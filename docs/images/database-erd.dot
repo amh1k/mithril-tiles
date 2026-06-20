@@ -1,0 +1,99 @@
+digraph DatabaseERD {
+  graph [
+    rankdir=LR,
+    bgcolor="#ffffff",
+    pad="0.35",
+    nodesep="0.75",
+    ranksep="1.0",
+    splines=polyline,
+    fontname="Inter"
+  ];
+
+  node [
+    shape=record,
+    style="rounded,filled",
+    fillcolor="#f8fafc",
+    color="#334155",
+    penwidth=1.2,
+    fontname="Inter",
+    fontsize=11
+  ];
+
+  edge [
+    color="#475569",
+    penwidth=1.1,
+    fontname="Inter",
+    fontsize=10,
+    arrowsize=0.7
+  ];
+
+  users [
+    label="{users|PK id: uuid\l display_name: string\l UK handle: string\l UK email: string\l avatar_url: string\l account_status: string\l created_at: timestamptz\l updated_at: timestamptz\l}"
+  ];
+
+  guest_sessions [
+    label="{guest_sessions|PK id: uuid\l display_name: string\l UK session_token_hash: string\l created_at: timestamptz\l expires_at: timestamptz\l}"
+  ];
+
+  bot_profiles [
+    label="{bot_profiles|PK id: uuid\l UK name: string\l difficulty: string\l behavior_style: string\l avatar_url: string\l is_active: boolean\l created_at: timestamptz\l updated_at: timestamptz\l}"
+  ];
+
+  word_packs [
+    label="{word_packs|PK id: uuid\l FK owner_user_id: uuid\l name: string\l description: string\l language: string\l visibility: string\l status: string\l created_at: timestamptz\l updated_at: timestamptz\l}"
+  ];
+
+  words [
+    label="{words|PK id: uuid\l FK word_pack_id: uuid\l text: string\l normalized_text: string\l category: string\l difficulty: string\l language: string\l status: string\l created_at: timestamptz\l}"
+  ];
+
+  games [
+    label="{games|PK id: uuid\l room_code: string\l FK host_participant_id: uuid\l FK word_pack_id: uuid\l status: string\l settings_snapshot: jsonb\l started_at: timestamptz\l ended_at: timestamptz\l created_at: timestamptz\l}"
+  ];
+
+  game_participants [
+    label="{game_participants|PK id: uuid\l FK game_id: uuid\l FK user_id: uuid\l FK guest_session_id: uuid\l FK bot_profile_id: uuid\l display_name_snapshot: string\l participant_type: string\l is_host: boolean\l joined_at: timestamptz\l left_at: timestamptz\l}"
+  ];
+
+  game_rounds [
+    label="{game_rounds|PK id: uuid\l FK game_id: uuid\l round_number: int\l FK drawer_participant_id: uuid\l FK word_id: uuid\l word_text_snapshot: string\l status: string\l duration_seconds: int\l started_at: timestamptz\l ended_at: timestamptz\l}"
+  ];
+
+  round_scores [
+    label="{round_scores|PK id: uuid\l FK round_id: uuid\l FK participant_id: uuid\l points_earned: int\l score_reason: string\l awarded_at: timestamptz\l}"
+  ];
+
+  game_final_scores [
+    label="{game_final_scores|PK id: uuid\l FK game_id: uuid\l FK participant_id: uuid\l final_score: int\l final_rank: int\l is_winner: boolean\l created_at: timestamptz\l}"
+  ];
+
+  global_leaderboard [
+    label="{global_leaderboard|PK id: uuid\l FK user_id: uuid\l total_score: int\l games_played: int\l games_won: int\l rank: int\l updated_at: timestamptz\l}"
+  ];
+
+  user_stats [
+    label="{user_stats|PK/FK user_id: uuid\l games_played: int\l games_won: int\l total_score: int\l total_draw_rounds: int\l total_correct_rounds: int\l average_rank: numeric\l updated_at: timestamptz\l}"
+  ];
+
+  users -> word_packs [label="1 to many owns"];
+  word_packs -> words [label="1 to many contains"];
+  word_packs -> games [label="1 to many selected for"];
+
+  games -> game_participants [label="1 to many has"];
+  games -> game_rounds [label="1 to many has"];
+  games -> game_final_scores [label="1 to many produces"];
+  game_participants -> games [label="host participant", style=dashed];
+
+  users -> game_participants [label="1 to many user identity"];
+  guest_sessions -> game_participants [label="1 to many guest identity"];
+  bot_profiles -> game_participants [label="1 to many bot identity"];
+
+  game_participants -> game_rounds [label="1 to many draws"];
+  words -> game_rounds [label="1 to many selected in"];
+  game_rounds -> round_scores [label="1 to many awards"];
+  game_participants -> round_scores [label="1 to many receives"];
+  game_participants -> game_final_scores [label="1 to many receives"];
+
+  users -> global_leaderboard [label="1 to 0..1 ranked by"];
+  users -> user_stats [label="1 to 0..1 summarized by"];
+}

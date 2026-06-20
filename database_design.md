@@ -283,6 +283,12 @@ classDiagram
 
 This ERD focuses on relationships and cardinality.
 
+Rendered PNG version:
+
+![Mithril Tiles database ERD](docs/images/database-erd.png)
+
+Editable Mermaid version:
+
 ```mermaid
 erDiagram
     USERS {
