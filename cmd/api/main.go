@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	"mithrilTiles.abdulmoiz.net/internal/data"
@@ -60,6 +61,7 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+	runMigrations(cfg.db.dsn)
 	
 	defer db.Close(ctx)
 	logger.Info("database connection pool established")
@@ -73,15 +75,7 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-
-
-
-
 }
-
-
-
-
 func openDB(cfg config, ctx context.Context)(*pgx.Conn, error) {
 	conn, err := pgx.Connect(ctx, cfg.db.dsn)
 	if err != nil {
@@ -96,6 +90,7 @@ func openDB(cfg config, ctx context.Context)(*pgx.Conn, error) {
 		return nil, err
 	}
 	fmt.Println("Connection established")
+
 	return conn, nil
 
 }
