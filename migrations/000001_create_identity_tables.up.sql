@@ -5,6 +5,7 @@ CREATE TABLE users (
     display_name text NOT NULL,
     handle text UNIQUE,
     email text UNIQUE,
+    password text NOT NULL,
     avatar_url text,
     account_status text NOT NULL DEFAULT 'active',
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -13,6 +14,7 @@ CREATE TABLE users (
     CONSTRAINT users_display_name_not_blank CHECK (length(trim(display_name)) > 0),
     CONSTRAINT users_handle_not_blank CHECK (handle IS NULL OR length(trim(handle)) > 0),
     CONSTRAINT users_email_not_blank CHECK (email IS NULL OR length(trim(email)) > 0),
+    CONSTRAINT users_password_not_blank CHECK (length(trim(password)) > 0),
     CONSTRAINT users_account_status_check CHECK (
         account_status IN ('active', 'suspended', 'deleted', 'pending')
     )

@@ -4,5 +4,7 @@ type Models struct {
 }
 
 func NewModels()Models{
-	return Models{}
+	return Models{
+		
+	}
 }
