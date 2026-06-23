@@ -96,3 +96,8 @@ func(m UserModel)Insert(user *User) error {
 	}
 
 
+func (m UserModel)GetByEmail(email string)(*User, error) {
+	return &User{}, nil
+}
+
+

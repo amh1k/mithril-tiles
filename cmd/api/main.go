@@ -68,7 +68,7 @@ func main() {
 	app := &application{
 		config: cfg,
 		logger: logger,
-		models: data.NewModels(),
+		models: data.NewModels(db),
 	}
 	err = app.serve()
 	if err != nil {

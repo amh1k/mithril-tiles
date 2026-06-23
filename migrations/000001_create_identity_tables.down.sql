@@ -1,3 +1,4 @@
 DROP TABLE IF EXISTS bot_profiles;
 DROP TABLE IF EXISTS guest_sessions;
+DROP TABLE IF EXISTS tokens;
 DROP TABLE IF EXISTS users;

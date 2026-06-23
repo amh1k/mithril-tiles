@@ -20,6 +20,18 @@ CREATE TABLE users (
     )
 );
 
+CREATE TABLE tokens (
+    hash bytea PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expiry timestamptz NOT NULL,
+    scope text NOT NULL,
+
+    CONSTRAINT tokens_scope_not_blank CHECK (length(trim(scope)) > 0)
+);
+
+CREATE INDEX tokens_user_id_idx ON tokens (user_id);
+CREATE INDEX tokens_expiry_idx ON tokens (expiry);
+
 CREATE TABLE guest_sessions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     display_name text NOT NULL,
