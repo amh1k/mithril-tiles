@@ -4,12 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/joho/godotenv"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
@@ -36,6 +38,10 @@ type application struct {
 }
 func main() {
 	var cfg config
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.db.dsn,
@@ -48,12 +54,13 @@ func main() {
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle time")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	db, err := openDB(cfg)
+	ctx := context.Background()
+	db, err := openDB(cfg, ctx)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	ctx := context.Background()
+	
 	defer db.Close(ctx)
 	logger.Info("database connection pool established")
 	app := &application{
@@ -75,8 +82,7 @@ func main() {
 
 
 
-func openDB(cfg config)(*pgx.Conn, error) {
-	ctx := context.Background()
+func openDB(cfg config, ctx context.Context)(*pgx.Conn, error) {
 	conn, err := pgx.Connect(ctx, cfg.db.dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
