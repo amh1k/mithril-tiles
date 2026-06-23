@@ -10,11 +10,11 @@ import (
 )
 func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		displayName string
-		handle string
-    	email string
-		password string
-		avatarURL string
+		DisplayName string `json:"display_name"`
+		Handle string `json:"handle"`
+    	Email string  `json:"email"`
+		Password string `json:"password"`
+		AvatarURL string`json:"avatar_url"`
 	}
 	err := app.readJSON(w,r, &input)
 	if err != nil {
@@ -22,12 +22,12 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	user := &data.User{
-		DisplayName: input.displayName,
-		Handle: input.handle,
-		Email: input.email,
-		AvatarURL: input.avatarURL,
+		DisplayName: input.DisplayName,
+		Handle: input.Handle,
+		Email: input.Email,
+		AvatarURL: input.AvatarURL,
 	}
-	err = user.Password.Set(input.password)
+	err = user.Password.Set(input.Password)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -56,8 +56,8 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 
 	func(app *application)loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		var input struct {
-			email string
-			password string
+			Email string `json:"email"`
+			Password string `json:"password"`
 
 		}
 		err := app.readJSON(w,r, &input)
@@ -66,12 +66,17 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 			return
 
 		}
-		user, err := app.models.Users.GetByEmail(input.email)
+		user, err := app.models.Users.GetByEmail(input.Email)
 		if err != nil {
-
-
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.invalidCredentialsResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
 		}
-		match, err := user.Password.Matches(input.password)
+		return
+	}
+		match, err := user.Password.Matches(input.Password)
 		if err != nil {
 			app.serverErrorResponse(w, r, err)
 			return
@@ -88,10 +93,6 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 		if err != nil {
 		app.serverErrorResponse(w, r, err)
 		}
-
-
-
-
 	}
 
 

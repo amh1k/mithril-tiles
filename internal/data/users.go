@@ -2,10 +2,12 @@ package data
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 	"mithrilTiles.abdulmoiz.net/internal/validator"
@@ -17,7 +19,7 @@ var (
 	ErrDuplicateEmail = errors.New("duplicate email")
 )
 type User struct {
-	ID        int64     `json:"id"`
+	ID        uuid.UUID     `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	DisplayName     string    `json:"display_name"`
@@ -96,8 +98,35 @@ func(m UserModel)Insert(user *User) error {
 	}
 
 
-func (m UserModel)GetByEmail(email string)(*User, error) {
-	return &User{}, nil
-}
+func (m UserModel) GetByEmail(email string) (*User, error) {
+	query := `
+	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
+	FROM users
+	WHERE email = $1`
+	var user User
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := m.DB.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.AccountStatus,
+		&user.AvatarURL,
+		&user.DisplayName,
+		&user.Email,
+		&user.Password.Hash,
+		&user.Handle,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		switch {
 
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+
+	}
+	return &user, nil
+}
 
