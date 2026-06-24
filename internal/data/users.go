@@ -250,6 +250,7 @@ func (m UserModel) UpdateAvatar(ctx context.Context, id uuid.UUID, avatarURL str
 
 func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error) {
 	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+	
 	query := `
 	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
 	FROM users
@@ -259,10 +260,11 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	AND tokens.scope = $2
 	AND tokens.expiry > $3`
 	args := []any{tokenHash[:], tokenScope, time.Now()}
+	
 	var user User
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := m.DB.QueryRow(ctx, query, args).Scan(
+	err := m.DB.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.CreatedAt,
 		&user.AccountStatus,
@@ -274,6 +276,8 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 		&user.UpdatedAt,
 	)
 	if err != nil {
+		fmt.Println(err)
+		
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			return nil, ErrRecordNotFound

@@ -21,8 +21,6 @@ func (app *application)uploadToCloudinary(ctx context.Context,file multipart.Fil
 	apiKey,
 	apiSecret,
 	cloudName,
-	
-
 	)
 	cld, err := cloudinary.NewFromURL(cloudinaryURL)
 	if err != nil {
