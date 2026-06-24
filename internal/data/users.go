@@ -2,40 +2,45 @@ package data
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
+
 type UserModel struct {
 	DB *pgx.Conn
 }
+
 var (
-	ErrDuplicateEmail = errors.New("duplicate email")
+	ErrDuplicateEmail  = errors.New("duplicate email")
+	ErrDuplicateHandle = errors.New("duplicate handle")
 )
+
 type User struct {
-	ID        uuid.UUID     `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	DisplayName     string    `json:"display_name"`
-	AccountStatus 	string 		`json:"account_status"`
-	Handle 			string 		`json:"handle"`
-	Email    string    `json:"email"`
-	Password  Password  `json:"-"`
-	Activated bool      `json:"activated"`
-	AvatarURL string    `json:"avatar_url"`
+	ID            uuid.UUID `json:"id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	DisplayName   string    `json:"display_name"`
+	AccountStatus string    `json:"account_status"`
+	Handle        string    `json:"handle"`
+	Email         string    `json:"email"`
+	Password      Password  `json:"-"`
+	Activated     bool      `json:"activated"`
+	AvatarURL     string    `json:"avatar_url"`
 }
 type Password struct {
 	Plaintext *string
 	Hash      []byte
 }
-func (p *Password)Set(plaintextpassword string)(error) {
-	hash, err := bcrypt.GenerateFromPassword([] byte (plaintextpassword), 12)
+
+func (p *Password) Set(plaintextpassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextpassword), 12)
 	if err != nil {
 		return err
 	}
@@ -75,7 +80,7 @@ func Validatehandle(v *validator.Validator, handle string) {
 	v.Check(len(handle) <= 60, "handle", "must not be more than 60 bytes long")
 }
 
-func(m UserModel)Insert(user *User) error {
+func (m UserModel) Insert(user *User) error {
 	query := `
 	INSERT INTO users (display_name, handle, email, password, avatar_url)
 	VALUES ($1, $2, $3, $4, $5)
@@ -95,27 +100,25 @@ func(m UserModel)Insert(user *User) error {
 		}
 	}
 	return nil
-	}
+}
 
-func (m UserModel)Delete(id uuid.UUID) error {
+func (m UserModel) Delete(id uuid.UUID) error {
 	query := `
 	DELETE FROM users
 	WHERE id = $1`
-	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	res, err:= m.DB.Exec(ctx,query, id)
+	res, err := m.DB.Exec(ctx, query, id)
 	if err != nil {
 		return err
 	}
-	rowsAffected:= res.RowsAffected()
+	rowsAffected := res.RowsAffected()
 	if rowsAffected == 0 {
 		return ErrRecordNotFound
 	}
 	return nil
 
-
 }
-
 
 func (m UserModel) GetByEmail(email string) (*User, error) {
 	query := `
@@ -139,7 +142,7 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	if err != nil {
 		switch {
 
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			return nil, ErrRecordNotFound
 		default:
 			return nil, err
@@ -147,4 +150,79 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 
 	}
 	return &user, nil
+}
+
+func (m UserModel) Get(id uuid.UUID) (*User, error) {
+	query := `
+	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
+	FROM users
+	WHERE id = $1`
+	var user User
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	err := m.DB.QueryRow(ctx, query, id).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.AccountStatus,
+		&user.AvatarURL,
+		&user.DisplayName,
+		&user.Email,
+		&user.Password.Hash,
+		&user.Handle,
+		&user.UpdatedAt,
+	)
+	if err != nil {
+		switch {
+
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+
+	}
+	return &user, nil
+
+}
+
+func (m UserModel) Update(user *User) error {
+	query := `
+	UPDATE users
+	SET display_name = $1,
+		handle = $2,
+		email = $3,
+		password = $4,
+		avatar_url = $5,
+		updated_at = now()
+	WHERE id = $6
+	RETURNING updated_at`
+
+	args := []any{
+		user.DisplayName,
+		user.Handle,
+		user.Email,
+		user.Password.Hash,
+		user.AvatarURL,
+		user.ID,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := m.DB.QueryRow(ctx, query, args...).Scan(&user.UpdatedAt)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return ErrRecordNotFound
+		case errors.As(err, &pgErr) && pgErr.ConstraintName == "users_email_key":
+			return ErrDuplicateEmail
+		case errors.As(err, &pgErr) && pgErr.ConstraintName == "users_handle_key":
+			return ErrDuplicateHandle
+		default:
+			return err
+		}
+	}
+
+	return nil
 }
