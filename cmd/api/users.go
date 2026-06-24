@@ -94,7 +94,7 @@ func (app *application) loginUserHandler(w http.ResponseWriter, r *http.Request)
 		app.serverErrorResponse(w, r, err)
 	}
 }
-func (app *application) DeleteUserHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
@@ -116,7 +116,7 @@ func (app *application) DeleteUserHandler(w http.ResponseWriter, r *http.Request
 
 }
 
-func (app *application) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)
@@ -201,7 +201,7 @@ func (app *application) UpdateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 }
 
-func (app *application) UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) uploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
 	err := r.ParseMultipartForm(5 << 20)
 	if err != nil {
