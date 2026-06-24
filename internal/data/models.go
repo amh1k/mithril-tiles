@@ -12,13 +12,12 @@ var (
 type Models struct {
 	Users UserModel
 	Tokens TokenModel
-
+	GuestSessions GuestSessionsModel
 }
-
-
 func NewModels(db *pgx.Conn)Models{
 	return Models{
 		UserModel{DB: db},
 		TokenModel{DB: db},
+		GuestSessionsModel{DB: db},
 	}
 }

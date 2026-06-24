@@ -5,9 +5,11 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 )
-func(app *application)routes()http.Handler {
+
+func (app *application) routes() http.Handler {
 	router := httprouter.New()
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodPost, "/v1/guest-sessions", app.createGuestSessionHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/users/register", app.registerUserHandler)
 	router.HandlerFunc(http.MethodPost, "/v1/users/login", app.loginUserHandler)
 	router.HandlerFunc(http.MethodDelete, "/v1/users/delete", app.requireAuthenticatedUser(app.deleteUserHandler))

@@ -12,23 +12,26 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
 
-
-type TokenModel struct  {
+type TokenModel struct {
 	DB *pgx.Conn
 }
+
 const (
 	ScopeAuthentication = "authentication"
+	ScopeGuest          = "guest_authentication"
 )
+
 type Token struct {
-	Plaintext string    `json:"token"`
-	Hash      []byte    `json:"-"`
-	UserID    uuid.UUID    `json:"-"`
-	Expiry    time.Time `json:"expiry"`
-	Scope     string    `json:"-"`
+	Plaintext      string     `json:"token"`
+	Hash           []byte     `json:"-"`
+	UserID         *uuid.UUID `json:"-"`
+	GuestSessionID *uuid.UUID `json:"-"`
+	Expiry         time.Time  `json:"expiry"`
+	Scope          string     `json:"-"`
 }
-func generateToken(userID uuid.UUID, ttl time.Duration, scope string) (*Token, error) {
+
+func generateToken(ttl time.Duration, scope string) (*Token, error) {
 	token := &Token{
-		UserID: userID,
 		Expiry: time.Now().Add(ttl),
 		Scope:  scope,
 	}
@@ -47,21 +50,31 @@ func ValidateTokenPlaintext(v *validator.Validator, tokenPlaintext string) {
 	v.Check(len(tokenPlaintext) == 26, "token", "must be 26 bytes long")
 }
 
-
-
 func (m TokenModel) New(userID uuid.UUID, ttl time.Duration, scope string) (*Token, error) {
-	token, err := generateToken(userID, ttl, scope)
+	token, err := generateToken(ttl, scope)
 	if err != nil {
 		return nil, err
 	}
+	token.UserID = &userID
 	err = m.Insert(token)
 	return token, err
 }
+
+func (m TokenModel) NewForGuest(guestSessionID uuid.UUID, ttl time.Duration) (*Token, error) {
+	token, err := generateToken(ttl, ScopeGuest)
+	if err != nil {
+		return nil, err
+	}
+	token.GuestSessionID = &guestSessionID
+	err = m.Insert(token)
+	return token, err
+}
+
 func (m TokenModel) Insert(token *Token) error {
 	query := `
-	INSERT INTO tokens (hash, user_id, expiry, scope)
-	VALUES ($1, $2, $3, $4)`
-	args := []any{token.Hash, token.UserID, token.Expiry, token.Scope}
+	INSERT INTO tokens (hash, user_id, guest_session_id, expiry, scope)
+	VALUES ($1, $2, $3, $4, $5)`
+	args := []any{token.Hash, token.UserID, token.GuestSessionID, token.Expiry, token.Scope}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_, err := m.DB.Exec(ctx, query, args...)
