@@ -97,6 +97,25 @@ func(m UserModel)Insert(user *User) error {
 	return nil
 	}
 
+func (m UserModel)Delete(id uuid.UUID) error {
+	query := `
+	DELETE FROM users
+	WHERE id = $1`
+	ctx, cancel := context.WithTimeout(context.Background(), 3 * time.Second)
+	defer cancel()
+	res, err:= m.DB.Exec(ctx,query, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected:= res.RowsAffected()
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+	return nil
+
+
+}
+
 
 func (m UserModel) GetByEmail(email string) (*User, error) {
 	query := `
@@ -129,4 +148,3 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	}
 	return &user, nil
 }
-

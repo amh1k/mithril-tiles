@@ -54,20 +54,53 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 	// }
 
 
-	func(app *application)loginUserHandler(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			Email string `json:"email"`
-			Password string `json:"password"`
+func(app *application)loginUserHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email string `json:"email"`
+		Password string `json:"password"`
 
-		}
-		err := app.readJSON(w,r, &input)
-		if err != nil {
-			app.badRequestResponse(w, r, err)
-			return
+	}
+	err := app.readJSON(w,r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
 
-		}
-		user, err := app.models.Users.GetByEmail(input.Email)
-		if err != nil {
+	}
+	user, err := app.models.Users.GetByEmail(input.Email)
+	if err != nil {
+	switch {
+	case errors.Is(err, data.ErrRecordNotFound):
+		app.invalidCredentialsResponse(w, r)
+	default:
+		app.serverErrorResponse(w, r, err)
+	}
+	return
+}
+	match, err := user.Password.Matches(input.Password)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	if !match {
+		app.invalidCredentialsResponse(w, r)
+		return
+	}
+	token, err := app.models.Tokens.New(user.ID,3*24*time.Hour, data.ScopeAuthentication)
+	if err != nil {
+		app.serverErrorResponse(w,r,err)
+	}
+	app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil)
+	if err != nil {
+	app.serverErrorResponse(w, r, err)
+	}
+}
+func (app *application)DeleteUserHandler(w http.ResponseWriter, r *http.Request)  {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+	}
+	err = app.models.Users.Delete(id)
+	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
 			app.invalidCredentialsResponse(w, r)
@@ -76,24 +109,14 @@ func(app *application)registerUserHandler(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-		match, err := user.Password.Matches(input.Password)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
-			return
-		}
-		if !match {
-			app.invalidCredentialsResponse(w, r)
-			return
-		}
-		token, err := app.models.Tokens.New(user.ID,3*24*time.Hour, data.ScopeAuthentication)
-		if err != nil {
-			app.serverErrorResponse(w,r,err)
-		}
-		app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil)
-		if err != nil {
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "user successfully deleted"}, nil)
+	if err != nil {
 		app.serverErrorResponse(w, r, err)
-		}
 	}
+
+}
+
+
 
 
 
