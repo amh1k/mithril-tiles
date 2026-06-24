@@ -18,5 +18,8 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPost, "/v1/word-packs", app.requireAuthenticatedUser(app.createWordPackHandler))
 	router.HandlerFunc(http.MethodPatch, "/v1/word-packs/:id", app.requireAuthenticatedUser(app.updateWordPackHandler))
 	router.HandlerFunc(http.MethodDelete, "/v1/word-packs/:id", app.requireAuthenticatedUser(app.deleteWordPackHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/word-packs/:id/words", app.requireAuthenticatedUser(app.createWordHandler))
+	router.HandlerFunc(http.MethodPatch, "/v1/words/:id", app.requireAuthenticatedUser(app.updateWordHandler))
+	router.HandlerFunc(http.MethodDelete, "/v1/words/:id", app.requireAuthenticatedUser(app.deleteWordHandler))
 	return app.recoverPanic(app.authenticate(router))
 }
