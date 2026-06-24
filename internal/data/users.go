@@ -226,3 +226,18 @@ func (m UserModel) Update(user *User) error {
 
 	return nil
 }
+
+func (m UserModel) UpdateAvatar(ctx context.Context, id uuid.UUID, avatarURL string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	user, err := m.Get(id)
+	if err != nil {
+		return err
+	}
+	user.AvatarURL = avatarURL
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return m.Update(user)
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -195,6 +196,40 @@ func (app *application) UpdateUserHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	err = app.writeJSON(w, http.StatusOK, envelope{"user": user}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) UploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
+	err := r.ParseMultipartForm(5 << 20)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+	file, header, err := r.FormFile("avatar")
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+	defer file.Close()
+	fmt.Println("uploaded file:", header.Filename)
+	fmt.Println("file size:", header.Size)
+	avatarURL, err := app.uploadToCloudinary(r.Context(), file, header)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	userID := app.contextGetUser(r).ID
+	err = app.models.Users.UpdateAvatar(r.Context(), userID, avatarURL)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"avatar_url": avatarURL,
+	}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
