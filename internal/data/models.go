@@ -18,6 +18,7 @@ type Models struct {
 	WordPacks     WordPackModel
 	Words         WordModel
 	Games         GameModel
+	GameRounds    GameRoundModel
 }
 
 func NewModels(db *pgx.Conn) Models {
@@ -28,5 +29,6 @@ func NewModels(db *pgx.Conn) Models {
 		WordPacks:     WordPackModel{DB: db},
 		Words:         WordModel{DB: db},
 		Games:         GameModel{DB: db},
+		GameRounds:    GameRoundModel{DB: db},
 	}
 }
