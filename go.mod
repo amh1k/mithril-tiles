@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/cloudinary/cloudinary-go/v2 v2.16.0 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/creasty/defaults v1.7.0 // indirect
 	github.com/golang-migrate/migrate v3.5.4+incompatible // indirect
 	github.com/golang-migrate/migrate/v4 v4.19.1 // indirect
