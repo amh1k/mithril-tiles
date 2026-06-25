@@ -50,7 +50,7 @@ type Room struct {
 	sessionsMu sync.Mutex
 }
 
-func NewRoom(dataDir string) (*Room, error) {
+func NewRoom(roomCode string) (*Room, error) {
 	cr := &Room{
 		Player:        make(map[*Player]bool),
 		join:          make(chan *Player),
@@ -62,7 +62,7 @@ func NewRoom(dataDir string) (*Room, error) {
 		sessions:      make(map[string]*data.Token),
 		messages:      make([]Message, 0),
 		startTime:     time.Now(),
-		dataDir:       dataDir,
+		dataDir:       roomCode,
 	}
 
 	return cr, nil
@@ -91,3 +91,25 @@ func (r *Room)Run() {
         }
     }
 }
+
+// func runServer(code string) {
+//     room, err := NewRoom(code)
+//     if err != nil {
+//         fmt.Printf("Failed to initialize: %v\n", err)
+//         return
+//     }
+//     defer room.shutdown()
+//     sigChan := make(chan os.Signal, 1)
+//     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+//     go func() {
+//         <-sigChan
+//         fmt.Println("\nReceived shutdown signal")
+//         room.shutdown()
+//         os.Exit(0)
+//     }()
+//     go room.Run()
+
+
+
+
+// }

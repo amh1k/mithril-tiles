@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
 	"mithrilTiles.abdulmoiz.net/internal/data"
+	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
 
 type config struct {
@@ -35,6 +36,7 @@ type application struct {
 	logger *slog.Logger
 	models data.Models
 	wg sync.WaitGroup
+	roomManager realtime.RoomManager
 
 }
 func main() {
@@ -65,10 +67,13 @@ func main() {
 	
 	defer db.Close(ctx)
 	logger.Info("database connection pool established")
+	roomManager := realtime.NewRoomManager()
 	app := &application{
 		config: cfg,
 		logger: logger,
 		models: data.NewModels(db),
+		roomManager: *roomManager,
+		
 	}
 	err = app.serve()
 	if err != nil {
