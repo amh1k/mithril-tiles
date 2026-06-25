@@ -9,7 +9,7 @@ import (
 )
 
 type Player struct {
-    conn         websocket.Conn      
+    conn         *websocket.Conn      
     principal    data.Principal   //Contains guest or user info
     outgoing     chan string   // Buffered channel for writes
     lastActive   time.Time     // For idle detection

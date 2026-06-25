@@ -6,6 +6,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/julienschmidt/httprouter"
+	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
 func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
@@ -54,6 +55,6 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 	// for {
 	// 	conn.
 	// }
-
-	room.HandleClient(conn, room, ctx)
+	principal := app.contextGetPrincipal(r)
+	realtime.HandlePlayer(conn, room, principal, ctx)
 }
