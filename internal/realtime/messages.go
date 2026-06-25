@@ -10,6 +10,6 @@ type Message struct {
 }
 
 type DirectMessage struct {
-    toClient *Client
+    toClient *Player
     message  string
 }

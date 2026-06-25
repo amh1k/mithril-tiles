@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -8,33 +9,85 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
-
 type Room struct {
 
-// Communication channels
-    join          chan *Client
-    leave         chan *Client
-    broadcast     chan string
-    listUsers     chan *Client
-    directMessage chan DirectMessage
+	// Communication channels
 
-    // State
-    clients       map[*Client]bool
-    mu            sync.Mutex
-    totalMessages int
-    startTime     time.Time
+	join           chan *Player
+	leave          chan *Player
+	broadcast      chan string
+	listPlayers    chan *Player
+	directMessage  chan DirectMessage
+	correctGuesses int
+	HostPlayer     *Player
+	currentWord    string
+	roomCode       string
+	currentDrawer  *Player
+	currentRoundNo int
 
-    // Message history
-    messages      []Message
-    messageMu     sync.Mutex
-    nextMessageID int
+	//Scores
+	scoresMu sync.Mutex
+	scores   map[*Player]int
 
-    // Persistence
-    walFile       *os.File
-    walMu         sync.Mutex
-    dataDir       string
+	// State2
+	Player        map[*Player]bool
+	mu            sync.Mutex
+	totalMessages int
+	startTime     time.Time
 
-    // Sessions
-    sessions      map[string]*data.Token
-    sessionsMu    sync.Mutex
+	// Message history
+	messages      []Message
+	messageMu     sync.Mutex
+	nextMessageID int
+
+	// Persistence
+	walFile *os.File
+	walMu   sync.Mutex
+	dataDir string
+
+	// Sessions
+	sessions   map[string]*data.Token
+	sessionsMu sync.Mutex
+}
+
+func NewRoom(dataDir string) (*Room, error) {
+	cr := &Room{
+		Player:        make(map[*Player]bool),
+		join:          make(chan *Player),
+		leave:         make(chan *Player),
+		broadcast:     make(chan string),
+		listPlayers:   make(chan *Player),
+		directMessage: make(chan DirectMessage),
+		scores:        make(map[*Player]int),
+		sessions:      make(map[string]*data.Token),
+		messages:      make([]Message, 0),
+		startTime:     time.Now(),
+		dataDir:       dataDir,
+	}
+
+	return cr, nil
+}
+
+
+func (r *Room)Run() {
+    fmt.Println("Room heartbeat started...")
+    // go cr.cleanupInactiveClients()
+    for {
+        select {
+        case player := <-r.join:
+            r.handleJoin(player)
+        
+        case player := <-r.leave:
+            r.handleLeave(player)
+        
+        case message := <-r.broadcast:
+            r.handleBroadcast(player)
+
+        case player := <-r.listPlayers:
+            r.sendUserList(player)
+
+        case dm := <-r.directMessage:
+            r.handleDirectMessage(dm)
+        }
+    }
 }

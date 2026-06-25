@@ -8,14 +8,14 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
-type Client struct {
+type Player struct {
     conn         websocket.Conn      
     principal    data.Principal   //Contains guest or user info
     outgoing     chan string   // Buffered channel for writes
     lastActive   time.Time     // For idle detection
     messagesSent int           // Statistics
     messagesRecv int
-    isSlowClient bool          // Testing flag
+    isSlowPlayer bool          // Testing flag
     reconnectToken string
     mu             sync.Mutex   // Protects stats fields
 }
