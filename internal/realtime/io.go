@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -35,19 +36,65 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 		}
 		conn.Close(status, reason)
 	}()
+	username := principal.DisplayName()
 
-	
-
-	welcomeMessage := buildWelcomeMessage(principal.DisplayName())
+	welcomeMessage := buildWelcomeMessage(username)
 	if err := conn.Write(ctx, websocket.MessageText, []byte(welcomeMessage)); err != nil {
 		return
 	}
-
-	go writeMessages(player, ctx)
-	readMessages(player, room, ctx)
+	go readMessages(player, room, username, ctx)
+	writeMessages(player, ctx, username)
+	
+	room.updateSessionActivity(username)
+	room.leave <- player
 }
 
 func buildWelcomeMessage(username string) string {
 	msg := fmt.Sprintf("Welcome, %s!\n", username)
 	return msg
+}
+
+func readMessages(player *Player, room *Room, username string, ctx context.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Panic in readMessages for %s: %v\n", username, r)
+		}
+	}()
+
+	for {
+		_, messageBytes, err := player.conn.Read(ctx)
+		if err != nil {
+			return
+		}
+		message := string(messageBytes)
+
+		player.markActive()
+		message = strings.TrimSpace(message)
+		if message == "" {
+			continue
+		}
+		player.mu.Lock()
+		player.messagesRecv++
+		player.mu.Unlock()
+		formatted := fmt.Sprintf("[%s]: %s\n", username, message)
+		room.broadcast <- formatted
+	}
+}
+
+func writeMessages(player *Player, ctx context.Context, username string) {
+	defer func() {
+        if r := recover(); r != nil {
+            fmt.Printf("Panic in writeMessages for %s: %v\n", username, r)
+        }
+    }()
+	for message := range player.outgoing {
+		err := player.conn.Write(ctx, websocket.MessageText, []byte(message))
+		 if err != nil {
+            fmt.Printf("Write error for %s: %v\n",username, err)
+            return
+        }
+	}
+
+
+
 }
