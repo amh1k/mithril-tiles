@@ -30,7 +30,7 @@ type Room struct {
 	scores   map[*Player]int
 
 	// State2
-	Player        map[*Player]bool
+	players       map[*Player]bool
 	mu            sync.Mutex
 	totalMessages int
 	startTime     time.Time
@@ -52,7 +52,7 @@ type Room struct {
 
 func NewRoom(roomCode string) (*Room, error) {
 	cr := &Room{
-		Player:        make(map[*Player]bool),
+		players:        make(map[*Player]bool),
 		join:          make(chan *Player),
 		leave:         make(chan *Player),
 		broadcast:     make(chan string),
@@ -81,7 +81,7 @@ func (r *Room)Run() {
             r.handleLeave(player)
         
         case message := <-r.broadcast:
-            r.handleBroadcast(player)
+            r.handleBroadcast(message)
 
         case player := <-r.listPlayers:
             r.sendUserList(player)
