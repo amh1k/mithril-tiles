@@ -12,23 +12,27 @@ var (
 )
 
 type Models struct {
-	Users         UserModel
-	Tokens        TokenModel
-	GuestSessions GuestSessionsModel
-	WordPacks     WordPackModel
-	Words         WordModel
-	Games         GameModel
-	GameRounds    GameRoundModel
+	Users           UserModel
+	Tokens          TokenModel
+	GuestSessions   GuestSessionsModel
+	WordPacks       WordPackModel
+	Words           WordModel
+	Games           GameModel
+	GameRounds      GameRoundModel
+	RoundScores     RoundScoreModel
+	GameFinalScores GameFinalScoreModel
 }
 
 func NewModels(db *pgx.Conn) Models {
 	return Models{
-		Users:         UserModel{DB: db},
-		Tokens:        TokenModel{DB: db},
-		GuestSessions: GuestSessionsModel{DB: db},
-		WordPacks:     WordPackModel{DB: db},
-		Words:         WordModel{DB: db},
-		Games:         GameModel{DB: db},
-		GameRounds:    GameRoundModel{DB: db},
+		Users:           UserModel{DB: db},
+		Tokens:          TokenModel{DB: db},
+		GuestSessions:   GuestSessionsModel{DB: db},
+		WordPacks:       WordPackModel{DB: db},
+		Words:           WordModel{DB: db},
+		Games:           GameModel{DB: db},
+		GameRounds:      GameRoundModel{DB: db},
+		RoundScores:     RoundScoreModel{DB: db},
+		GameFinalScores: GameFinalScoreModel{DB: db},
 	}
 }
