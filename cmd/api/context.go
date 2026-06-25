@@ -7,16 +7,16 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 type contextKey string
-
-const userContextKey = contextKey("user")
-func (app *application) contextSetUser(r *http.Request, user *data.User) *http.Request {
-	ctx := context.WithValue(r.Context(), userContextKey, user)
+const principalContextKey = contextKey("principal")
+func (app *application) contextSetPrincipal(r *http.Request, principal *data.Principal) *http.Request {
+	ctx := context.WithValue(r.Context(), principalContextKey, principal)
 	return r.WithContext(ctx)
 }
-func (app *application) contextGetUser(r *http.Request) *data.User {
-	user, ok := r.Context().Value(userContextKey).(*data.User)
+
+func (app *application) contextGetPrincipal(r *http.Request) *data.Principal {
+	principal, ok := r.Context().Value(principalContextKey).(*data.Principal)
 	if !ok {
-		panic("missing user value in request context")
+		panic("missing principal value in request context")
 	}
-	return user
+	return principal
 }

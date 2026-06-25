@@ -26,54 +26,69 @@ func (app *application) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Authorization")
 		authorizationHeader := r.Header.Get("Authorization")
-		
+
 		if authorizationHeader == "" {
-			
-			r = app.contextSetUser(r, data.AnonymousUser)
+			r = app.contextSetPrincipal(r, data.AnonymousPrincipal)
 			next.ServeHTTP(w, r)
 			return
 		}
 		headerParts := strings.Split(authorizationHeader, " ")
 		if len(headerParts) != 2 || headerParts[0] != "Bearer" {
-			
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
 		token := headerParts[1]
 		v := validator.New()
 		if data.ValidateTokenPlaintext(v, token); !v.Valid() {
-			// fmt.Println("HO2")
 			app.invalidAuthenticationTokenResponse(w, r)
 			return
 		}
-		
+
 		user, err := app.models.Users.GetForToken(data.ScopeAuthentication, token)
-		if err != nil {
-			fmt.Println("ABCDE")
-			// fmt.Println("HO3")
-			switch {
-			case errors.Is(err, data.ErrRecordNotFound):
-				app.invalidAuthenticationTokenResponse(w, r)
-			default:
-				app.serverErrorResponse(w, r, err)
-			}
+		if err == nil {
+			r = app.contextSetPrincipal(r, data.NewUserPrincipal(user))
+			next.ServeHTTP(w, r)
 			return
-
 		}
-		r = app.contextSetUser(r, user)
-		
-		next.ServeHTTP(w, r)
+		if !errors.Is(err, data.ErrRecordNotFound) {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+		guestSession, err := app.models.GuestSessions.GetForToken(data.ScopeGuest, token)
+		if err == nil {
+			r = app.contextSetPrincipal(r, data.NewGuestPrincipal(guestSession))
+			next.ServeHTTP(w, r)
+			return
+		}
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.invalidAuthenticationTokenResponse(w, r)
+			return
+		}
 
+		app.serverErrorResponse(w, r, err)
 	})
 }
-func (app *application) requireAuthenticatedUser(next http.HandlerFunc) http.HandlerFunc {
+
+func (app *application) requireAuthenticatedPrincipal(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user := app.contextGetUser(r)
-		if user.IsAnonymous() {
+		principal := app.contextGetPrincipal(r)
+		if !principal.IsAuthenticated() {
 			app.authenticationRequiredResponse(w, r)
 			return
 		}
-		
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) requireRegisteredUser(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		principal := app.contextGetPrincipal(r)
+		if !principal.IsUser() {
+			app.authenticationRequiredResponse(w, r)
+			return
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }

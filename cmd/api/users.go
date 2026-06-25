@@ -203,13 +203,13 @@ func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request
 
 func (app *application) uploadAvatarHandler(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
-	
+
 	err := r.ParseMultipartForm(5 << 20)
 	if err != nil {
 		app.badRequestResponse(w, r, err)
 		return
 	}
-	
+
 	file, header, err := r.FormFile("avatar")
 	if err != nil {
 		app.badRequestResponse(w, r, err)
@@ -223,7 +223,7 @@ func (app *application) uploadAvatarHandler(w http.ResponseWriter, r *http.Reque
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	userID := app.contextGetUser(r).ID
+	userID := app.contextGetPrincipal(r).User.ID
 	err = app.models.Users.UpdateAvatar(r.Context(), userID, avatarURL)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)

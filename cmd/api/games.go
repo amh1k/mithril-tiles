@@ -48,6 +48,7 @@ func (app *application) createGameHandler(w http.ResponseWriter, r *http.Request
 		app.serverErrorResponse(w, r, err)
 		return
 	}
+	
 	err = app.writeJSON(w, http.StatusCreated, envelope{"game": game}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
