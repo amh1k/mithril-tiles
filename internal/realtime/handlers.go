@@ -1,8 +1,9 @@
 package realtime
 
-import "fmt"
-
-
+import (
+	"fmt"
+	"time"
+)
 func(r *Room)handleBroadcast(message string) {
 	from := "system"
     actualContent := message
@@ -40,7 +41,7 @@ func(r *Room)handleJoin(player *Player) {
 	r.players[player] = true
 	r.mu.Unlock()
 	player.markActive()
-	r.sendHistory(client, 10)
+	r.sendHistory(player, 10)
 	announcement := fmt.Sprintf("*** %s joined the room ***\n", player.principal.DisplayName())
     r.handleBroadcast(announcement)
 
@@ -67,5 +68,83 @@ func(r *Room)handleLeave(player *Player) {
     announcement := fmt.Sprintf("*** %s left the room ***\n", player.principal.DisplayName())
     r.handleBroadcast(announcement)
 }
+
+func(r *Room)sendHistory(player *Player, count int) {
+	r.messageMu.Lock()
+	defer r.messageMu.Unlock()
+	start := len(r.messages) - count
+    if start < 0 {
+        start = 0
+    }
+	historyMsg := "Recent messages:\n"
+    for i := start; i < len(r.messages); i++ {
+        msg := r.messages[i]
+        historyMsg += fmt.Sprintf(" [%s]: %s\n", msg.From, msg.Content)
+    }
+	select {
+	case player.outgoing <-historyMsg:
+	default:
+	}
+
+
+}
+func(r *Room)sendUserList(player *Player) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	list := "Users online:\n"
+	for p := range r.players {
+		status := ""
+        if p.isInactive(1 * time.Minute) {
+            status = " (idle)"
+        }
+        list += fmt.Sprintf("  - %s%s\n", p.principal.DisplayName(), status)
+	}
+	list += fmt.Sprintf("\nTotal messages: %d\n", r.totalMessages)
+    list += fmt.Sprintf("Uptime: %s\n", time.Since(r.startTime).Round(time.Second))
+
+    select {
+    case player.outgoing <- list:
+    default:
+    }
+
+}
+
+func (r *Room)handleDirectMessage(dm DirectMessage) {
+	select {
+	case dm.toClient.outgoing <-dm.message :
+		dm.toClient.mu.Lock()
+        dm.toClient.messagesSent++
+        dm.toClient.mu.Unlock()
+	default:
+        fmt.Printf("Couldn't deliver DM to %s\n", dm.toClient.principal.DisplayName())
+	}
+}
+
+
+func(r *Room)findPlayerByUsername(username string) (*Player, error){
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for player := range r.players {
+		if player.principal.DisplayName() == username {
+			return player, nil
+		}
+
+	}
+	err := fmt.Errorf("Username not found")
+	return nil, err
+
+}
+
+func(player *Player)markActive() {
+	player.mu.Lock()
+	defer player.mu.Unlock()
+	player.lastActive = time.Now()
+}
+func (player *Player) isInactive(timeout time.Duration) bool {
+    player.mu.Lock()
+    defer player.mu.Unlock()
+    return time.Since(player.lastActive) > timeout
+}
+
 
 

@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
-
 func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, ctx context.Context) {
 	if conn == nil || room == nil || principal == nil || !principal.IsAuthenticated() {
 		if conn != nil {
@@ -94,7 +93,4 @@ func writeMessages(player *Player, ctx context.Context, username string) {
             return
         }
 	}
-
-
-
 }
