@@ -5,8 +5,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
 type Room struct {
@@ -46,20 +44,20 @@ type Room struct {
 	dataDir string
 
 	// Sessions
-	sessions   map[string]*data.Token
+	sessions   map[string]*SessionInfo
 	sessionsMu sync.Mutex
 }
 
 func NewRoom(roomCode string) (*Room, error) {
 	cr := &Room{
-		players:        make(map[*Player]bool),
+		players:       make(map[*Player]bool),
 		join:          make(chan *Player),
 		leave:         make(chan *Player),
 		broadcast:     make(chan string),
 		listPlayers:   make(chan *Player),
 		directMessage: make(chan DirectMessage),
 		scores:        make(map[*Player]int),
-		sessions:      make(map[string]*data.Token),
+		sessions:      make(map[string]*SessionInfo),
 		messages:      make([]Message, 0),
 		startTime:     time.Now(),
 		dataDir:       roomCode,
@@ -68,28 +66,27 @@ func NewRoom(roomCode string) (*Room, error) {
 	return cr, nil
 }
 
+func (r *Room) Run() {
+	fmt.Println("Room heartbeat started...")
+	go r.cleanupInactiveplayers()
+	for {
+		select {
+		case player := <-r.join:
+			r.handleJoin(player)
 
-func (r *Room)Run() {
-    fmt.Println("Room heartbeat started...")
-    // go cr.cleanupInactiveClients()
-    for {
-        select {
-        case player := <-r.join:
-            r.handleJoin(player)
-        
-        case player := <-r.leave:
-            r.handleLeave(player)
-        
-        case message := <-r.broadcast:
-            r.handleBroadcast(message)
+		case player := <-r.leave:
+			r.handleLeave(player)
 
-        case player := <-r.listPlayers:
-            r.sendUserList(player)
+		case message := <-r.broadcast:
+			r.handleBroadcast(message)
 
-        case dm := <-r.directMessage:
-            r.handleDirectMessage(dm)
-        }
-    }
+		case player := <-r.listPlayers:
+			r.sendUserList(player)
+
+		case dm := <-r.directMessage:
+			r.handleDirectMessage(dm)
+		}
+	}
 }
 
 // func runServer(code string) {
@@ -108,8 +105,5 @@ func (r *Room)Run() {
 //         os.Exit(0)
 //     }()
 //     go room.Run()
-
-
-
 
 // }
