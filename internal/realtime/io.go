@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,10 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
+type IncomingEvent struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
 func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, ctx context.Context) {
 	if conn == nil || room == nil || principal == nil || !principal.IsAuthenticated() {
 		if conn != nil {
@@ -62,26 +67,44 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 	}()
 
 	for {
-		_, messageBytes, err := player.conn.Read(ctx)
+		_, data, err := player.conn.Read(ctx)
 		if err != nil {
 			return
 		}
-		message := string(messageBytes)
+		var event IncomingEvent
+		if err := json.Unmarshal(data, &event); err != nil {
+			continue
+		}
+		switch(event.Type ) {
+		case "chat_message":
+			message := string(event.Data)
+			player.markActive()
+			message = strings.TrimSpace(message)
+			if message == "" {
+				continue
+			}
+			player.mu.Lock()
+			player.messagesRecv++
+			player.mu.Unlock()
+			if strings.HasPrefix(message, "/") {
+				handleCommand(player, room, message)
+				continue
+			}
+			formatted := fmt.Sprintf("[%s]: %s\n", username, message)
+			room.broadcast <- formatted
 
-		player.markActive()
-		message = strings.TrimSpace(message)
-		if message == "" {
-			continue
+		case "draw_stroke":
+			var stroke DrawStroke
+			if err := json.Unmarshal(event.Data, &stroke); err != nil {
+				continue
+			}
+
+			stroke.From = player.principal.DisplayName()
+			stroke.RoomCode = room.roomCode
+			room.drawStroke <- stroke
+
 		}
-		player.mu.Lock()
-		player.messagesRecv++
-		player.mu.Unlock()
-		if strings.HasPrefix(message, "/") {
-			handleCommand(player, room, message)
-			continue
-		}
-		formatted := fmt.Sprintf("[%s]: %s\n", username, message)
-		room.broadcast <- formatted
+		
 	}
 }
 

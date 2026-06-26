@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -148,3 +149,46 @@ func (player *Player) isInactive(timeout time.Duration) bool {
 
 
 
+
+
+func (r *Room)handleDrawStroke(stroke *DrawStroke) {
+	if stroke == nil {
+		return
+	}
+	if r.currentDrawer.principal.DisplayName() != stroke.From {
+		return
+	}
+	r.broadcastStroke(*stroke)
+}
+
+
+func (r* Room)broadcastStroke(stroke DrawStroke) {
+	payload := struct {
+		Type string     `json:"type"`
+		Data DrawStroke `json:"data"`
+	}{
+		Type: "draw_stroke",
+		Data: stroke,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	r.mu.Lock()
+	
+
+	players := make([]*Player, 0,len(r.players))
+	for p := range r.players {
+		players = append(players, p)
+
+	}
+	r.mu.Unlock()
+	for _,player := range players {
+		select {
+		case player.outgoing <- string(data):
+		default:
+
+		}
+	}
+
+}

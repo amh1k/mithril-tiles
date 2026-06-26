@@ -2,7 +2,6 @@ package realtime
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 )
@@ -23,9 +22,17 @@ type Room struct {
 	currentDrawer  *Player
 	currentRoundNo int
 
+	//drawing
+	drawStroke chan DrawStroke
+
 	//Scores
 	scoresMu sync.Mutex
 	scores   map[*Player]int
+	
+
+	//draw histroy (optional)
+	// strokesMu sync.Mutex
+	// strokes   []DrawStroke
 
 	// State2
 	players       map[*Player]bool
@@ -39,9 +46,9 @@ type Room struct {
 	nextMessageID int
 
 	// Persistence
-	walFile *os.File
-	walMu   sync.Mutex
-	dataDir string
+	// walFile *os.File
+	// walMu   sync.Mutex
+	// dataDir string
 
 	// Sessions
 	sessions   map[string]*SessionInfo
@@ -56,11 +63,13 @@ func NewRoom(roomCode string) (*Room, error) {
 		broadcast:     make(chan string),
 		listPlayers:   make(chan *Player),
 		directMessage: make(chan DirectMessage),
+		drawStroke: make(chan DrawStroke, 256),
 		scores:        make(map[*Player]int),
 		sessions:      make(map[string]*SessionInfo),
 		messages:      make([]Message, 0),
 		startTime:     time.Now(),
-		dataDir:       roomCode,
+		roomCode:       roomCode,
+		
 	}
 
 	return cr, nil
@@ -85,6 +94,10 @@ func (r *Room) Run() {
 
 		case dm := <-r.directMessage:
 			r.handleDirectMessage(dm)
+
+
+		case stroke := <-r.drawStroke:
+			r.handleDrawStroke(&stroke)
 		}
 	}
 }
