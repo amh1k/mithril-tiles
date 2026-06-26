@@ -63,7 +63,7 @@ func (r *Room) isUsernameConnected(username string) bool {
 	defer r.mu.Unlock()
 
 	for player := range r.players {
-		if player.principal.DisplayName() == username {
+		if player.Principal.DisplayName() == username {
 			return true
 		}
 	}
@@ -80,7 +80,7 @@ func (r *Room) cleanupInactiveplayers() {
 		var toRemove []*Player
 		for player := range r.players {
 			if player.isInactive(5 * time.Minute) {
-				fmt.Printf("Removing inactive: %s\n", player.principal.DisplayName())
+				fmt.Printf("Removing inactive: %s\n", player.Principal.DisplayName())
 				toRemove = append(toRemove, player)
 			}
 		}

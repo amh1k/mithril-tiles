@@ -9,13 +9,13 @@ import (
 )
 
 type Player struct {
-    conn         *websocket.Conn      
-    principal    data.Principal   //Contains guest or user info
-    outgoing     chan string   // Buffered channel for writes
-    lastActive   time.Time     // For idle detection
-    messagesSent int           // Statistics
-    messagesRecv int
-    isSlowPlayer bool          // Testing flag
-    reconnectToken string
-    mu             sync.Mutex   // Protects stats fields
+	Conn           *websocket.Conn
+	Principal      data.Principal //Contains guest or user info
+	Outgoing       chan string    // Buffered channel for writes
+	LastActive     time.Time      // For idle detection
+	MessagesSent   int            // Statistics
+	MessagesRecv   int
+	IsSlowPlayer   bool // Testing flag
+	ReconnectToken string
+	Mu             sync.Mutex // Protects stats fields
 }

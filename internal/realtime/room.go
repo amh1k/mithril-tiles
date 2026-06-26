@@ -14,6 +14,7 @@ type Room struct {
 	leave          chan *Player
 	broadcast      chan string
 	listPlayers    chan *Player
+	startGame      chan string
 	directMessage  chan DirectMessage
 	correctGuesses int
 	HostPlayer     *Player
@@ -21,6 +22,7 @@ type Room struct {
 	roomCode       string
 	currentDrawer  *Player
 	currentRoundNo int
+	gameStarted    bool
 
 	//drawing
 	drawStroke chan DrawStroke
@@ -28,7 +30,6 @@ type Room struct {
 	//Scores
 	scoresMu sync.Mutex
 	scores   map[*Player]int
-	
 
 	//draw histroy (optional)
 	// strokesMu sync.Mutex
@@ -62,14 +63,15 @@ func NewRoom(roomCode string) (*Room, error) {
 		leave:         make(chan *Player),
 		broadcast:     make(chan string),
 		listPlayers:   make(chan *Player),
+		startGame:     make(chan string, 1),
 		directMessage: make(chan DirectMessage),
-		drawStroke: make(chan DrawStroke, 256),
+		drawStroke:    make(chan DrawStroke, 256),
 		scores:        make(map[*Player]int),
 		sessions:      make(map[string]*SessionInfo),
 		messages:      make([]Message, 0),
 		startTime:     time.Now(),
-		roomCode:       roomCode,
-		
+		roomCode:      roomCode,
+		gameStarted:   false,
 	}
 
 	return cr, nil
@@ -95,9 +97,10 @@ func (r *Room) Run() {
 		case dm := <-r.directMessage:
 			r.handleDirectMessage(dm)
 
-
 		case stroke := <-r.drawStroke:
 			r.handleDrawStroke(&stroke)
+		case <-r.startGame:
+			r.handleStartGame()
 		}
 	}
 }

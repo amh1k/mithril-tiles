@@ -1,4 +1,5 @@
 package realtime
+
 type DrawStroke struct {
 	From      string  `json:"from"`
 	RoomCode  string  `json:"room_code"`
@@ -9,4 +10,3 @@ type DrawStroke struct {
 	Color     string  `json:"color"`
 	BrushSize float64 `json:"brush_size"`
 }
-

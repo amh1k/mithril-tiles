@@ -16,6 +16,7 @@ type IncomingEvent struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 }
+
 func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, ctx context.Context) {
 	if conn == nil || room == nil || principal == nil || !principal.IsAuthenticated() {
 		if conn != nil {
@@ -24,11 +25,11 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 		return
 	}
 	player := &Player{
-		conn:           conn,
-		principal:      *principal,
-		outgoing:       make(chan string, 10),
-		lastActive:     time.Now(),
-		reconnectToken: uuid.NewString(),
+		Conn:           conn,
+		Principal:      *principal,
+		Outgoing:       make(chan string, 10),
+		LastActive:     time.Now(),
+		ReconnectToken: uuid.NewString(),
 	}
 
 	defer func() {
@@ -67,7 +68,7 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 	}()
 
 	for {
-		_, data, err := player.conn.Read(ctx)
+		_, data, err := player.Conn.Read(ctx)
 		if err != nil {
 			return
 		}
@@ -75,7 +76,7 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 		if err := json.Unmarshal(data, &event); err != nil {
 			continue
 		}
-		switch(event.Type ) {
+		switch event.Type {
 		case "chat_message":
 			message := string(event.Data)
 			player.markActive()
@@ -83,9 +84,9 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 			if message == "" {
 				continue
 			}
-			player.mu.Lock()
-			player.messagesRecv++
-			player.mu.Unlock()
+			player.Mu.Lock()
+			player.MessagesRecv++
+			player.Mu.Unlock()
 			if strings.HasPrefix(message, "/") {
 				handleCommand(player, room, message)
 				continue
@@ -99,12 +100,12 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 				continue
 			}
 
-			stroke.From = player.principal.DisplayName()
+			stroke.From = player.Principal.DisplayName()
 			stroke.RoomCode = room.roomCode
 			room.drawStroke <- stroke
 
 		}
-		
+
 	}
 }
 
@@ -114,8 +115,8 @@ func writeMessages(player *Player, ctx context.Context, username string) {
 			fmt.Printf("Panic in writeMessages for %s: %v\n", username, r)
 		}
 	}()
-	for message := range player.outgoing {
-		err := player.conn.Write(ctx, websocket.MessageText, []byte(message))
+	for message := range player.Outgoing {
+		err := player.Conn.Write(ctx, websocket.MessageText, []byte(message))
 		if err != nil {
 			fmt.Printf("Write error for %s: %v\n", username, err)
 			return
@@ -134,23 +135,23 @@ func handleCommand(player *Player, room *Room, command string) {
 		room.listPlayers <- player
 
 	case "/stats":
-		player.mu.Lock()
+		player.Mu.Lock()
 		stats := fmt.Sprintf("Your Stats:\n")
-		stats += fmt.Sprintf("  Messages sent: %d\n", player.messagesSent)
-		stats += fmt.Sprintf("  Messages received: %d\n", player.messagesRecv)
+		stats += fmt.Sprintf("  Messages sent: %d\n", player.MessagesSent)
+		stats += fmt.Sprintf("  Messages received: %d\n", player.MessagesRecv)
 		stats += fmt.Sprintf("  Last active: %s ago\n",
-			time.Since(player.lastActive).Round(time.Second))
-		player.mu.Unlock()
+			time.Since(player.LastActive).Round(time.Second))
+		player.Mu.Unlock()
 
 		select {
-		case player.outgoing <- stats:
+		case player.Outgoing <- stats:
 		default:
 		}
 
 	case "/msg":
 		if len(parts) < 3 {
 			select {
-			case player.outgoing <- "Usage: /msg <username> <message>\n":
+			case player.Outgoing <- "Usage: /msg <username> <message>\n":
 			default:
 			}
 			return
@@ -162,25 +163,25 @@ func handleCommand(player *Player, room *Room, command string) {
 		targetplayer, err := room.findPlayerByUsername(targetUsername)
 		if err != nil {
 			select {
-			case player.outgoing <- fmt.Sprintf("User '%s' not found\n", targetUsername):
+			case player.Outgoing <- fmt.Sprintf("User '%s' not found\n", targetUsername):
 			default:
 			}
 			return
 		}
 
-		privateMsg := fmt.Sprintf("[From %s]: %s\n", player.principal.DisplayName(), messageText)
+		privateMsg := fmt.Sprintf("[From %s]: %s\n", player.Principal.DisplayName(), messageText)
 		select {
-		case targetplayer.outgoing <- privateMsg:
+		case targetplayer.Outgoing <- privateMsg:
 		default:
 			select {
-			case player.outgoing <- fmt.Sprintf("%s's inbox is full\n", targetUsername):
+			case player.Outgoing <- fmt.Sprintf("%s's inbox is full\n", targetUsername):
 			default:
 			}
 			return
 		}
 
 		select {
-		case player.outgoing <- fmt.Sprintf("Message sent to %s\n", targetUsername):
+		case player.Outgoing <- fmt.Sprintf("Message sent to %s\n", targetUsername):
 		default:
 		}
 
@@ -189,7 +190,7 @@ func handleCommand(player *Player, room *Room, command string) {
 		if len(parts) > 1 {
 			if _, err := fmt.Sscanf(parts[1], "%d", &count); err != nil {
 				select {
-				case player.outgoing <- "Usage: /history [count]\n":
+				case player.Outgoing <- "Usage: /history [count]\n":
 				default:
 				}
 				return
@@ -202,33 +203,33 @@ func handleCommand(player *Player, room *Room, command string) {
 
 	case "/token":
 		room.sessionsMu.Lock()
-		session := room.sessions[player.principal.DisplayName()]
+		session := room.sessions[player.Principal.DisplayName()]
 		room.sessionsMu.Unlock()
 
 		if session != nil {
 			msg := fmt.Sprintf("Your reconnect token:\n")
-			msg += fmt.Sprintf("   reconnect:%s:%s\n", player.principal.DisplayName(), session.ReconnectToken)
+			msg += fmt.Sprintf("   reconnect:%s:%s\n", player.Principal.DisplayName(), session.ReconnectToken)
 			select {
-			case player.outgoing <- msg:
+			case player.Outgoing <- msg:
 			default:
 			}
 		}
 
 	case "/quit":
-		announcement := fmt.Sprintf("%s left the chat\n", player.principal.DisplayName())
+		announcement := fmt.Sprintf("%s left the chat\n", player.Principal.DisplayName())
 		room.broadcast <- announcement
 
 		select {
-		case player.outgoing <- "Goodbye!\n":
+		case player.Outgoing <- "Goodbye!\n":
 		default:
 		}
 
 		time.Sleep(100 * time.Millisecond)
-		player.conn.Close(websocket.StatusGoingAway, "player wants to quit")
+		player.Conn.Close(websocket.StatusGoingAway, "player wants to quit")
 
 	default:
 		select {
-		case player.outgoing <- fmt.Sprintf("Unknown: %s\n", parts[0]):
+		case player.Outgoing <- fmt.Sprintf("Unknown: %s\n", parts[0]):
 		default:
 		}
 	}
