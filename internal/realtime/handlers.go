@@ -160,14 +160,16 @@ func (player *Player) isInactive(timeout time.Duration) bool {
 	return time.Since(player.LastActive) > timeout
 }
 
-func (r *Room) handleDrawStroke(stroke *DrawStroke) {
-	if stroke == nil {
-		return
-	}
+func (r *Room) handleDrawStroke(stroke DrawStroke) {
+	// if stroke == nil {
+	// 	fmt.Println("Error happend : (")
+	// 	return
+	// }
 	if r.currentDrawer.Principal.DisplayName() != stroke.From {
+		fmt.Println("Error happend : (")
 		return
 	}
-	r.broadcastStroke(*stroke)
+	r.broadcastStroke(stroke)
 }
 
 func (r *Room) broadcastStroke(stroke DrawStroke) {

@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -57,35 +58,12 @@ func TestBroadcast(t *testing.T) {
 	}
 	waitForMessage(t, player1.Outgoing,"Hi there bros")
 	waitForMessage(t, player2.Outgoing, "Hi there bros")
-
-	// select {
-	// case msg := <-player1.Outgoing:
-	// 	fmt.Println(msg)
-	// 	if !strings.Contains(msg, "Hi") {
-
-	// 		t.Fatal("Player1 didn't receive correct message")
-	// 	}
-	// case <-time.After(1 * time.Second):
-	// 	t.Fatal("Player1 didn't receive message")
-	// }
-	// select {
-	// case msg := <-player2.Outgoing:
-	// 	fmt.Println(msg)
-	// 	if !strings.Contains(msg, "Hi") {
-
-	// 		t.Fatal("Player2 didn't receive correct message")
-	// 	}
-	// case <-time.After(1 * time.Second):
-	// 	t.Fatal("Player2 didn't receive message")
-	// }
+	close(roomTest.done)
 
 }
-
 func waitForMessage(t *testing.T, outgoing <-chan string, expected string) {
 	t.Helper()
-
 	timeout := time.After(time.Second)
-
 	for {
 		select {
 		case msg := <-outgoing:
@@ -96,4 +74,76 @@ func waitForMessage(t *testing.T, outgoing <-chan string, expected string) {
 			t.Fatalf("did not receive message containing %q", expected)
 		}
 	}
+}
+
+
+func TestDrawStroke(t *testing.T) {
+	roomTest, err := NewRoomUnitTest("abc")
+	if err != nil {
+
+	}
+	go roomTest.Run()
+	drawStrokeTest := DrawStroke{
+		From:      "Test User",
+		RoomCode:  "abc",
+		FromX:     10,
+		FromY:     20,
+		ToX:       30,
+		ToY:       40,
+		Color:     "#000000",
+		BrushSize: 5,
+	}
+	principal1 := data.Principal{
+		Type: data.PrincipalUser,
+		User: &data.User{
+			ID:            uuid.MustParse("11111111-1111-1111-1111-111111111111"),
+			DisplayName:   "Test User",
+			AccountStatus: "active",
+			Handle:        "test-user",
+			Email:         "test-user@example.com",
+			Activated:     true,
+		},
+		GuestSession: nil,
+	}
+	player1 := &Player{
+		Principal: principal1,
+		Outgoing:  make(chan string, 10),
+	}
+	principal2 := data.Principal{
+		Type: data.PrincipalGuest,
+		GuestSession: &data.GuestSession{
+			ID:          uuid.MustParse("22222222-2222-2222-2222-222222222222"),
+			DisplayName: "Test Guest",
+			CreatedAt:   time.Now(),
+		},
+		User: nil,
+	}
+	player2 := &Player{
+		Principal: principal2,
+		Outgoing:  make(chan string, 10),
+	}
+	payload := struct {
+		Type string     `json:"type"`
+		Data DrawStroke `json:"data"`
+	}{
+		Type: "draw_stroke",
+		Data: drawStrokeTest,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	roomTest.mu.Lock()
+	roomTest.currentDrawer = player1
+	roomTest.mu.Unlock()
+	roomTest.join <- player1
+	roomTest.join <- player2
+	roomTest.drawStroke <- drawStrokeTest
+	waitForMessage(t, player1.Outgoing,string(data))
+	// waitForMessage(t, player2.Outgoing, string(data))
+	close(roomTest.done)
+
+
+	
+
 }

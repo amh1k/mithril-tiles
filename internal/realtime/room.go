@@ -26,6 +26,7 @@ type Room struct {
 	currentRoundNo int
 	gameStarted    bool
 	roundInfo      chan string
+	done 		   chan struct{}
 	gameLifecycle  GameLifecycle
 
 	//drawing
@@ -84,6 +85,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
 		gameLifecycle:  gameLifecycle,
+		done: 			 make(chan struct{}),
 	}
 
 	return cr, nil
@@ -108,6 +110,7 @@ func NewRoomUnitTest(roomCode string)(*Room, error) {
 		correctGuesses: 0,
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
+		done: 			 make(chan struct{}),
 	}
 
 	return cr, nil
@@ -135,12 +138,14 @@ func (r *Room) Run() {
 			r.handleDirectMessage(dm)
 
 		case stroke := <-r.drawStroke:
-			r.handleDrawStroke(&stroke)
+			r.handleDrawStroke(stroke)
 		case <-r.startGame:
 			r.handleStartGame()
 
 		case <-r.roundInfo:
 			go r.endRound()
+		case <-r.done:
+			return
 		}
 	}
 }
