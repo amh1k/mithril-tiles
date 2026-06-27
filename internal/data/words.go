@@ -29,6 +29,36 @@ type Word struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+func (m WordModel) GetRandomForPackWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	wordPackID uuid.UUID,
+) (*Word, error) {
+	query := `
+	SELECT id, word_pack_id, text, difficulty, created_at
+	FROM words
+	WHERE word_pack_id = $1
+	ORDER BY random()
+	LIMIT 1`
+
+	word := &Word{}
+	err := tx.QueryRow(ctx, query, wordPackID).Scan(
+		&word.ID,
+		&word.WordPackID,
+		&word.Text,
+		&word.Difficulty,
+		&word.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return word, nil
+}
+
 func ValidateWord(v *validator.Validator, word *Word) {
 	v.Check(word.WordPackID != uuid.Nil, "word_pack_id", "must be provided")
 	v.Check(strings.TrimSpace(word.Text) != "", "text", "must be provided")

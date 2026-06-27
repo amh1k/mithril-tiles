@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const roundDuration = 90 * time.Second
+
 type Room struct {
 
 	// Communication channels
@@ -23,6 +25,8 @@ type Room struct {
 	currentDrawer  *Player
 	currentRoundNo int
 	gameStarted    bool
+	roundInfo      chan string
+	gameLifecycle  GameLifecycle
 
 	//drawing
 	drawStroke chan DrawStroke
@@ -56,7 +60,11 @@ type Room struct {
 	sessionsMu sync.Mutex
 }
 
-func NewRoom(roomCode string) (*Room, error) {
+func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
+	if gameLifecycle == nil {
+		return nil, fmt.Errorf("game lifecycle is required")
+	}
+
 	cr := &Room{
 		players:        make(map[*Player]bool),
 		join:           make(chan *Player),
@@ -74,6 +82,8 @@ func NewRoom(roomCode string) (*Room, error) {
 		gameStarted:    false,
 		correctGuesses: 0,
 		currentRoundNo: 0,
+		roundInfo:      make(chan string, 1),
+		gameLifecycle:  gameLifecycle,
 	}
 
 	return cr, nil
@@ -103,6 +113,9 @@ func (r *Room) Run() {
 			r.handleDrawStroke(&stroke)
 		case <-r.startGame:
 			r.handleStartGame()
+
+		case <-r.roundInfo:
+			go r.endRound()
 		}
 	}
 }

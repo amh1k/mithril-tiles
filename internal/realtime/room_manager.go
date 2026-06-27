@@ -6,13 +6,15 @@ import (
 )
 
 type RoomManager struct {
-	mu    sync.Mutex
-	rooms map[string]*Room
+	mu            sync.Mutex
+	rooms         map[string]*Room
+	gameLifecycle GameLifecycle
 }
 
-func NewRoomManager() *RoomManager {
+func NewRoomManager(gameLifecycle GameLifecycle) *RoomManager {
 	return &RoomManager{
-		rooms: make(map[string]*Room),
+		rooms:         make(map[string]*Room),
+		gameLifecycle: gameLifecycle,
 	}
 }
 func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
@@ -24,7 +26,7 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 		return room, nil
 	}
 
-	room, err := NewRoom(roomCode)
+	room, err := NewRoom(roomCode, rm.gameLifecycle)//main way though which we are able to manipulate database in realtime
 	if err != nil {
 		return nil, err
 	}

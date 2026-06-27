@@ -26,6 +26,67 @@ type GameRound struct {
 	EndedAt             *time.Time `json:"ended_at"`
 }
 
+func (m *GameRoundModel) InsertWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	gameRound *GameRound,
+) (*GameRound, error) {
+	query := `
+	INSERT INTO game_rounds (
+		game_id,
+		round_number,
+		drawer_participant_id,
+		word_id,
+		word_text_snapshot,
+		status,
+		duration_seconds,
+		started_at,
+		ended_at
+	)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	RETURNING
+		id,
+		game_id,
+		round_number,
+		drawer_participant_id,
+		word_id,
+		word_text_snapshot,
+		status,
+		duration_seconds,
+		started_at,
+		ended_at`
+
+	err := tx.QueryRow(
+		ctx,
+		query,
+		gameRound.GameID,
+		gameRound.RoundNumber,
+		gameRound.DrawerParticipantID,
+		gameRound.WordID,
+		gameRound.WordTextSnapshot,
+		gameRound.Status,
+		gameRound.DurationSeconds,
+		gameRound.StartedAt,
+		gameRound.EndedAt,
+	).Scan(
+		&gameRound.ID,
+		&gameRound.GameID,
+		&gameRound.RoundNumber,
+		&gameRound.DrawerParticipantID,
+		&gameRound.WordID,
+		&gameRound.WordTextSnapshot,
+		&gameRound.Status,
+		&gameRound.DurationSeconds,
+		&gameRound.StartedAt,
+		&gameRound.EndedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return gameRound, nil
+}
+
 func (m *GameRoundModel) CompleteActiveForRoom(
 	ctx context.Context,
 	tx pgx.Tx,

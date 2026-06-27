@@ -1,10 +1,13 @@
 package realtime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
 	"time"
+
+	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
 func (r *Room) handleBroadcast(message string) {
@@ -207,7 +210,7 @@ func (r *Room) canJoin() bool {
 	return true
 
 }
-func (r *Room)CanStart() bool {
+func (r *Room) CanStart() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(r.players) <= 1 {
@@ -222,46 +225,116 @@ func (r *Room) StartGame() {
 	default:
 	}
 }
-func(r *Room)HandleRoundEnd() {
+func (r *Room) endRound() {
+	r.scoresMu.Lock()
+	scores := make([]PlayerRoundScore, 0, len(r.scores))
+	for player, points := range r.scores {
+		scores = append(scores, PlayerRoundScore{
+			Principal: player.Principal,
+			Points:    points,
+		})
+	}
+	r.scoresMu.Unlock()
 
-}
-func (r *Room)HandleRoundStart()  {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := r.gameLifecycle.EndRound(ctx, RoundEndRequest{
+		RoomCode: r.roomCode,
+		EndedAt:  time.Now(),
+		Scores:   scores,
+	})
+	if err != nil {
+		fmt.Printf("failed to end round in room %s: %v\n", r.roomCode, err)
+		return
+	}
+
 	r.mu.Lock()
-	r.currentRoundNo ++
-	r.correctGuesses = 0
-	r.currentWord = "bcd"
-	tempArr := make([]*Player, 0, len(r.players))
-	for p := range r.players {
-		tempArr = append(tempArr, p)
-
-	}
-	randomNumber := rand.Intn(5)
-	r.currentDrawer = tempArr[randomNumber]
-	for player := range r.scores {
-		r.scores[player] = 0
-	}
+	r.currentWord = ""
 	r.mu.Unlock()
 
+	r.startRound()
+}
+
+func (r *Room) startRound() {
+	r.mu.Lock()
+	if !r.gameStarted || len(r.players) < 2 {
+		r.mu.Unlock()
+		return
+	}
+
+	roundNumber := r.currentRoundNo + 1
+	players := make([]*Player, 0, len(r.players))
+	for player := range r.players {
+		players = append(players, player)
+	}
+	drawer := players[rand.Intn(len(players))]
+	r.mu.Unlock()
+
+	participants := make([]data.Principal, 0, len(players))
+	for _, player := range players {
+		participants = append(participants, player.Principal)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := r.gameLifecycle.StartRound(ctx, RoundStartRequest{
+		RoomCode:        r.roomCode,
+		RoundNumber:     roundNumber,
+		Drawer:          drawer.Principal,
+		Participants:    participants,
+		DurationSeconds: int(roundDuration / time.Second),
+	})
+	if err != nil {
+		fmt.Printf("failed to start round in room %s: %v\n", r.roomCode, err)
+		return
+	}
+
+	r.scoresMu.Lock()
+	r.scores = make(map[*Player]int, len(players))
+	for _, player := range players {
+		r.scores[player] = 0
+	}
+	r.correctGuesses = 0
+	r.scoresMu.Unlock()
+
+	r.mu.Lock()
+	r.currentRoundNo = roundNumber
+	r.currentDrawer = drawer
+	r.currentWord = result.Word
+	r.startTime = result.StartedAt
+	r.mu.Unlock()
+
+	time.AfterFunc(roundDuration, func() {
+		select {
+		case r.roundInfo <- "end round":
+		default:
+		}
+	})
 }
 
 func (r *Room) handleStartGame() {
-	if r.gameStarted {
+	r.mu.Lock()
+	if r.gameStarted || len(r.players) < 2 {
+		r.mu.Unlock()
 		return
 	}
-	r.mu.Lock()
-	// r.gameStarted = true
-	// r.currentRoundNo = 1
-	// r.correctGuesses = 0
-	// r.currentWord = "bac" // have to add logic for adding current word  todo
+	r.gameStarted = true
 	r.startTime = time.Now()
-	
 	r.mu.Unlock()
+
+	go r.startRound()
 }
 
-func(r *Room)handleCorrectGuess(player *Player) {
+func (r *Room) handleCorrectGuess(player *Player) {
 	r.scoresMu.Lock()
-	r.scores[player]++
-	r.correctGuesses ++
-	r.scoresMu.Unlock()
+	defer r.scoresMu.Unlock()
 
+	if _, eligible := r.scores[player]; !eligible {
+		return
+	}
+
+	r.scores[player]++
+	r.correctGuesses++
 }

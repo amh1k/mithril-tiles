@@ -26,19 +26,19 @@ type config struct {
 		maxIdleConns int
 		maxIdleTime  time.Duration
 	}
-	
+
 	cors struct {
 		trustedOrigins []string
 	}
 }
 type application struct {
-	config config
-	logger *slog.Logger
-	models data.Models
-	wg sync.WaitGroup
-	roomManager realtime.RoomManager
-
+	config      config
+	logger      *slog.Logger
+	models      data.Models
+	wg          sync.WaitGroup
+	roomManager *realtime.RoomManager
 }
+
 func main() {
 	var cfg config
 	err := godotenv.Load()
@@ -64,16 +64,17 @@ func main() {
 		os.Exit(1)
 	}
 	runMigrations(cfg.db.dsn)
-	
+
 	defer db.Close(ctx)
 	logger.Info("database connection pool established")
-	roomManager := realtime.NewRoomManager()
+	models := data.NewModels(db)
+	gameLifecycle := newGameLifecycleService(models)
+	roomManager := realtime.NewRoomManager(gameLifecycle)
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
-		roomManager: *roomManager,
-		
+		config:      cfg,
+		logger:      logger,
+		models:      models,
+		roomManager: roomManager,
 	}
 	err = app.serve()
 	if err != nil {
@@ -81,7 +82,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func openDB(cfg config, ctx context.Context)(*pgx.Conn, error) {
+func openDB(cfg config, ctx context.Context) (*pgx.Conn, error) {
 	conn, err := pgx.Connect(ctx, cfg.db.dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
