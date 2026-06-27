@@ -21,6 +21,51 @@ type RoundScore struct {
 	AwardedAt     time.Time `json:"awarded_at"`
 }
 
+func (m *RoundScoreModel) InsertWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	roundScore *RoundScore,
+) (*RoundScore, error) {
+	query := `
+	INSERT INTO round_scores (
+		round_id,
+		participant_id,
+		points_earned,
+		score_reason,
+		awarded_at
+	)
+	VALUES ($1, $2, $3, $4, $5)
+	RETURNING
+		id,
+		round_id,
+		participant_id,
+		points_earned,
+		score_reason,
+		awarded_at`
+
+	err := tx.QueryRow(
+		ctx,
+		query,
+		roundScore.RoundID,
+		roundScore.ParticipantID,
+		roundScore.PointsEarned,
+		roundScore.ScoreReason,
+		roundScore.AwardedAt,
+	).Scan(
+		&roundScore.ID,
+		&roundScore.RoundID,
+		&roundScore.ParticipantID,
+		&roundScore.PointsEarned,
+		&roundScore.ScoreReason,
+		&roundScore.AwardedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return roundScore, nil
+}
+
 func (m *RoundScoreModel) Insert(roundScore *RoundScore) (*RoundScore, error) {
 	query := `
 	INSERT INTO round_scores (

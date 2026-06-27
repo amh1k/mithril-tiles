@@ -72,33 +72,111 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	if room.HostPlayer == nil {
+
+	hostPlayer, players := room.GameStartSnapshot()
+	if hostPlayer == nil {
 		app.badRequestResponse(w, r, errors.New("room has no host player"))
 		return
 	}
-	if !room.CanStart() {
-		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
+
+	principal := app.contextGetPrincipal(r)
+	if principal.ID() != hostPlayer.Principal.ID() {
+		app.errorResponse(w, r, http.StatusForbidden, "only the room host can start the game")
+		return
 	}
-	room.StartGame()
-	game := &data.Game{
-		RoomCode:          roomCode,
-		HostParticipantID: room.HostPlayer.Principal.ID(),
-		WordPackID:        input.WordPackID,
-		Status:            "started",
-		SettingsSnapshot:  input.SettingsSnapshot,
-		StartedAt:         time.Now(),
+	if len(players) <= 1 {
+		app.badRequestResponse(w, r, errors.New("cannot start a game with fewer than two players"))
+		return
 	}
 
-	game, err = app.models.Games.Insert(game)
+	hostIsConnected := false
+	for _, player := range players {
+		if player == hostPlayer {
+			hostIsConnected = true
+			break
+		}
+	}
+	if !hostIsConnected {
+		app.badRequestResponse(w, r, errors.New("room host is not connected"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	tx, err := app.models.BeginTransaction(ctx)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	
+	defer tx.Rollback(ctx)
+
+	startedAt := time.Now()
+	hostParticipantID := uuid.New()
+	game := &data.Game{
+		ID:                uuid.New(),
+		RoomCode:          roomCode,
+		HostParticipantID: hostParticipantID,
+		WordPackID:        input.WordPackID,
+		Status:            "started",
+		SettingsSnapshot:  input.SettingsSnapshot,
+		StartedAt:         startedAt,
+	}
+
+	game, err = app.models.Games.InsertWithTx(ctx, tx, game)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	participants := make([]*data.GameParticipant, 0, len(players))
+	for _, player := range players {
+		participantID := uuid.New()
+		isHost := player == hostPlayer
+		if isHost {
+			participantID = hostParticipantID
+		}
+
+		participant := &data.GameParticipant{
+			ID:                  participantID,
+			GameID:              game.ID,
+			DisplayNameSnapshot: player.Principal.DisplayName(),
+			IsHost:              isHost,
+			JoinedAt:            startedAt,
+		}
+
+		participant, err = app.models.GameParticipants.InsertPrincipalWithTx(
+			ctx,
+			tx,
+			participant,
+			&player.Principal,
+		)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
+
+		participants = append(participants, participant)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	room.StartGame()
+
+	err = app.writeJSON(w, http.StatusCreated, envelope{
+		"game":              game,
+		"game_participants": participants,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
 
-
-func(app *application) handleRoundStart(w http.ResponseWriter, r *http.Request) {
+func (app *application) handleRoundStart(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
 	roomCode := params.ByName("roomID")
 	if roomCode == "" {
@@ -115,7 +193,7 @@ func(app *application) handleRoundStart(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if !room.CanStart() {
-		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
+		app.serverErrorResponse(w, r, fmt.Errorf("Cant play with 1 user only"))
 	}
 	var selectedWord struct {
 		ID   uuid.UUID
@@ -164,13 +242,14 @@ func(app *application) handleRoundStart(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func(app *application)handleRoundEnd(w http.ResponseWriter, r *http.Request) {
+func (app *application) handleRoundEnd(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
 	roomCode := params.ByName("roomID")
 	if roomCode == "" {
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
 	}
+
 	room, err := app.roomManager.GetOrCreateRoom(roomCode)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
@@ -180,24 +259,89 @@ func(app *application)handleRoundEnd(w http.ResponseWriter, r *http.Request) {
 		app.badRequestResponse(w, r, errors.New("room has no host player"))
 		return
 	}
-	if !room.CanStart() {
-		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
+
+	principal := app.contextGetPrincipal(r)
+	if principal.ID() != room.HostPlayer.Principal.ID() {
+		app.errorResponse(w, r, http.StatusForbidden, "only the room host can end a round")
+		return
 	}
+
 	scores := room.GetScores()
-	for player,score := range scores{
-		&data.RoundScore{
-			ParticipantID: player.Principal.ID(),
-			PointsEarned: score,
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	tx, err := app.models.BeginTransaction(ctx)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	endedAt := time.Now()
+	gameRound, err := app.models.GameRounds.CompleteActiveForRoom(
+		ctx,
+		tx,
+		roomCode,
+		endedAt,
+	)
+	if errors.Is(err, data.ErrRecordNotFound) {
+		app.badRequestResponse(w, r, errors.New("room has no active round"))
+		return
+	}
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	roundScores := make([]*data.RoundScore, 0, len(scores))
+	for player, score := range scores {
+		participantID, err := app.models.GameParticipants.GetIDForPrincipal(
+			ctx,
+			tx,
+			gameRound.GameID,
+			&player.Principal,
+		)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			app.serverErrorResponse(w, r, fmt.Errorf(
+				"player %s is not registered as a game participant",
+				player.Principal.ID(),
+			))
+			return
+		}
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
 		}
 
+		roundScore := &data.RoundScore{
+			RoundID:       gameRound.ID,
+			ParticipantID: participantID,
+			PointsEarned:  score,
+			ScoreReason:   "correct_guess",
+			AwardedAt:     endedAt,
+		}
 
+		roundScore, err = app.models.RoundScores.InsertWithTx(ctx, tx, roundScore)
+		if err != nil {
+			app.serverErrorResponse(w, r, err)
+			return
+		}
 
-		
-
+		roundScores = append(roundScores, roundScore)
 	}
 
+	err = tx.Commit(ctx)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
 	}
-	
 
+	room.HandleRoundEnd()
 
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"game_round":   gameRound,
+		"round_scores": roundScores,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }

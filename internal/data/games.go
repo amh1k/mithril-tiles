@@ -25,6 +25,63 @@ type Game struct {
 	CreatedAt         time.Time       `json:"created_at"`
 }
 
+func (m *GameModel) InsertWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	game *Game,
+) (*Game, error) {
+	query := `
+	INSERT INTO games (
+		id,
+		room_code,
+		host_participant_id,
+		word_pack_id,
+		status,
+		settings_snapshot,
+		started_at,
+		ended_at
+	)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	RETURNING
+		id,
+		room_code,
+		host_participant_id,
+		word_pack_id,
+		status,
+		settings_snapshot,
+		started_at,
+		ended_at,
+		created_at`
+
+	err := tx.QueryRow(
+		ctx,
+		query,
+		game.ID,
+		game.RoomCode,
+		game.HostParticipantID,
+		game.WordPackID,
+		game.Status,
+		game.SettingsSnapshot,
+		game.StartedAt,
+		game.EndedAt,
+	).Scan(
+		&game.ID,
+		&game.RoomCode,
+		&game.HostParticipantID,
+		&game.WordPackID,
+		&game.Status,
+		&game.SettingsSnapshot,
+		&game.StartedAt,
+		&game.EndedAt,
+		&game.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
 func (m *GameModel) Insert(game *Game) (*Game, error) {
 	query := `
 	INSERT INTO games (

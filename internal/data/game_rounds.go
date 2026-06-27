@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,6 +24,62 @@ type GameRound struct {
 	DurationSeconds     int        `json:"duration_seconds"`
 	StartedAt           time.Time  `json:"started_at"`
 	EndedAt             *time.Time `json:"ended_at"`
+}
+
+func (m *GameRoundModel) CompleteActiveForRoom(
+	ctx context.Context,
+	tx pgx.Tx,
+	roomCode string,
+	endedAt time.Time,
+) (*GameRound, error) {
+	query := `
+	UPDATE game_rounds
+	SET status = 'completed',
+		ended_at = $1
+	WHERE id = (
+		SELECT gr.id
+		FROM game_rounds AS gr
+		INNER JOIN games AS g ON g.id = gr.game_id
+		WHERE g.room_code = $2
+			AND g.status = 'started'
+			AND gr.status = 'started'
+		ORDER BY gr.started_at DESC
+		LIMIT 1
+		FOR UPDATE
+	)
+	RETURNING
+		id,
+		game_id,
+		round_number,
+		drawer_participant_id,
+		word_id,
+		word_text_snapshot,
+		status,
+		duration_seconds,
+		started_at,
+		ended_at`
+
+	gameRound := &GameRound{}
+	err := tx.QueryRow(ctx, query, endedAt, roomCode).Scan(
+		&gameRound.ID,
+		&gameRound.GameID,
+		&gameRound.RoundNumber,
+		&gameRound.DrawerParticipantID,
+		&gameRound.WordID,
+		&gameRound.WordTextSnapshot,
+		&gameRound.Status,
+		&gameRound.DurationSeconds,
+		&gameRound.StartedAt,
+		&gameRound.EndedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return gameRound, nil
 }
 
 func (m *GameRoundModel) Insert(gameRound *GameRound) (*GameRound, error) {

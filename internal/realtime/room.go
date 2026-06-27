@@ -58,20 +58,20 @@ type Room struct {
 
 func NewRoom(roomCode string) (*Room, error) {
 	cr := &Room{
-		players:       make(map[*Player]bool),
-		join:          make(chan *Player),
-		leave:         make(chan *Player),
-		broadcast:     make(chan string),
-		listPlayers:   make(chan *Player),
-		startGame:     make(chan string, 1),
-		directMessage: make(chan DirectMessage),
-		drawStroke:    make(chan DrawStroke, 256),
-		scores:        make(map[*Player]int),
-		sessions:      make(map[string]*SessionInfo),
-		messages:      make([]Message, 0),
-		startTime:     time.Now(),
-		roomCode:      roomCode,
-		gameStarted:   false,
+		players:        make(map[*Player]bool),
+		join:           make(chan *Player),
+		leave:          make(chan *Player),
+		broadcast:      make(chan string),
+		listPlayers:    make(chan *Player),
+		startGame:      make(chan string, 1),
+		directMessage:  make(chan DirectMessage),
+		drawStroke:     make(chan DrawStroke, 256),
+		scores:         make(map[*Player]int),
+		sessions:       make(map[string]*SessionInfo),
+		messages:       make([]Message, 0),
+		startTime:      time.Now(),
+		roomCode:       roomCode,
+		gameStarted:    false,
 		correctGuesses: 0,
 		currentRoundNo: 0,
 	}
@@ -106,8 +106,20 @@ func (r *Room) Run() {
 		}
 	}
 }
-func (r *Room)GetScores()map [*Player]int{
+func (r *Room) GetScores() map[*Player]int {
 	return r.scores
+}
+
+func (r *Room) GameStartSnapshot() (*Player, []*Player) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	players := make([]*Player, 0, len(r.players))
+	for player := range r.players {
+		players = append(players, player)
+	}
+
+	return r.HostPlayer, players
 }
 
 // func runServer(code string) {
