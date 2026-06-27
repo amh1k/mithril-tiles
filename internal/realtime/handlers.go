@@ -207,6 +207,14 @@ func (r *Room) canJoin() bool {
 	return true
 
 }
+func (r *Room)CanStart() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.players) <= 1 {
+		return false
+	}
+	return true
+}
 
 func (r *Room) StartGame() {
 	select {
@@ -214,27 +222,46 @@ func (r *Room) StartGame() {
 	default:
 	}
 }
+func(r *Room)HandleRoundEnd() {
 
-func (r *Room) handleStartGame() {
-	if r.gameStarted {
-		return
-	}
-
+}
+func (r *Room)HandleRoundStart()  {
 	r.mu.Lock()
-
-	r.currentRoundNo = 1
+	r.currentRoundNo ++
 	r.correctGuesses = 0
-	r.currentWord = "bac" // have to add logic for adding current word  todo
-	r.startTime = time.Now()
-	randomNumber := rand.Intn(5)
+	r.currentWord = "bcd"
 	tempArr := make([]*Player, 0, len(r.players))
 	for p := range r.players {
 		tempArr = append(tempArr, p)
 
 	}
+	randomNumber := rand.Intn(5)
 	r.currentDrawer = tempArr[randomNumber]
-
+	for player := range r.scores {
+		r.scores[player] = 0
+	}
 	r.mu.Unlock()
 
+}
+
+func (r *Room) handleStartGame() {
+	if r.gameStarted {
+		return
+	}
+	r.mu.Lock()
+	// r.gameStarted = true
+	// r.currentRoundNo = 1
+	// r.correctGuesses = 0
+	// r.currentWord = "bac" // have to add logic for adding current word  todo
+	r.startTime = time.Now()
+	
+	r.mu.Unlock()
+}
+
+func(r *Room)handleCorrectGuess(player *Player) {
+	r.scoresMu.Lock()
+	r.scores[player]++
+	r.correctGuesses ++
+	r.scoresMu.Unlock()
 
 }

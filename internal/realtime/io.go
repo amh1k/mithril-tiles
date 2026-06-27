@@ -227,6 +227,33 @@ func handleCommand(player *Player, room *Room, command string) {
 		time.Sleep(100 * time.Millisecond)
 		player.Conn.Close(websocket.StatusGoingAway, "player wants to quit")
 
+	case"/guess":
+		if len(parts) < 2 {
+			select {
+			case player.Outgoing <- "Usage: /guess <word>\n":
+			default:
+			}
+			return
+
+		}
+		targetWord := room.currentWord
+		guessedWord := parts[1]
+		if targetWord !=guessedWord {
+			select {
+			case player.Outgoing <- "Wrong Guess":
+			default:
+			}
+		}else {
+			select {
+			case player.Outgoing <- "Correct Guess! Congrats":
+				room.handleCorrectGuess(player)
+			default:
+
+			}
+		}
+
+
+
 	default:
 		select {
 		case player.Outgoing <- fmt.Sprintf("Unknown: %s\n", parts[0]):

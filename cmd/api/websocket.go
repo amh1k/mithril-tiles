@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -75,6 +76,9 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 		app.badRequestResponse(w, r, errors.New("room has no host player"))
 		return
 	}
+	if !room.CanStart() {
+		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
+	}
 	room.StartGame()
 	game := &data.Game{
 		RoomCode:          roomCode,
@@ -89,6 +93,29 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
+	}
+	
+}
+
+
+func(app *application) handleRoundStart(w http.ResponseWriter, r *http.Request) {
+	params := httprouter.ParamsFromContext(r.Context())
+	roomCode := params.ByName("roomID")
+	if roomCode == "" {
+		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	room, err := app.roomManager.GetOrCreateRoom(roomCode)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	if room.HostPlayer == nil {
+		app.badRequestResponse(w, r, errors.New("room has no host player"))
+		return
+	}
+	if !room.CanStart() {
+		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
 	}
 	var selectedWord struct {
 		ID   uuid.UUID
@@ -128,14 +155,49 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-
-	
-
+	room.HandleRoundStart()
 	err = app.writeJSON(w, http.StatusCreated, envelope{
-		"game":       game,
 		"game_round": gameRound,
 	}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func(app *application)handleRoundEnd(w http.ResponseWriter, r *http.Request) {
+	params := httprouter.ParamsFromContext(r.Context())
+	roomCode := params.ByName("roomID")
+	if roomCode == "" {
+		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	room, err := app.roomManager.GetOrCreateRoom(roomCode)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	if room.HostPlayer == nil {
+		app.badRequestResponse(w, r, errors.New("room has no host player"))
+		return
+	}
+	if !room.CanStart() {
+		app.serverErrorResponse(w,r, fmt.Errorf("Cant play with 1 user only"))
+	}
+	scores := room.GetScores()
+	for player,score := range scores{
+		&data.RoundScore{
+			ParticipantID: player.Principal.ID(),
+			PointsEarned: score,
+		}
+
+
+
+		
+
+	}
+
+	}
+	
+
+
 }

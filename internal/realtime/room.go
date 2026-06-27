@@ -72,6 +72,8 @@ func NewRoom(roomCode string) (*Room, error) {
 		startTime:     time.Now(),
 		roomCode:      roomCode,
 		gameStarted:   false,
+		correctGuesses: 0,
+		currentRoundNo: 0,
 	}
 
 	return cr, nil
@@ -103,6 +105,9 @@ func (r *Room) Run() {
 			r.handleStartGame()
 		}
 	}
+}
+func (r *Room)GetScores()map [*Player]int{
+	return r.scores
 }
 
 // func runServer(code string) {
