@@ -12,6 +12,11 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
+// curl -X POST http://localhost:4000/v1/guest-sessions \
+//   -H "Content-Type: application/json" \
+//   -d '{"display_name":"Player One"}'
+
+
 type IncomingEvent struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
@@ -48,6 +53,10 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	if err := conn.Write(ctx, websocket.MessageText, []byte(welcomeMessage)); err != nil {
 		return
 	}
+	room.join <- player
+	defer func() {
+		room.leave <- player
+	}()
 	go readMessages(player, room, username, ctx)
 	writeMessages(player, ctx, username)
 
@@ -78,16 +87,22 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 		}
 		switch event.Type {
 		case "chat_message":
-			message := string(event.Data)
+			var message string
+			if err := json.Unmarshal(event.Data, &message); err != nil {
+				continue
+			}
 			player.markActive()
 			message = strings.TrimSpace(message)
+			
 			if message == "" {
+				
 				continue
 			}
 			player.Mu.Lock()
 			player.MessagesRecv++
 			player.Mu.Unlock()
 			if strings.HasPrefix(message, "/") {
+				
 				handleCommand(player, room, message)
 				continue
 			}
@@ -125,6 +140,7 @@ func writeMessages(player *Player, ctx context.Context, username string) {
 }
 
 func handleCommand(player *Player, room *Room, command string) {
+	// fmt.Println("handle command check")
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
 		return

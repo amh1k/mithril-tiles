@@ -21,7 +21,7 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPost, "/v1/word-packs/:id/words", app.requireRegisteredUser(app.createWordHandler))
 	router.HandlerFunc(http.MethodPatch, "/v1/words/:id", app.requireRegisteredUser(app.updateWordHandler))
 	router.HandlerFunc(http.MethodDelete, "/v1/words/:id", app.requireRegisteredUser(app.deleteWordHandler))
-	router.HandlerFunc(http.MethodPost, "/v1/rooms/:id", app.requireAuthenticatedPrincipal(app.createGameHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID", app.requireAuthenticatedPrincipal(app.createGameHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID/start", app.requireAuthenticatedPrincipal(app.handleStartGame))
 	router.HandlerFunc(http.MethodGet, "/v1/rooms/:roomID/ws", app.requireAuthenticatedPrincipal(app.handleWebSocket))
 	return app.recoverPanic(app.authenticate(router))
