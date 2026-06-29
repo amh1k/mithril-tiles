@@ -208,4 +208,130 @@ L1:
 	if !hostFound {
 		t.Fatal("game host was not present in game participants")
 	}
+	for msg := range player1.Receive {
+		if msg == "Round1 has started" {
+			break
+		}
+	}
+	// below this is the place where the round has been started
+	gameRound, err := app.models.GameRounds.GetByGameAndRoundNumber(input.Game.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gameRound.ID == uuid.Nil {
+		t.Fatal("expected persisted game round ID")
+	}
+	if gameRound.GameID != input.Game.ID {
+		t.Fatalf("expected game ID %s, got %s", input.Game.ID, gameRound.GameID)
+	}
+	if gameRound.RoundNumber != 1 {
+		t.Fatalf("expected round number 1, got %d", gameRound.RoundNumber)
+	}
+	if gameRound.Status != "started" {
+		t.Fatalf("expected round status %q, got %q", "started", gameRound.Status)
+	}
+	if gameRound.WordID != word.ID {
+		t.Fatalf("expected word ID %s, got %s", word.ID, gameRound.WordID)
+	}
+	if gameRound.WordTextSnapshot != word.Text {
+		t.Fatalf("expected word snapshot %q, got %q", word.Text, gameRound.WordTextSnapshot)
+	}
+	if gameRound.DurationSeconds != 10 {
+		t.Fatalf("expected round duration 10, got %d", gameRound.DurationSeconds)
+	}
+	if gameRound.StartedAt.IsZero() {
+		t.Fatal("expected round start time")
+	}
+	if gameRound.EndedAt != nil {
+		t.Fatal("expected active round to have no end time")
+	}
+
+	drawerFound := false
+	for _, participant := range input.GameParticipants {
+		if participant.ID == gameRound.DrawerParticipantID {
+			drawerFound = true
+			break
+		}
+	}
+	if !drawerFound {
+		t.Fatal("round drawer was not present in game participants")
+	}
+
+	player1.Send <- "/guess apple"
+	msg := <-player1.Receive
+	if msg != "Correct Guess! Congrats" {
+		t.Fatal("Guess should be correct")
+	}
+	// this will block
+	for msg := range player1.Receive {
+		if msg == "Round1 has ended" {
+			break
+		}
+	}
+
+	completedRound, err := app.models.GameRounds.GetByGameAndRoundNumber(input.Game.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completedRound.ID != gameRound.ID {
+		t.Fatalf("expected completed round ID %s, got %s", gameRound.ID, completedRound.ID)
+	}
+	if completedRound.Status != "completed" {
+		t.Fatalf("expected round status %q, got %q", "completed", completedRound.Status)
+	}
+	if completedRound.EndedAt == nil {
+		t.Fatal("expected completed round end time")
+	}
+	if completedRound.EndedAt.Before(completedRound.StartedAt) {
+		t.Fatal("round ended before it started")
+	}
+
+	roundScores, err := app.models.RoundScores.GetAllForRound(completedRound.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roundScores) != 2 {
+		t.Fatalf("expected 2 round scores, got %d", len(roundScores))
+	}
+	expectedScores := make(map[uuid.UUID]int, len(input.GameParticipants))
+	for _, participant := range input.GameParticipants {
+		switch participant.DisplayNameSnapshot {
+		case "player1":
+			expectedScores[participant.ID] = 1
+		case "player2":
+			expectedScores[participant.ID] = 0
+		}
+	}
+	if len(expectedScores) != 2 {
+		t.Fatal("expected game participants for player1 and player2")
+	}
+
+	seenScores := make(map[uuid.UUID]bool, len(roundScores))
+	for _, roundScore := range roundScores {
+		expectedPoints, ok := expectedScores[roundScore.ParticipantID]
+		if !ok {
+			t.Fatalf("unexpected score participant %s", roundScore.ParticipantID)
+		}
+		if roundScore.RoundID != completedRound.ID {
+			t.Fatalf("expected score round ID %s, got %s", completedRound.ID, roundScore.RoundID)
+		}
+		if roundScore.PointsEarned != expectedPoints {
+			t.Fatalf(
+				"expected participant %s to earn %d point(s), got %d",
+				roundScore.ParticipantID,
+				expectedPoints,
+				roundScore.PointsEarned,
+			)
+		}
+		if roundScore.ScoreReason != "correct_guess" {
+			t.Fatalf("expected score reason %q, got %q", "correct_guess", roundScore.ScoreReason)
+		}
+		if roundScore.AwardedAt.IsZero() {
+			t.Fatal("expected score award time")
+		}
+		seenScores[roundScore.ParticipantID] = true
+	}
+	if len(seenScores) != len(expectedScores) {
+		t.Fatal("not all participant scores were persisted")
+	}
 }

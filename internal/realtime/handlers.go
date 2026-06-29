@@ -250,12 +250,16 @@ func (r *Room) endRound() {
 		fmt.Printf("failed to end round in room %s: %v\n", r.roomCode, err)
 		return
 	}
-
 	r.mu.Lock()
 	r.currentWord = ""
 	r.mu.Unlock()
-
-	r.startRound()
+	// close(r.done)
+	r.broadcast<- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
+	timer := time.NewTimer(10 * time.Second)
+	select{
+	case <-timer.C:
+		r.startRound()
+	}
 }
 
 func (r *Room) startRound() {
@@ -306,6 +310,7 @@ func (r *Room) startRound() {
 	r.currentWord = result.Word
 	r.startTime = result.StartedAt
 	r.mu.Unlock()
+	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
 
 	time.AfterFunc(roundDuration, func() {
 		select {

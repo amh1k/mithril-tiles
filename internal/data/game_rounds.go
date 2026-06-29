@@ -88,6 +88,51 @@ func (m *GameRoundModel) InsertWithTx(
 	return gameRound, nil
 }
 
+func (m *GameRoundModel) GetByGameAndRoundNumber(
+	gameID uuid.UUID,
+	roundNumber int,
+) (*GameRound, error) {
+	query := `
+	SELECT
+		id,
+		game_id,
+		round_number,
+		drawer_participant_id,
+		word_id,
+		word_text_snapshot,
+		status,
+		duration_seconds,
+		started_at,
+		ended_at
+	FROM game_rounds
+	WHERE game_id = $1 AND round_number = $2`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	gameRound := &GameRound{}
+	err := m.DB.QueryRow(ctx, query, gameID, roundNumber).Scan(
+		&gameRound.ID,
+		&gameRound.GameID,
+		&gameRound.RoundNumber,
+		&gameRound.DrawerParticipantID,
+		&gameRound.WordID,
+		&gameRound.WordTextSnapshot,
+		&gameRound.Status,
+		&gameRound.DurationSeconds,
+		&gameRound.StartedAt,
+		&gameRound.EndedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return gameRound, nil
+}
+
 func (m *GameRoundModel) CompleteActiveForRoom(
 	ctx context.Context,
 	tx pgx.Tx,

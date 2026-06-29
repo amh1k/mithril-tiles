@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const roundDuration = 90 * time.Second
+const roundDuration = 10 * time.Second
 
 type Room struct {
 

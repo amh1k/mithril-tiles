@@ -22,6 +22,50 @@ type RoundScore struct {
 	AwardedAt     time.Time `json:"awarded_at"`
 }
 
+func (m *RoundScoreModel) GetAllForRound(roundID uuid.UUID) ([]*RoundScore, error) {
+	query := `
+	SELECT
+		id,
+		round_id,
+		participant_id,
+		points_earned,
+		score_reason,
+		awarded_at
+	FROM round_scores
+	WHERE round_id = $1
+	ORDER BY participant_id`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.Query(ctx, query, roundID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roundScores := make([]*RoundScore, 0)
+	for rows.Next() {
+		roundScore := &RoundScore{}
+		if err := rows.Scan(
+			&roundScore.ID,
+			&roundScore.RoundID,
+			&roundScore.ParticipantID,
+			&roundScore.PointsEarned,
+			&roundScore.ScoreReason,
+			&roundScore.AwardedAt,
+		); err != nil {
+			return nil, err
+		}
+		roundScores = append(roundScores, roundScore)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return roundScores, nil
+}
+
 func (m *RoundScoreModel) InsertWithTx(
 	ctx context.Context,
 	tx pgx.Tx,
