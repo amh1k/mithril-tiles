@@ -28,11 +28,13 @@ func (s *gameLifecycleService) StartRound(
 		return nil, fmt.Errorf("begin round-start transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	
 
 	game, err := s.models.Games.GetActiveForRoomWithTx(ctx, tx, request.RoomCode)
 	if err != nil {
 		return nil, fmt.Errorf("get active game: %w", err)
 	}
+	
 
 	startedAt := time.Now()
 	for i := range request.Participants {

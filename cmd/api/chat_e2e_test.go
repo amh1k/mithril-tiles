@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
@@ -76,21 +77,27 @@ func waitForPlayerMessage(t *testing.T, player *realtime.TestPlayer, expected st
 }
 
 func TestChat(t *testing.T) {
-	_, server := NewTestApplicationE2E(t)
+	app, server := NewTestApplicationE2E(t)
 	fmt.Println(server.URL)
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/rooms/1234/ws"
-	token, err := GetAuthenticatedGuest(server, 1)
-	token, err = GetAuthenticatedGuest(server, 2)
+	token1, err := GetAuthenticatedGuest(server, 1)
+	token2, err := GetAuthenticatedGuest(server, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	player1 := realtime.StartPlayer(wsURL, *token)
+	player1 := realtime.StartPlayer(wsURL, *token1)
 	t.Cleanup(player1.Cancel)
+L1:
+	for msg := range player1.Receive {
+		if msg == "*** player1 joined the room ***" {
+			break L1
+		}
+	}
 
-	player2 := realtime.StartPlayer(wsURL, *token)
+	player2 := realtime.StartPlayer(wsURL, *token2)
 	t.Cleanup(player2.Cancel)
 	for _, player := range []*realtime.TestPlayer{player1, player2} {
 		select {
@@ -108,6 +115,97 @@ func TestChat(t *testing.T) {
 	player2.Send <- msg2
 	waitForPlayerMessage(t, player1, msg2)
 
-
 	// now we start the game
+	wordPack := &data.WordPack{
+		Name:        "E2E Test Words",
+		Slug:        "e2e-test-words",
+		Description: "Word pack for the chat E2E test",
+		IsActive:    true,
+	}
+	if err := app.models.WordPacks.Insert(wordPack); err != nil {
+		t.Fatal(err)
+	}
+	word := &data.Word{
+		WordPackID: wordPack.ID,
+		Text:       "apple",
+		Difficulty: "easy",
+	}
+	if err := app.models.Words.Insert(word); err != nil {
+		t.Fatal(err)
+	}
+
+	var settingsSnapshot json.RawMessage
+	startGameInput := struct {
+		WordPackID       uuid.UUID       `json:"word_pack_id"`
+		SettingsSnapshot json.RawMessage `json:"settings_snapshot,omitempty"`
+	}{
+		WordPackID:       wordPack.ID,
+		SettingsSnapshot: settingsSnapshot,
+	}
+	requestBody, err := json.Marshal(startGameInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	startGameURL := server.URL + "/v1/rooms/1234/start"
+	req, err := http.NewRequest(
+		http.MethodPost,
+		startGameURL,
+		bytes.NewReader(requestBody),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+*token1)
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("expected status %d, got %d", http.StatusCreated, resp.StatusCode)
+	}
+
+	var input struct {
+		Game             data.Game              `json:"game"`
+		GameParticipants []data.GameParticipant `json:"game_participants"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&input); err != nil {
+		t.Fatal(err)
+	}
+
+	if input.Game.RoomCode != "1234" {
+		t.Fatalf("expected room code %q, got %q", "1234", input.Game.RoomCode)
+	}
+	if input.Game.Status != "started" {
+		t.Fatalf("expected game status %q, got %q", "started", input.Game.Status)
+	}
+	if input.Game.WordPackID != wordPack.ID {
+		t.Fatalf("expected word pack ID %s, got %s", wordPack.ID, input.Game.WordPackID)
+	}
+	if string(input.Game.SettingsSnapshot) != "{}" {
+		t.Fatalf("expected default settings snapshot {}, got %s", input.Game.SettingsSnapshot)
+	}
+	if len(input.GameParticipants) != 2 {
+		t.Fatalf("expected 2 game participants, got %d", len(input.GameParticipants))
+	}
+
+	hostFound := false
+	for _, participant := range input.GameParticipants {
+		if participant.GameID != input.Game.ID {
+			t.Fatalf(
+				"expected participant game ID %s, got %s",
+				input.Game.ID,
+				participant.GameID,
+			)
+		}
+		if participant.IsHost && participant.ID == input.Game.HostParticipantID {
+			hostFound = true
+		}
+	}
+	if !hostFound {
+		t.Fatal("game host was not present in game participants")
+	}
 }

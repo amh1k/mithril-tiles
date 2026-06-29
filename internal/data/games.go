@@ -32,6 +32,7 @@ func (m *GameModel) GetActiveForRoomWithTx(
 	tx pgx.Tx,
 	roomCode string,
 ) (*Game, error) {
+	
 	query := `
 	SELECT
 		id,
@@ -61,12 +62,14 @@ func (m *GameModel) GetActiveForRoomWithTx(
 		&game.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
+		
 		return nil, ErrRecordNotFound
 	}
 	if err != nil {
+		
 		return nil, err
 	}
-
+	
 	return game, nil
 }
 

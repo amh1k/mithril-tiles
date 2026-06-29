@@ -44,6 +44,7 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 }
 
 func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) {
+	// fmt.Println("We are ehre boys")
 	params := httprouter.ParamsFromContext(r.Context())
 	roomCode := params.ByName("roomID")
 	if roomCode == "" {

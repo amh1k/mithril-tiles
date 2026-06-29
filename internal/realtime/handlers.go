@@ -272,7 +272,6 @@ func (r *Room) startRound() {
 	}
 	drawer := players[rand.Intn(len(players))]
 	r.mu.Unlock()
-
 	participants := make([]data.Principal, 0, len(players))
 	for _, player := range players {
 		participants = append(participants, player.Principal)
