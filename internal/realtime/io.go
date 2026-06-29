@@ -267,9 +267,6 @@ func handleCommand(player *Player, room *Room, command string) {
 
 			}
 		}
-
-
-
 	default:
 		select {
 		case player.Outgoing <- fmt.Sprintf("Unknown: %s\n", parts[0]):

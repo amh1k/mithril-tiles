@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type GameFinalScoreModel struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
 type GameFinalScore struct {

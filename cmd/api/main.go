@@ -11,7 +11,7 @@ import (
 	"time"
 
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
@@ -23,7 +23,7 @@ type config struct {
 	db   struct {
 		dsn          string
 		maxOpenConns int
-		maxIdleConns int
+		minIdleConns int
 		maxIdleTime  time.Duration
 	}
 
@@ -53,7 +53,7 @@ func main() {
 		"PostgreSQL DSN",
 	)
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
-	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
+	flag.IntVar(&cfg.db.minIdleConns, "db-min-idle-conns", 2, "PostgreSQL minimum idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle time")
 	flag.Parse()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -65,7 +65,7 @@ func main() {
 	}
 	runMigrations(cfg.db.dsn)
 
-	defer db.Close(ctx)
+	defer db.Close()
 	logger.Info("database connection pool established")
 	models := data.NewModels(db)
 	gameLifecycle := newGameLifecycleService(models)
@@ -82,21 +82,29 @@ func main() {
 		os.Exit(1)
 	}
 }
-func openDB(cfg config, ctx context.Context) (*pgx.Conn, error) {
-	conn, err := pgx.Connect(ctx, cfg.db.dsn)
+func openDB(cfg config, ctx context.Context) (*pgxpool.Pool, error) {
+	poolConfig, err := pgxpool.ParseConfig(cfg.db.dsn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("parse database configuration: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	err = conn.Ping(ctx)
+
+	poolConfig.MaxConns = int32(cfg.db.maxOpenConns)
+	poolConfig.MinIdleConns = int32(cfg.db.minIdleConns)
+	poolConfig.MaxConnIdleTime = cfg.db.maxIdleTime
+
+	db, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		conn.Close(ctx)
-		return nil, err
+		return nil, fmt.Errorf("create database pool: %w", err)
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := db.Ping(pingCtx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	fmt.Println("Connection established")
 
-	return conn, nil
+	return db, nil
 
 }

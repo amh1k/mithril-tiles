@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -13,7 +14,7 @@ var (
 )
 
 type Models struct {
-	db               *pgx.Conn
+	db               *pgxpool.Pool
 	Users            UserModel
 	Tokens           TokenModel
 	GuestSessions    GuestSessionsModel
@@ -26,7 +27,7 @@ type Models struct {
 	GameFinalScores  GameFinalScoreModel
 }
 
-func NewModels(db *pgx.Conn) Models {
+func NewModels(db *pgxpool.Pool) Models {
 	return Models{
 		db:               db,
 		Users:            UserModel{DB: db},

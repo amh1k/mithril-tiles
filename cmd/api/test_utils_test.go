@@ -2,33 +2,48 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
 	"testing"
 	"time"
 
-	"github.com/joho/godotenv"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
-func NewTestApplicationE2E(t *testing.T) (*application, *httptest.Server){
-	var cfg config
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+
+func NewTestApplicationE2E(t *testing.T) (*application, *httptest.Server) {
+	t.Helper()
+
 	ctx := context.Background()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test utility path")
+	}
+
+	migrations, err := filepath.Glob(
+		filepath.Join(filepath.Dir(filename), "..", "..", "migrations", "*.up.sql"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(migrations) == 0 {
+		t.Fatal("no database migrations found")
+	}
+	sort.Strings(migrations)
+
 	container, err := tcpostgres.Run(
 		ctx,
 		"postgres:16-alpine",
 		tcpostgres.WithDatabase("mithril_test"),
 		tcpostgres.WithUsername("test"),
 		tcpostgres.WithPassword("test"),
-		// tcpostgres.WithInitScripts(migrations...),
+		tcpostgres.WithInitScripts(migrations...),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {
@@ -41,31 +56,33 @@ func NewTestApplicationE2E(t *testing.T) (*application, *httptest.Server){
 		t.Fatal(err)
 	}
 
-	cfg.port= 4000
-	cfg.env="development"
-	cfg.db.dsn= dsn
-	cfg.db.maxOpenConns = 25
-	cfg.db.maxIdleConns=  25
-	cfg.db.maxIdleTime= 15*time.Minute
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	
+	var cfg config
+	cfg.env = "test"
+	cfg.db.dsn = dsn
+	cfg.db.maxOpenConns = 5
+	cfg.db.minIdleConns = 1
+	cfg.db.maxIdleTime = time.Minute
+
 	db, err := openDB(cfg, ctx)
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		t.Fatal(err)
 	}
-	runMigrations(cfg.db.dsn)
-	defer db.Close(ctx)
-	logger.Info("database connection pool established")
+	t.Cleanup(func() {
+		db.Close()
+	})
+
 	models := data.NewModels(db)
 	gameLifecycle := newGameLifecycleService(models)
 	roomManager := realtime.NewRoomManager(gameLifecycle)
 	app := &application{
 		config:      cfg,
-		logger:      logger,
+		logger:      slog.New(slog.NewTextHandler(os.Stdout, nil)),
 		models:      models,
 		roomManager: roomManager,
 	}
-	ts := httptest.NewServer(app.routes())
-	return app, ts
+
+	server := httptest.NewServer(app.routes())
+	t.Cleanup(server.Close)
+
+	return app, server
 }

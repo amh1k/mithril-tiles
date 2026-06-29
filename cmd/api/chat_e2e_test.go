@@ -55,20 +55,41 @@ func GetAuthenticatedGuest(server *httptest.Server, no int) (*string, error) {
 	return &input.AuthenticationToken.Plaintext, nil
 }
 
+func waitForPlayerMessage(t *testing.T, player *realtime.TestPlayer, expected string) {
+	t.Helper()
+
+	timeout := time.NewTimer(3 * time.Second)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case message := <-player.Receive:
+			if strings.Contains(message, expected) {
+				return
+			}
+		case err := <-player.Errors:
+			t.Fatal(err)
+		case <-timeout.C:
+			t.Fatalf("timed out waiting for message containing %q", expected)
+		}
+	}
+}
+
 func TestChat(t *testing.T) {
 	_, server := NewTestApplicationE2E(t)
+	fmt.Println(server.URL)
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/rooms/1234/ws"
-
 	token, err := GetAuthenticatedGuest(server, 1)
+	token, err = GetAuthenticatedGuest(server, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 	player1 := realtime.StartPlayer(wsURL, *token)
 	t.Cleanup(player1.Cancel)
-	token, err = GetAuthenticatedGuest(server, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	player2 := realtime.StartPlayer(wsURL, *token)
 	t.Cleanup(player2.Cancel)
 	for _, player := range []*realtime.TestPlayer{player1, player2} {
@@ -80,6 +101,13 @@ func TestChat(t *testing.T) {
 			t.Fatal("timed out waiting for player connection")
 		}
 	}
+	msg1 := "Player1 here"
+	player1.Send <- msg1
+	waitForPlayerMessage(t, player2, msg1)
+	msg2 := "Player2 here"
+	player2.Send <- msg2
+	waitForPlayerMessage(t, player1, msg2)
 
-	player1.Send <- "Player1 here"
+
+	// now we start the game
 }

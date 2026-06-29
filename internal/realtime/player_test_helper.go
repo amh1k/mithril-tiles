@@ -37,6 +37,7 @@ func StartPlayer(wsURL string, token string) *TestPlayer {
 func (p *TestPlayer) run(ctx context.Context, wsURL string, token string) {
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+token)
+	fmt.Println("Hello boy")
 	conn, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
 		HTTPHeader: headers,
 	})

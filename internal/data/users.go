@@ -10,12 +10,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
 
 type UserModel struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
 var (
@@ -39,7 +40,6 @@ type Password struct {
 	Plaintext *string
 	Hash      []byte
 }
-
 
 func (p *Password) Set(plaintextpassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(plaintextpassword), 12)

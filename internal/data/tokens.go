@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
 
 type TokenModel struct {
-	DB *pgx.Conn
+	DB *pgxpool.Pool
 }
 
 const (

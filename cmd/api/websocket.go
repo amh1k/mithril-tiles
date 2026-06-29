@@ -21,6 +21,7 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
 	}
+	
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
