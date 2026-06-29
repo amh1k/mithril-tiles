@@ -1,25 +1,40 @@
 package realtime
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
 
 	"github.com/coder/websocket"
 )
 
+type TestPlayer struct {
+	Send    chan string
+	Receive chan string
+	Ready   chan struct{}
+	Errors  chan error
+	Cancel  context.CancelFunc
+}
 
+func StartPlayer(wsURL string, token string) *TestPlayer {
+	ctx, cancel := context.WithCancel(context.Background())
+	player := &TestPlayer{
+		Send:    make(chan string, 200),
+		Receive: make(chan string, 200),
+		Ready:   make(chan struct{}),
+		Errors:  make(chan error, 1),
+		Cancel:  cancel,
+	}
 
-func StartPlayer(wsURL string, token string) {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
+	go player.run(ctx, wsURL, token)
+
+	return player
+}
+
+func (p *TestPlayer) run(ctx context.Context, wsURL string, token string) {
 	headers := http.Header{}
 	headers.Set("Authorization", "Bearer "+token)
 	conn, response, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
@@ -27,14 +42,20 @@ func StartPlayer(wsURL string, token string) {
 	})
 	if err != nil {
 		if response != nil {
-			log.Fatalf("connect to %s: %v (HTTP %s)", wsURL, err, response.Status)
+			p.reportError(fmt.Errorf(
+				"connect to %s: %w (HTTP %s)",
+				wsURL,
+				err,
+				response.Status,
+			))
+			return
 		}
-		log.Fatalf("connect to %s: %v", wsURL, err)
+		p.reportError(fmt.Errorf("connect to %s: %w", wsURL, err))
+		return
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "player client closed")
+	defer conn.Close(websocket.StatusNormalClosure, "test player closed")
 
-	fmt.Printf("Connected to %s\n", wsURL)
-	fmt.Println("Enter chat messages, /commands, or /exit to disconnect.")
+	close(p.Ready)
 
 	readDone := make(chan error, 1)
 	go func() {
@@ -48,44 +69,32 @@ func StartPlayer(wsURL string, token string) {
 				continue
 			}
 
-			fmt.Printf("\r%s\n>> ", strings.TrimRight(string(message), "\n"))
+			select {
+			case p.Receive <- strings.TrimRight(string(message), "\n"):
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
-
-	input := make(chan string)
-	go func() {
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			input <- scanner.Text()
-		}
-		close(input)
-	}()
-
-	fmt.Print(">> ")
 	for {
 		select {
 		case <-ctx.Done():
 			return
-
 		case err := <-readDone:
-			if websocket.CloseStatus(err) == websocket.StatusNormalClosure ||
-				errors.Is(err, context.Canceled) {
-				return
+			if websocket.CloseStatus(err) != websocket.StatusNormalClosure &&
+				!errors.Is(err, context.Canceled) {
+				p.reportError(fmt.Errorf("WebSocket disconnected: %w", err))
 			}
-			log.Fatalf("WebSocket disconnected: %v", err)
+			return
 
-		case message, ok := <-input:
+		case message, ok := <-p.Send:
 			if !ok {
 				return
 			}
 
 			message = strings.TrimSpace(message)
 			if message == "" {
-				fmt.Print(">> ")
 				continue
-			}
-			if message == "/exit" {
-				return
 			}
 
 			event := struct {
@@ -98,14 +107,20 @@ func StartPlayer(wsURL string, token string) {
 
 			payload, err := json.Marshal(event)
 			if err != nil {
-				log.Fatalf("encode chat event: %v", err)
+				p.reportError(fmt.Errorf("encode chat event: %w", err))
+				return
 			}
 			if err := conn.Write(ctx, websocket.MessageText, payload); err != nil {
-				log.Fatalf("send chat event: %v", err)
+				p.reportError(fmt.Errorf("send chat event: %w", err))
+				return
 			}
-
-			fmt.Print(">> ")
 		}
 	}
+}
 
+func (p *TestPlayer) reportError(err error) {
+	select {
+	case p.Errors <- err:
+	default:
+	}
 }
