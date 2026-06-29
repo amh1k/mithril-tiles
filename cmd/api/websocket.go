@@ -17,7 +17,6 @@ import (
 func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
 	roomID := params.ByName("roomID")
-
 	if roomID == "" {
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
