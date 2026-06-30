@@ -27,12 +27,56 @@ type Game struct {
 	CreatedAt         time.Time       `json:"created_at"`
 }
 
+func (m *GameModel) CompleteWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	gameID uuid.UUID,
+	endedAt time.Time,
+) (*Game, error) {
+	query := `
+	UPDATE games
+	SET status = 'completed',
+		ended_at = $1
+	WHERE id = $2
+		AND status = 'started'
+	RETURNING
+		id,
+		room_code,
+		host_participant_id,
+		word_pack_id,
+		status,
+		settings_snapshot,
+		started_at,
+		ended_at,
+		created_at`
+
+	game := &Game{}
+	err := tx.QueryRow(ctx, query, endedAt, gameID).Scan(
+		&game.ID,
+		&game.RoomCode,
+		&game.HostParticipantID,
+		&game.WordPackID,
+		&game.Status,
+		&game.SettingsSnapshot,
+		&game.StartedAt,
+		&game.EndedAt,
+		&game.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
 func (m *GameModel) GetActiveForRoomWithTx(
 	ctx context.Context,
 	tx pgx.Tx,
 	roomCode string,
 ) (*Game, error) {
-	
 	query := `
 	SELECT
 		id,
@@ -62,14 +106,12 @@ func (m *GameModel) GetActiveForRoomWithTx(
 		&game.CreatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		
 		return nil, ErrRecordNotFound
 	}
 	if err != nil {
-		
 		return nil, err
 	}
-	
+
 	return game, nil
 }
 

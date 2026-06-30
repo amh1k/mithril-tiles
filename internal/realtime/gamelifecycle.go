@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
+
 type GamePersistenceRequest struct {
 	RoomCode         string
 	WordPackID       uuid.UUID
@@ -49,8 +50,24 @@ type RoundEndRequest struct {
 	Scores   []PlayerRoundScore
 }
 
+type PlayerFinalScore struct {
+	Principal data.Principal
+	Points    int
+}
+
+type GameEndRequest struct {
+	RoomCode string
+	Scores   []PlayerFinalScore
+}
+
+type GameEndResult struct {
+	GameID      uuid.UUID
+	FinalScores []*data.GameFinalScore
+}
+
 type GameLifecycle interface {
 	StartGame(context.Context, GamePersistenceRequest) (*GamePersistenceResult, error)
 	StartRound(context.Context, RoundStartRequest) (*RoundStartResult, error)
 	EndRound(context.Context, RoundEndRequest) error
+	EndGame(context.Context, GameEndRequest) (*GameEndResult, error)
 }

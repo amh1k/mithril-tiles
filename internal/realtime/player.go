@@ -8,6 +8,7 @@ import (
 	"github.com/coder/websocket"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
+
 type Player struct {
 	Conn           *websocket.Conn
 	Principal      data.Principal //Contains guest or user info
@@ -21,6 +22,7 @@ type Player struct {
 	cancel         context.CancelFunc
 	leaveOnce      sync.Once // so that player is  unregistered only once
 }
+
 func (p *Player) cancelConnection() {
 	if p.cancel != nil {
 		p.cancel()

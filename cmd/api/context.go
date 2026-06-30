@@ -6,8 +6,11 @@ import (
 
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
+
 type contextKey string
+
 const principalContextKey = contextKey("principal")
+
 func (app *application) contextSetPrincipal(r *http.Request, principal *data.Principal) *http.Request {
 	ctx := context.WithValue(r.Context(), principalContextKey, principal)
 	return r.WithContext(ctx)

@@ -26,7 +26,7 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 		return room, nil
 	}
 
-	room, err := NewRoom(roomCode, rm.gameLifecycle)//main way though which we are able to manipulate database in realtime
+	room, err := NewRoom(roomCode, rm.gameLifecycle, rm.DeleteRoom) //main way though which we are able to manipulate database in realtime
 	if err != nil {
 		return nil, err
 	}

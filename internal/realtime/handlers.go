@@ -49,6 +49,9 @@ func (r *Room) handleJoin(player *Player) {
 		r.HostPlayer = player
 	}
 	r.mu.Unlock()
+	r.scoresMu.Lock()
+	r.globalScores[player] = 0
+	r.scoresMu.Unlock()
 	player.markActive()
 	r.sendHistory(player, 10)
 	announcement := fmt.Sprintf("*** %s joined the room ***\n", player.Principal.DisplayName())
@@ -68,6 +71,7 @@ func (r *Room) handleLeave(player *Player) {
 
 	r.scoresMu.Lock()
 	delete(r.scores, player)
+	delete(r.globalScores, player)
 	r.scoresMu.Unlock()
 
 	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), playerCount)
@@ -244,9 +248,21 @@ func (r *Room) endRound() {
 	// close(r.done)
 	r.broadcast <- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
 	timer := time.NewTimer(10 * time.Second)
+	if r.currentRoundNo == 3 {
+		select {
+		case r.endGame <- struct{}{}:
+			return
+		case <-r.done:
+			return
+
+		}
+
+	}
 	select {
 	case <-timer.C:
 		r.startRound()
+	case <-r.done:
+		return
 	}
 }
 
@@ -302,6 +318,8 @@ func (r *Room) startRound() {
 	time.AfterFunc(roundDuration, func() {
 		select {
 		case r.roundInfo <- "end round":
+		case <-r.done:
+			return
 		default:
 		}
 	})
@@ -419,5 +437,35 @@ func (r *Room) handleCorrectGuess(player *Player) {
 		return
 	}
 	r.scores[player]++
+	r.globalScores[player]++
 	r.correctGuesses++
+}
+func (r *Room) handleEndGame() {
+
+	// we have to cleanup the room
+	r.scoresMu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	scores := make([]PlayerFinalScore, 0)
+	for player, points := range r.globalScores {
+		scores = append(scores, PlayerFinalScore{
+			Principal: player.Principal,
+			Points:    points,
+		})
+	}
+	r.scoresMu.Unlock()
+	defer cancel()
+	req := GameEndRequest{
+		RoomCode: r.roomCode,
+		Scores:   scores,
+	}
+	_, err := r.gameLifecycle.EndGame(ctx, req)
+	if err != nil {
+		fmt.Printf("Error in persisting final scores so ending game not possible")
+		return
+
+	}
+	r.broadcast <- "Game has ended"
+	r.deleteRoom(r.roomCode)
+	close(r.done)
+
 }

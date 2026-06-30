@@ -15,6 +15,9 @@ const (
 	GameStateStarting GameState = "starting"
 	GameStateStarted  GameState = "started"
 )
+const (
+	GameRounds = 3
+)
 
 type Room struct {
 
@@ -37,13 +40,16 @@ type Room struct {
 	roundInfo      chan string
 	done           chan struct{}
 	gameLifecycle  GameLifecycle
+	deleteRoom     func(roomCode string)
+	endGame        chan struct{} // differnt from done
 
 	//drawing
 	drawStroke chan DrawStroke
 
 	//Scores
-	scoresMu sync.Mutex
-	scores   map[*Player]int
+	scoresMu     sync.Mutex
+	scores       map[*Player]int
+	globalScores map[*Player]int
 
 	//draw histroy (optional)
 	// strokesMu sync.Mutex
@@ -70,7 +76,7 @@ type Room struct {
 	sessionsMu sync.Mutex
 }
 
-func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
+func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomCode string)) (*Room, error) {
 	if gameLifecycle == nil {
 		return nil, fmt.Errorf("game lifecycle is required")
 	}
@@ -86,6 +92,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
+		globalScores:   make(map[*Player]int),
 		sessions:       make(map[string]*SessionInfo),
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
@@ -96,6 +103,8 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
 		roundInfo:      make(chan string, 20),
 		gameLifecycle:  gameLifecycle,
 		done:           make(chan struct{}),
+		endGame:        make(chan struct{}),
+		deleteRoom:     deleteRoom,
 	}
 
 	return cr, nil
@@ -113,6 +122,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
+		globalScores:   make(map[*Player]int),
 		sessions:       make(map[string]*SessionInfo),
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
@@ -157,6 +167,8 @@ func (r *Room) Run() {
 
 		case <-r.roundInfo:
 			go r.endRound()
+		case <-r.endGame:
+			go r.handleEndGame()
 		case <-r.done:
 			return
 		}

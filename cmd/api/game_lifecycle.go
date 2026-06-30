@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -240,7 +241,6 @@ func (s *gameLifecycleService) StartRound(
 		StartedAt: startedAt,
 	}, nil
 }
-
 func (s *gameLifecycleService) EndRound(
 	ctx context.Context,
 	request realtime.RoundEndRequest,
@@ -296,4 +296,95 @@ func (s *gameLifecycleService) EndRound(
 	}
 
 	return nil
+}
+
+func (s *gameLifecycleService) EndGame(
+	ctx context.Context,
+	request realtime.GameEndRequest,
+) (*realtime.GameEndResult, error) {
+	if request.RoomCode == "" {
+		return nil, fmt.Errorf("room code is required")
+	}
+	if len(request.Scores) == 0 {
+		return nil, fmt.Errorf("at least one final score is required")
+	}
+
+	scores := append([]realtime.PlayerFinalScore(nil), request.Scores...)
+	seenPrincipals := make(map[string]struct{}, len(scores))
+	for i := range scores {
+		principal := scores[i].Principal
+		if principal.ID() == uuid.Nil {
+			return nil, fmt.Errorf("final score %d has an invalid principal", i)
+		}
+		key := fmt.Sprintf("%s:%s", principal.Type, principal.ID())
+		if _, exists := seenPrincipals[key]; exists {
+			return nil, fmt.Errorf("duplicate final score for principal %s", key)
+		}
+		seenPrincipals[key] = struct{}{}
+	}
+
+	sort.SliceStable(scores, func(i, j int) bool {
+		if scores[i].Points != scores[j].Points {
+			return scores[i].Points > scores[j].Points
+		}
+		left := fmt.Sprintf("%s:%s", scores[i].Principal.Type, scores[i].Principal.ID())
+		right := fmt.Sprintf("%s:%s", scores[j].Principal.Type, scores[j].Principal.ID())
+		return left < right
+	})
+
+	tx, err := s.models.BeginTransaction(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin game-end transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	game, err := s.models.Games.GetActiveForRoomWithTx(ctx, tx, request.RoomCode)
+	if err != nil {
+		return nil, fmt.Errorf("get active game: %w", err)
+	}
+
+	finalScores := make([]*data.GameFinalScore, 0, len(scores))
+	for i := range scores {
+		score := &scores[i]
+		participantID, err := s.models.GameParticipants.GetIDForPrincipal(
+			ctx,
+			tx,
+			game.ID,
+			&score.Principal,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("resolve final-score participant: %w", err)
+		}
+
+		finalScores = append(finalScores, &data.GameFinalScore{
+			GameID:        game.ID,
+			ParticipantID: participantID,
+			FinalScore:    score.Points,
+			FinalRank:     i + 1,
+			IsWinner:      i == 0,
+		})
+	}
+
+	finalScores, err = s.models.GameFinalScores.InsertManyWithTx(
+		ctx,
+		tx,
+		finalScores,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert game final scores: %w", err)
+	}
+
+	endedAt := time.Now()
+	game, err = s.models.Games.CompleteWithTx(ctx, tx, game.ID, endedAt)
+	if err != nil {
+		return nil, fmt.Errorf("complete game: %w", err)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit game-end transaction: %w", err)
+	}
+
+	return &realtime.GameEndResult{
+		GameID:      game.ID,
+		FinalScores: finalScores,
+	}, nil
 }

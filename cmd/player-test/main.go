@@ -14,6 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 )
+
 func main() {
 	wsURL := os.Getenv("REALTIME_WS_URL")
 	if wsURL == "" {

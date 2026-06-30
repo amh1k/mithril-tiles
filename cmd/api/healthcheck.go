@@ -4,8 +4,7 @@ import (
 	"net/http"
 )
 
-
-func(app *application)healthcheckHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) healthcheckHandler(w http.ResponseWriter, r *http.Request) {
 	version := "1"
 	env := envelope{
 		"status": "available",

@@ -11,16 +11,16 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func (app *application)uploadToCloudinary(ctx context.Context,file multipart.File,header *multipart.FileHeader)(string, error) {
+func (app *application) uploadToCloudinary(ctx context.Context, file multipart.File, header *multipart.FileHeader) (string, error) {
 	godotenv.Load()
 	apiKey := os.Getenv("CLOUDINARY_API_KEY")
 	apiSecret := os.Getenv("CLOUDINARY_API_SECRET")
 	cloudName := os.Getenv("CLOUDINARY_CLOUD_NAME")
 	cloudinaryURL := fmt.Sprintf(
-	"cloudinary://%s:%s@%s",
-	apiKey,
-	apiSecret,
-	cloudName,
+		"cloudinary://%s:%s@%s",
+		apiKey,
+		apiSecret,
+		cloudName,
 	)
 	cld, err := cloudinary.NewFromURL(cloudinaryURL)
 	if err != nil {
@@ -35,6 +35,3 @@ func (app *application)uploadToCloudinary(ctx context.Context,file multipart.Fil
 	}
 	return uploadResult.SecureURL, nil
 }
-
-
-

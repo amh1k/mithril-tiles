@@ -88,7 +88,6 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	})
 
 	_ = group.Wait()
-	room.leave <- player
 	room.updateSessionActivity(username)
 }
 

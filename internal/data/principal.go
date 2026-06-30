@@ -10,7 +10,6 @@ const (
 	PrincipalGuest     PrincipalType = "guest"
 )
 
-
 type Principal struct {
 	Type         PrincipalType
 	User         *User
@@ -34,7 +33,6 @@ func NewGuestPrincipal(guestSession *GuestSession) *Principal {
 		GuestSession: guestSession,
 	}
 }
-
 
 func (p *Principal) IsAuthenticated() bool {
 	return p != nil && (p.IsUser() || p.IsGuest())

@@ -74,24 +74,24 @@ func (r *Room) isUsernameConnected(username string) bool {
 func (r *Room) cleanupInactiveplayers() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-   for {
-	select {
-	case <- ticker.C:
-		r.mu.Lock()
-		var toRemove []*Player
-		for player := range r.players {
-			if player.isInactive(5 * time.Minute) {
-				fmt.Printf("Removing inactive: %s\n", player.Principal.DisplayName())
-				toRemove = append(toRemove, player)
+	for {
+		select {
+		case <-ticker.C:
+			r.mu.Lock()
+			var toRemove []*Player
+			for player := range r.players {
+				if player.isInactive(5 * time.Minute) {
+					fmt.Printf("Removing inactive: %s\n", player.Principal.DisplayName())
+					toRemove = append(toRemove, player)
+				}
 			}
-		}
-		r.mu.Unlock()
-		for _, player := range toRemove {
-			player.unregister(r)
-		}
-	case <-r.done:
-		return
+			r.mu.Unlock()
+			for _, player := range toRemove {
+				player.unregister(r)
+			}
+		case <-r.done:
+			return
 
+		}
 	}
-   }
 }

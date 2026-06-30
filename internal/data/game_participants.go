@@ -111,7 +111,7 @@ func (m *GameParticipantModel) GetIDForPrincipal(
 	gameID uuid.UUID,
 	principal *Principal,
 ) (uuid.UUID, error) {
-	
+
 	var query string
 
 	switch {

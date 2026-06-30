@@ -11,7 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
 )
+
 type envelope map[string]any
+
 func (app *application) readIDParam(r *http.Request) (uuid.UUID, error) {
 	params := httprouter.ParamsFromContext(r.Context())
 	id, err := uuid.Parse(params.ByName("id"))

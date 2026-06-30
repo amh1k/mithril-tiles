@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
+
 var (
 	ErrGameStartInProgress = errors.New("game start is already in progress")
 	ErrGameAlreadyStarted  = errors.New("game has already started")
