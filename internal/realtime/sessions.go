@@ -86,7 +86,7 @@ func (r *Room) cleanupInactiveplayers() {
 		}
 		r.mu.Unlock()
 		for _, player := range toRemove {
-			r.leave <- player
+			player.unregister(r)
 		}
 	}
 }

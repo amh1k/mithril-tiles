@@ -9,13 +9,13 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
 // curl -X POST http://localhost:4000/v1/guest-sessions \
 //   -H "Content-Type: application/json" \
 //   -d '{"display_name":"Player One"}'
-
 
 type IncomingEvent struct {
 	Type string          `json:"type"`
@@ -29,12 +29,17 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 		}
 		return
 	}
+
+	connectionCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	player := &Player{
 		Conn:           conn,
 		Principal:      *principal,
 		Outgoing:       make(chan string, 10),
 		LastActive:     time.Now(),
 		ReconnectToken: uuid.NewString(),
+		cancel:         cancel,
 	}
 
 	defer func() {
@@ -50,18 +55,40 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	username := principal.DisplayName()
 
 	welcomeMessage := buildWelcomeMessage(username)
-	if err := conn.Write(ctx, websocket.MessageText, []byte(welcomeMessage)); err != nil {
+	if err := conn.Write(connectionCtx, websocket.MessageText, []byte(welcomeMessage)); err != nil {
 		return
 	}
-	room.join <- player
+
+	select {
+	case room.join <- player:
+	case <-connectionCtx.Done():
+		return
+	case <-room.done:
+		return
+	}
 	defer func() {
-		room.leave <- player
+		player.unregister(room)
 	}()
-	go readMessages(player, room, username, ctx)
-	writeMessages(player, ctx, username)
+
+	group, groupCtx := errgroup.WithContext(connectionCtx)
+	group.Go(func() error {
+		return readMessages(player, room, username, groupCtx)
+	})
+	group.Go(func() error {
+		return writeMessages(player, groupCtx, username)
+	})
+	group.Go(func() error {
+		select {
+		case <-groupCtx.Done():
+			return groupCtx.Err()
+		case <-room.done:
+			return fmt.Errorf("room closed")
+		}
+	})
+
+	_ = group.Wait()
 
 	room.updateSessionActivity(username)
-	room.leave <- player
 }
 
 func buildWelcomeMessage(username string) string {
@@ -69,17 +96,17 @@ func buildWelcomeMessage(username string) string {
 	return msg
 }
 
-func readMessages(player *Player, room *Room, username string, ctx context.Context) {
+func readMessages(player *Player, room *Room, username string, ctx context.Context) (err error) {
 	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Panic in readMessages for %s: %v\n", username, r)
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic in readMessages for %s: %v", username, recovered)
 		}
 	}()
 
 	for {
 		_, data, err := player.Conn.Read(ctx)
 		if err != nil {
-			return
+			return err
 		}
 		var event IncomingEvent
 		if err := json.Unmarshal(data, &event); err != nil {
@@ -93,16 +120,15 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 			}
 			player.markActive()
 			message = strings.TrimSpace(message)
-			
+
 			if message == "" {
-				
 				continue
 			}
 			player.Mu.Lock()
 			player.MessagesRecv++
 			player.Mu.Unlock()
 			if strings.HasPrefix(message, "/") {
-				
+
 				handleCommand(player, room, message)
 				continue
 			}
@@ -124,17 +150,24 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 	}
 }
 
-func writeMessages(player *Player, ctx context.Context, username string) {
+func writeMessages(player *Player, ctx context.Context, username string) (err error) {
 	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Panic in writeMessages for %s: %v\n", username, r)
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("panic in writeMessages for %s: %v", username, recovered)
 		}
 	}()
-	for message := range player.Outgoing {
-		err := player.Conn.Write(ctx, websocket.MessageText, []byte(message))
-		if err != nil {
-			fmt.Printf("Write error for %s: %v\n", username, err)
-			return
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case message, ok := <-player.Outgoing:
+			if !ok {
+				return nil
+			}
+			if err := player.Conn.Write(ctx, websocket.MessageText, []byte(message)); err != nil {
+				return fmt.Errorf("write message for %s: %w", username, err)
+			}
 		}
 	}
 }
@@ -243,7 +276,7 @@ func handleCommand(player *Player, room *Room, command string) {
 		time.Sleep(100 * time.Millisecond)
 		player.Conn.Close(websocket.StatusGoingAway, "player wants to quit")
 
-	case"/guess":
+	case "/guess":
 		if len(parts) < 2 {
 			select {
 			case player.Outgoing <- "Usage: /guess <word>\n":
@@ -254,12 +287,12 @@ func handleCommand(player *Player, room *Room, command string) {
 		}
 		targetWord := room.currentWord
 		guessedWord := parts[1]
-		if targetWord !=guessedWord {
+		if targetWord != guessedWord {
 			select {
 			case player.Outgoing <- "Wrong Guess":
 			default:
 			}
-		}else {
+		} else {
 			select {
 			case player.Outgoing <- "Correct Guess! Congrats":
 				room.handleCorrectGuess(player)

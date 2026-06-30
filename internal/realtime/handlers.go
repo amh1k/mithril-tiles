@@ -70,16 +70,11 @@ func (r *Room) handleLeave(player *Player) {
 		return
 	}
 	delete(r.players, player)
+	playerCount := len(r.players)
 	r.mu.Unlock()
-	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), len(r.players))
+	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), playerCount)
 
-	// Close channel safely
-	select {
-	case <-player.Outgoing:
-		// Already closed
-	default:
-		close(player.Outgoing)
-	}
+	player.cancelConnection()
 
 	announcement := fmt.Sprintf("*** %s left the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
@@ -254,9 +249,9 @@ func (r *Room) endRound() {
 	r.currentWord = ""
 	r.mu.Unlock()
 	// close(r.done)
-	r.broadcast<- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
+	r.broadcast <- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
 	timer := time.NewTimer(10 * time.Second)
-	select{
+	select {
 	case <-timer.C:
 		r.startRound()
 	}
