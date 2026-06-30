@@ -156,11 +156,14 @@ func (player *Player) isInactive(timeout time.Duration) bool {
 }
 
 func (r *Room) handleDrawStroke(stroke DrawStroke) {
-	// if stroke == nil {
-	// 	fmt.Println("Error happend : (")
-	// 	return
-	// }
-	if r.currentDrawer.Principal.DisplayName() != stroke.From {
+	r.mu.Lock()
+	currentDrawer := r.currentDrawer
+	r.mu.Unlock()
+
+	if currentDrawer == nil {
+		return
+	}
+	if currentDrawer.Principal.DisplayName() != stroke.From {
 		fmt.Println("Error happend : (")
 		return
 	}
