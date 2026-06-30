@@ -10,7 +10,6 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 	"github.com/julienschmidt/httprouter"
-	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
 
@@ -21,7 +20,6 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
 	}
-	
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
@@ -73,103 +71,36 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	hostPlayer, players := room.GameStartSnapshot()
-	if hostPlayer == nil {
-		app.badRequestResponse(w, r, errors.New("room has no host player"))
-		return
-	}
-
 	principal := app.contextGetPrincipal(r)
-	if principal.ID() != hostPlayer.Principal.ID() {
-		app.errorResponse(w, r, http.StatusForbidden, "only the room host can start the game")
-		return
-	}
-	if len(players) <= 1 {
-		app.badRequestResponse(w, r, errors.New("cannot start a game with fewer than two players"))
-		return
-	}
-
-	hostIsConnected := false
-	for _, player := range players {
-		if player == hostPlayer {
-			hostIsConnected = true
-			break
-		}
-	}
-	if !hostIsConnected {
-		app.badRequestResponse(w, r, errors.New("room host is not connected"))
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-
-	tx, err := app.models.BeginTransaction(ctx)
+	result, err := room.StartGame(ctx, realtime.GameStartRequest{
+		RequestedBy:      principal.ID(),
+		WordPackID:       input.WordPackID,
+		SettingsSnapshot: input.SettingsSnapshot,
+	})
 	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	startedAt := time.Now()
-	hostParticipantID := uuid.New()
-	game := &data.Game{
-		ID:                uuid.New(),
-		RoomCode:          roomCode,
-		HostParticipantID: hostParticipantID,
-		WordPackID:        input.WordPackID,
-		Status:            "started",
-		SettingsSnapshot:  input.SettingsSnapshot,
-		StartedAt:         startedAt,
-	}
-
-	game, err = app.models.Games.InsertWithTx(ctx, tx, game)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
-		return
-	}
-
-	participants := make([]*data.GameParticipant, 0, len(players))
-	for _, player := range players {
-		participantID := uuid.New()
-		isHost := player == hostPlayer
-		if isHost {
-			participantID = hostParticipantID
-		}
-
-		participant := &data.GameParticipant{
-			ID:                  participantID,
-			GameID:              game.ID,
-			DisplayNameSnapshot: player.Principal.DisplayName(),
-			IsHost:              isHost,
-			JoinedAt:            startedAt,
-		}
-
-		participant, err = app.models.GameParticipants.InsertPrincipalWithTx(
-			ctx,
-			tx,
-			participant,
-			&player.Principal,
-		)
-		if err != nil {
-			app.serverErrorResponse(w, r, err)
+		switch {
+		case errors.Is(err, realtime.ErrOnlyHostCanStart):
+			app.errorResponse(w, r, http.StatusForbidden, err.Error())
+		case errors.Is(err, realtime.ErrNotEnoughPlayers):
+			app.badRequestResponse(w, r, err)
+		case errors.Is(err, realtime.ErrGameStartInProgress),
+			errors.Is(err, realtime.ErrGameAlreadyStarted),
+			errors.Is(err, realtime.ErrRoomClosed):
+			app.errorResponse(w, r, http.StatusConflict, err.Error())
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			return
+		default:
+			app.serverErrorResponse(w, r, err)
 		}
-
-		participants = append(participants, participant)
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		app.serverErrorResponse(w, r, err)
 		return
 	}
-
-	room.StartGame()
-
 	err = app.writeJSON(w, http.StatusCreated, envelope{
-		"game":              game,
-		"game_participants": participants,
+		"game":              result.Game,
+		"game_participants": result.Participants,
+		"round":             result.Round,
 	}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)

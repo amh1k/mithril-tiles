@@ -1,7 +1,9 @@
 package realtime
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -151,4 +153,37 @@ func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	room.handleDrawStroke(DrawStroke{
 		From: "Test User",
 	})
+}
+
+func TestNewRoomStartsWithIdleGameState(t *testing.T) {
+	room, err := NewRoomUnitTest("abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if room.gameState != GameStateIdle {
+		t.Fatalf("expected game state %q, got %q", GameStateIdle, room.gameState)
+	}
+}
+
+func TestStartGameReturnsActorValidationError(t *testing.T) {
+	room, err := NewRoomUnitTest("abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go room.Run()
+	t.Cleanup(func() {
+		close(room.done)
+	})
+
+	_, err = room.StartGame(context.Background(), GameStartRequest{
+		RequestedBy: uuid.New(),
+		WordPackID:  uuid.New(),
+	})
+	if !errors.Is(err, ErrNotEnoughPlayers) {
+		t.Fatalf("expected %v, got %v", ErrNotEnoughPlayers, err)
+	}
+	if room.gameState != GameStateIdle {
+		t.Fatalf("expected game state %q, got %q", GameStateIdle, room.gameState)
+	}
 }

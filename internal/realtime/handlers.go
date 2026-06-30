@@ -48,13 +48,6 @@ func (r *Room) handleJoin(player *Player) {
 	if len(r.players) == 1 {
 		r.HostPlayer = player
 	}
-	if len(r.players) == 5 && !r.gameStarted {
-		select {
-		case r.startGame <- "Start the game":
-		default:
-
-		}
-	}
 	r.mu.Unlock()
 	player.markActive()
 	r.sendHistory(player, 10)
@@ -72,10 +65,13 @@ func (r *Room) handleLeave(player *Player) {
 	delete(r.players, player)
 	playerCount := len(r.players)
 	r.mu.Unlock()
+
+	r.scoresMu.Lock()
+	delete(r.scores, player)
+	r.scoresMu.Unlock()
+
 	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), playerCount)
-
 	player.cancelConnection()
-
 	announcement := fmt.Sprintf("*** %s left the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
 }
@@ -219,12 +215,6 @@ func (r *Room) CanStart() bool {
 	return true
 }
 
-func (r *Room) StartGame() {
-	select {
-	case r.startGame <- "Start the game":
-	default:
-	}
-}
 func (r *Room) endRound() {
 	r.scoresMu.Lock()
 	scores := make([]PlayerRoundScore, 0, len(r.scores))
@@ -262,11 +252,10 @@ func (r *Room) endRound() {
 
 func (r *Room) startRound() {
 	r.mu.Lock()
-	if !r.gameStarted || len(r.players) < 2 {
+	if r.gameState != GameStateStarted || len(r.players) < 2 {
 		r.mu.Unlock()
 		return
 	}
-
 	roundNumber := r.currentRoundNo + 1
 	players := make([]*Player, 0, len(r.players))
 	for player := range r.players {
@@ -318,17 +307,106 @@ func (r *Room) startRound() {
 	})
 }
 
-func (r *Room) handleStartGame() {
+func (r *Room) handleStartGame(command gameStartCommand) {
 	r.mu.Lock()
-	if r.gameStarted || len(r.players) < 2 {
+	var err error
+	switch {
+	case r.gameState == GameStateStarting:
+		err = ErrGameStartInProgress
+	case r.gameState == GameStateStarted:
+		err = ErrGameAlreadyStarted
+	case len(r.players) < 2:
+		err = ErrNotEnoughPlayers
+	case r.HostPlayer == nil || r.HostPlayer.Principal.ID() != command.request.RequestedBy:
+		err = ErrOnlyHostCanStart
+	}
+	if err != nil {
 		r.mu.Unlock()
+		command.result <- GameStartResult{Err: err}
 		return
 	}
-	r.gameStarted = true
-	r.startTime = time.Now()
+
+	r.gameState = GameStateStarting
+	players := make([]*Player, 0, len(r.players))
+	for player := range r.players {
+		players = append(players, player)
+	}
+	host := r.HostPlayer
+	drawer := players[rand.Intn(len(players))]
 	r.mu.Unlock()
 
-	go r.startRound()
+	participants := make([]data.Principal, 0, len(players))
+	for _, player := range players {
+		participants = append(participants, player.Principal)
+	}
+
+	go func() {
+		result, err := r.gameLifecycle.StartGame(
+			command.ctx,
+			GamePersistenceRequest{
+				RoomCode:         r.roomCode,
+				WordPackID:       command.request.WordPackID,
+				SettingsSnapshot: command.request.SettingsSnapshot,
+				Host:             host.Principal,
+				Participants:     participants,
+				Drawer:           drawer.Principal,
+				DurationSeconds:  int(roundDuration / time.Second),
+			},
+		)
+		completion := gameStartCompletion{
+			command:     command,
+			persistence: result,
+			drawer:      drawer,
+			players:     players,
+			err:         err,
+		}
+		select {
+		case r.gameStartDone <- completion:
+		case <-r.done:
+		}
+	}()
+}
+
+func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
+	if completion.err != nil {
+		r.mu.Lock()
+		r.gameState = GameStateIdle
+		r.mu.Unlock()
+		completion.command.result <- GameStartResult{Err: completion.err}
+		return
+	}
+
+	result := completion.persistence
+	r.scoresMu.Lock()
+	r.scores = make(map[*Player]int, len(completion.players))
+	for _, player := range completion.players {
+		r.scores[player] = 0
+	}
+	r.correctGuesses = 0
+	r.scoresMu.Unlock()
+
+	r.mu.Lock()
+	r.gameState = GameStateStarted
+	r.currentRoundNo = result.Round.RoundNumber
+	r.currentDrawer = completion.drawer
+	r.currentWord = result.Word
+	r.startTime = result.Round.StartedAt
+	r.mu.Unlock()
+
+	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
+	time.AfterFunc(roundDuration, func() {
+		select {
+		case r.roundInfo <- "end round":
+		case <-r.done:
+		default:
+		}
+	})
+
+	completion.command.result <- GameStartResult{
+		Game:         result.Game,
+		Participants: result.Participants,
+		Round:        result.Round,
+	}
 }
 
 func (r *Room) handleCorrectGuess(player *Player) {

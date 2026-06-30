@@ -8,6 +8,14 @@ import (
 
 const roundDuration = 10 * time.Second
 
+type GameState string
+
+const (
+	GameStateIdle     GameState = "idle"
+	GameStateStarting GameState = "starting"
+	GameStateStarted  GameState = "started"
+)
+
 type Room struct {
 
 	// Communication channels
@@ -16,7 +24,8 @@ type Room struct {
 	leave          chan *Player
 	broadcast      chan string
 	listPlayers    chan *Player
-	startGame      chan string
+	startGame      chan gameStartCommand
+	gameStartDone  chan gameStartCompletion
 	directMessage  chan DirectMessage
 	correctGuesses int
 	HostPlayer     *Player
@@ -24,9 +33,9 @@ type Room struct {
 	roomCode       string
 	currentDrawer  *Player
 	currentRoundNo int
-	gameStarted    bool
+	gameState      GameState
 	roundInfo      chan string
-	done 		   chan struct{}
+	done           chan struct{}
 	gameLifecycle  GameLifecycle
 
 	//drawing
@@ -72,7 +81,8 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
 		leave:          make(chan *Player),
 		broadcast:      make(chan string),
 		listPlayers:    make(chan *Player),
-		startGame:      make(chan string, 1),
+		startGame:      make(chan gameStartCommand),
+		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
@@ -80,17 +90,17 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle) (*Room, error) {
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
 		roomCode:       roomCode,
-		gameStarted:    false,
+		gameState:      GameStateIdle,
 		correctGuesses: 0,
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
 		gameLifecycle:  gameLifecycle,
-		done: 			 make(chan struct{}),
+		done:           make(chan struct{}),
 	}
 
 	return cr, nil
 }
-func NewRoomUnitTest(roomCode string)(*Room, error) {
+func NewRoomUnitTest(roomCode string) (*Room, error) {
 
 	cr := &Room{
 		players:        make(map[*Player]bool),
@@ -98,7 +108,8 @@ func NewRoomUnitTest(roomCode string)(*Room, error) {
 		leave:          make(chan *Player),
 		broadcast:      make(chan string),
 		listPlayers:    make(chan *Player),
-		startGame:      make(chan string, 1),
+		startGame:      make(chan gameStartCommand),
+		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
@@ -106,15 +117,15 @@ func NewRoomUnitTest(roomCode string)(*Room, error) {
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
 		roomCode:       roomCode,
-		gameStarted:    false,
+		gameState:      GameStateIdle,
 		correctGuesses: 0,
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
-		done: 			 make(chan struct{}),
+		done:           make(chan struct{}),
 	}
 
 	return cr, nil
-	
+
 }
 
 func (r *Room) Run() {
@@ -139,8 +150,10 @@ func (r *Room) Run() {
 
 		case stroke := <-r.drawStroke:
 			r.handleDrawStroke(stroke)
-		case <-r.startGame:
-			r.handleStartGame()
+		case command := <-r.startGame:
+			r.handleStartGame(command)
+		case completion := <-r.gameStartDone:
+			r.handleGameStartCompleted(completion)
 
 		case <-r.roundInfo:
 			go r.endRound()
@@ -151,18 +164,6 @@ func (r *Room) Run() {
 }
 func (r *Room) GetScores() map[*Player]int {
 	return r.scores
-}
-
-func (r *Room) GameStartSnapshot() (*Player, []*Player) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	players := make([]*Player, 0, len(r.players))
-	for player := range r.players {
-		players = append(players, player)
-	}
-
-	return r.HostPlayer, players
 }
 
 // func runServer(code string) {
