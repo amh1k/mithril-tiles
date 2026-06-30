@@ -58,9 +58,19 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	if err := conn.Write(connectionCtx, websocket.MessageText, []byte(welcomeMessage)); err != nil {
 		return
 	}
-
+	joinResult := make(chan error, 1)
 	select {
-	case room.join <- player:
+	case room.join <- joinRequest{player: player, result: joinResult}:
+	case <-connectionCtx.Done():
+		return
+	case <-room.done:
+		return
+	}
+	select {
+	case err := <-joinResult:
+		if err != nil {
+			return
+		}
 	case <-connectionCtx.Done():
 		return
 	case <-room.done:
@@ -139,6 +149,12 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 			var stroke DrawStroke
 			if err := json.Unmarshal(event.Data, &stroke); err != nil {
 				continue
+			}
+			room.mu.Lock()
+			if room.RoundState == RoundStateIdle {
+				room.mu.Unlock()
+				return nil
+
 			}
 
 			stroke.From = player.Principal.DisplayName()
@@ -282,6 +298,17 @@ func handleCommand(player *Player, room *Room, command string) {
 			case player.Outgoing <- "Usage: /guess <word>\n":
 			default:
 			}
+			return
+		}
+		room.mu.Lock()
+		if room.RoundState == RoundStateIdle {
+			select {
+			case player.Outgoing <- "Round isnt active yet so no need to guess":
+
+			default:
+
+			}
+			room.mu.Unlock()
 			return
 
 		}

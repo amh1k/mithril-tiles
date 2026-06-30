@@ -31,13 +31,14 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 		return nil, err
 	}
 	rm.rooms[roomCode] = room
-
-	go room.Run()
-	// if len(room.players)
 	err = fmt.Errorf("Room capacity filled to the brim")
 	if !room.canJoin() {
 		return nil, err
 	}
+
+	go room.Run()
+	// if len(room.players)
+	
 
 	return room, nil
 }

@@ -42,9 +42,16 @@ func (r *Room) handleBroadcast(message string) {
 	}
 }
 
-func (r *Room) handleJoin(player *Player) {
+func (r *Room) handleJoin(request joinRequest) {
+	player := request.player
 	r.mu.Lock()
+	if len(r.players) >= MaxPlayers {
+		r.mu.Unlock()
+		request.result <- fmt.Errorf("room capacity filled to the brim")
+		return
+	}
 	r.players[player] = true
+
 	if len(r.players) == 1 {
 		r.HostPlayer = player
 	}
@@ -56,6 +63,7 @@ func (r *Room) handleJoin(player *Player) {
 	r.sendHistory(player, 10)
 	announcement := fmt.Sprintf("*** %s joined the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
+	request.result <- nil
 
 }
 
@@ -258,6 +266,7 @@ func (r *Room) endRound() {
 		}
 
 	}
+	r.RoundState = RoundStateIdle // cooldown after a round ends
 	select {
 	case <-timer.C:
 		r.startRound()
@@ -312,6 +321,7 @@ func (r *Room) startRound() {
 	r.currentDrawer = drawer
 	r.currentWord = result.Word
 	r.startTime = result.StartedAt
+	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
 
@@ -461,9 +471,24 @@ func (r *Room) handleEndGame() {
 	_, err := r.gameLifecycle.EndGame(ctx, req)
 	if err != nil {
 		fmt.Printf("Error in persisting final scores so ending game not possible")
-		return
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 
+	L1:
+		for {
+			select {
+			case <-ticker.C:
+				_, err := r.gameLifecycle.EndGame(ctx, req)
+				if err == nil {
+					break L1
+
+				}
+
+			}
+
+		}
 	}
+
 	r.broadcast <- "Game has ended"
 	r.deleteRoom(r.roomCode)
 	close(r.done)

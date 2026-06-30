@@ -48,10 +48,10 @@ func TestBroadcast(t *testing.T) {
 		Outgoing:  make(chan string, 10),
 	}
 	select {
-	case roomTest.join <- player1:
+	case roomTest.join <- joinRequest{player: player1, result: make(chan error, 1)}:
 	}
 	select {
-	case roomTest.join <- player2:
+	case roomTest.join <- joinRequest{player: player2, result: make(chan error, 1)}:
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -137,8 +137,8 @@ func TestDrawStroke(t *testing.T) {
 	roomTest.mu.Lock()
 	roomTest.currentDrawer = player1
 	roomTest.mu.Unlock()
-	roomTest.join <- player1
-	roomTest.join <- player2
+	roomTest.join <- joinRequest{player: player1, result: make(chan error, 1)}
+	roomTest.join <- joinRequest{player: player2, result: make(chan error, 1)}
 	roomTest.drawStroke <- drawStrokeTest
 	waitForMessage(t, player1.Outgoing, string(data))
 	// waitForMessage(t, player2.Outgoing, string(data))
@@ -163,6 +163,27 @@ func TestNewRoomStartsWithIdleGameState(t *testing.T) {
 
 	if room.gameState != GameStateIdle {
 		t.Fatalf("expected game state %q, got %q", GameStateIdle, room.gameState)
+	}
+}
+
+func TestHandleJoinRejectsPlayerWhenRoomIsFull(t *testing.T) {
+	room, err := NewRoomUnitTest("abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range MaxPlayers {
+		room.players[&Player{}] = true
+	}
+
+	player := &Player{}
+	result := make(chan error, 1)
+	room.handleJoin(joinRequest{player: player, result: result})
+
+	if err := <-result; err == nil {
+		t.Fatal("expected full room to reject player")
+	}
+	if room.players[player] {
+		t.Fatal("rejected player was added to room")
 	}
 }
 

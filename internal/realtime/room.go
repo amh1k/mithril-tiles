@@ -15,15 +15,29 @@ const (
 	GameStateStarting GameState = "starting"
 	GameStateStarted  GameState = "started"
 )
+
+type RoundState string
+
+const (
+	RoundStateIdle    RoundState = "idle"
+	RoundStateStarted RoundState = "started"
+)
+
+type joinRequest struct {
+	player *Player
+	result chan error
+}
+
 const (
 	GameRounds = 3
+	MaxPlayers = 5
 )
 
 type Room struct {
 
 	// Communication channels
 
-	join           chan *Player
+	join           chan joinRequest
 	leave          chan *Player
 	broadcast      chan string
 	listPlayers    chan *Player
@@ -37,6 +51,7 @@ type Room struct {
 	currentDrawer  *Player
 	currentRoundNo int
 	gameState      GameState
+	RoundState     RoundState
 	roundInfo      chan string
 	done           chan struct{}
 	gameLifecycle  GameLifecycle
@@ -83,7 +98,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 
 	cr := &Room{
 		players:        make(map[*Player]bool),
-		join:           make(chan *Player),
+		join:           make(chan joinRequest),
 		leave:          make(chan *Player),
 		broadcast:      make(chan string),
 		listPlayers:    make(chan *Player),
@@ -98,6 +113,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 		startTime:      time.Now(),
 		roomCode:       roomCode,
 		gameState:      GameStateIdle,
+		RoundState:     RoundStateIdle,
 		correctGuesses: 0,
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
@@ -113,7 +129,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 
 	cr := &Room{
 		players:        make(map[*Player]bool),
-		join:           make(chan *Player),
+		join:           make(chan joinRequest),
 		leave:          make(chan *Player),
 		broadcast:      make(chan string),
 		listPlayers:    make(chan *Player),
@@ -143,8 +159,8 @@ func (r *Room) Run() {
 	go r.cleanupInactiveplayers()
 	for {
 		select {
-		case player := <-r.join:
-			r.handleJoin(player)
+		case request := <-r.join:
+			r.handleJoin(request)
 
 		case player := <-r.leave:
 			r.handleLeave(player)
