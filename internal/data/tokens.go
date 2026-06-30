@@ -82,7 +82,7 @@ func (m TokenModel) Insert(token *Token) error {
 
 }
 
-func (m TokenModel) DeleteAllForUser(scope string, userID int64) error {
+func (m TokenModel) DeleteAllForUser(scope string, userID uuid.UUID) error {
 	query := `
 	DELETE FROM tokens
 	WHERE scope = $1 AND user_id = $2`

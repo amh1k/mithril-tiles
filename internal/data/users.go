@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -72,12 +72,12 @@ func ValidatePasswordPlaintext(v *validator.Validator, password string) {
 	v.Check(len(password) <= 72, "password", "must not be more than 72 bytes long")
 }
 func ValidateDisplayName(v *validator.Validator, displayName string) {
-	v.Check(displayName != "", "displayName", "must be provided")
-	v.Check(len(displayName) >= 3, "displayName", "must be atleast 3 bytes long")
-	v.Check(len(displayName) <= 60, "displayName", "must not be more than 60 bytes long")
+	v.Check(strings.TrimSpace(displayName) != "", "display_name", "must be provided")
+	v.Check(len(displayName) >= 3, "display_name", "must be at least 3 bytes long")
+	v.Check(len(displayName) <= 60, "display_name", "must not be more than 60 bytes long")
 }
 func Validatehandle(v *validator.Validator, handle string) {
-	v.Check(handle != "", "handle", "must be provided")
+	v.Check(strings.TrimSpace(handle) != "", "handle", "must be provided")
 	v.Check(len(handle) >= 3, "handle", "must be atleast 3 bytes long")
 	v.Check(len(handle) <= 60, "handle", "must not be more than 60 bytes long")
 }
@@ -86,18 +86,24 @@ func (m UserModel) Insert(user *User) error {
 	query := `
 	INSERT INTO users (display_name, handle, email, password, avatar_url)
 	VALUES ($1, $2, $3, $4, $5)
-	RETURNING id, created_at, updated_at`
+	RETURNING id, account_status, created_at, updated_at`
 	args := []any{user.DisplayName, user.Handle, user.Email, user.Password.Hash, user.AvatarURL}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := m.DB.QueryRow(ctx, query, args...).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
+	err := m.DB.QueryRow(ctx, query, args...).Scan(
+		&user.ID,
+		&user.AccountStatus,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	)
 	if err != nil {
+		var pgErr *pgconn.PgError
 		switch {
-		case err.Error() == `pq: duplicate key value violates unique constraint users_email_key`:
-
+		case errors.As(err, &pgErr) && pgErr.ConstraintName == "users_email_key":
 			return ErrDuplicateEmail
+		case errors.As(err, &pgErr) && pgErr.ConstraintName == "users_handle_key":
+			return ErrDuplicateHandle
 		default:
-			fmt.Println(err)
 			return err
 		}
 	}
@@ -254,7 +260,8 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	ON users.id = tokens.user_id
 	WHERE tokens.hash = $1
 	AND tokens.scope = $2
-	AND tokens.expiry > $3`
+	AND tokens.expiry > $3
+	AND users.account_status = 'active'`
 	args := []any{tokenHash[:], tokenScope, time.Now()}
 
 	var user User

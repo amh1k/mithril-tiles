@@ -23,6 +23,17 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		app.badRequestResponse(w, r, err)
 		return
 	}
+
+	v := validator.New()
+	data.ValidateDisplayName(v, input.DisplayName)
+	data.Validatehandle(v, input.Handle)
+	data.ValidateEmail(v, input.Email)
+	data.ValidatePasswordPlaintext(v, input.Password)
+	if !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
 	user := &data.User{
 		DisplayName: input.DisplayName,
 		Handle:      input.Handle,
@@ -34,26 +45,35 @@ func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Reque
 		app.serverErrorResponse(w, r, err)
 		return
 	}
-	v := validator.New()
 	err = app.models.Users.Insert(user)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateEmail):
 			v.AddError("email", "a user with this email address already exists")
 			app.failedValidationResponse(w, r, v.Errors)
+		case errors.Is(err, data.ErrDuplicateHandle):
+			v.AddError("handle", "a user with this handle already exists")
+			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
-
 		}
+		return
+	}
 
+	token, err := app.models.Tokens.New(user.ID, 3*24*time.Hour, data.ScopeAuthentication)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusCreated, envelope{
+		"user":                 user,
+		"authentication_token": token,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
 	}
 }
-
-// token, err := app.models.Tokens.New(user.ID, 3*24*time.Hour, data.ScopeAuthentication)
-// if err != nil {
-// 	app.serverErrorResponse(w, r, err)
-// 	return
-// }
 
 func (app *application) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
@@ -88,22 +108,24 @@ func (app *application) loginUserHandler(w http.ResponseWriter, r *http.Request)
 	token, err := app.models.Tokens.New(user.ID, 3*24*time.Hour, data.ScopeAuthentication)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
-	app.writeJSON(w, http.StatusCreated, envelope{"authentication_token": token}, nil)
+	err = app.writeJSON(w, http.StatusCreated, envelope{
+		"user":                 user,
+		"authentication_token": token,
+	}, nil)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
 func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request) {
-	id, err := app.readIDParam(r)
-	if err != nil {
-		app.badRequestResponse(w, r, err)
-	}
-	err = app.models.Users.Delete(id)
+	id := app.contextGetPrincipal(r).ID()
+	err := app.models.Users.Delete(id)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
-			app.invalidCredentialsResponse(w, r)
+			app.notFoundResponse(w, r)
 		default:
 			app.serverErrorResponse(w, r, err)
 		}
@@ -117,13 +139,8 @@ func (app *application) deleteUserHandler(w http.ResponseWriter, r *http.Request
 }
 
 func (app *application) updateUserHandler(w http.ResponseWriter, r *http.Request) {
-	id, err := app.readIDParam(r)
-	if err != nil {
-		app.notFoundResponse(w, r)
-		return
-	}
+	id := app.contextGetPrincipal(r).ID()
 	user, err := app.models.Users.Get(id)
-
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrRecordNotFound):
