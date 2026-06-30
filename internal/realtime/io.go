@@ -80,6 +80,7 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	group.Go(func() error {
 		select {
 		case <-groupCtx.Done():
+
 			return groupCtx.Err()
 		case <-room.done:
 			return fmt.Errorf("room closed")
@@ -87,7 +88,7 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	})
 
 	_ = group.Wait()
-
+	room.leave <- player
 	room.updateSessionActivity(username)
 }
 

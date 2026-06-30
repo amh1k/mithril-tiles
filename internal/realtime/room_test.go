@@ -141,7 +141,6 @@ func TestDrawStroke(t *testing.T) {
 	waitForMessage(t, player1.Outgoing, string(data))
 	// waitForMessage(t, player2.Outgoing, string(data))
 	close(roomTest.done)
-
 }
 func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	room, err := NewRoomUnitTest("abc")

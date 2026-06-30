@@ -334,11 +334,12 @@ func (r *Room) handleStartGame() {
 func (r *Room) handleCorrectGuess(player *Player) {
 	r.scoresMu.Lock()
 	defer r.scoresMu.Unlock()
-
 	if _, eligible := r.scores[player]; !eligible {
 		return
 	}
-
+	if r.scores[player] == 1 {
+		return
+	}
 	r.scores[player]++
 	r.correctGuesses++
 }

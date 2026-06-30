@@ -74,8 +74,9 @@ func (r *Room) isUsernameConnected(username string) bool {
 func (r *Room) cleanupInactiveplayers() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-
-	for range ticker.C {
+   for {
+	select {
+	case <- ticker.C:
 		r.mu.Lock()
 		var toRemove []*Player
 		for player := range r.players {
@@ -88,5 +89,9 @@ func (r *Room) cleanupInactiveplayers() {
 		for _, player := range toRemove {
 			player.unregister(r)
 		}
+	case <-r.done:
+		return
+
 	}
+   }
 }
