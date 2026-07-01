@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const roundDuration = 10 * time.Second
@@ -11,9 +13,12 @@ const roundDuration = 10 * time.Second
 type GameState string
 
 const (
-	GameStateIdle     GameState = "idle"
-	GameStateStarting GameState = "starting"
-	GameStateStarted  GameState = "started"
+	GameStateIdle      GameState = "idle"
+	GameStateStarting  GameState = "starting"
+	GameStateStarted   GameState = "started"
+	GameStateEnding    GameState = "ending"
+	GameStateCompleted GameState = "completed"
+	GameStateEndFailed GameState = "end_failed"
 )
 
 type RoundState string
@@ -33,6 +38,20 @@ const (
 	MaxPlayers = 5
 )
 
+type endGameRetryPolicy struct {
+	MaxAttempts    int
+	AttemptTimeout time.Duration
+	InitialBackoff time.Duration
+	MaxBackoff     time.Duration
+}
+
+var defaultEndGameRetryPolicy = endGameRetryPolicy{
+	MaxAttempts:    4,
+	AttemptTimeout: 3 * time.Second,
+	InitialBackoff: time.Second,
+	MaxBackoff:     8 * time.Second,
+}
+
 type Room struct {
 
 	// Communication channels
@@ -50,11 +69,14 @@ type Room struct {
 	roomCode       string
 	currentDrawer  *Player
 	currentRoundNo int
+	gameID         uuid.UUID
 	gameState      GameState
 	RoundState     RoundState
 	roundInfo      chan string
 	done           chan struct{}
+	doneOnce       sync.Once
 	gameLifecycle  GameLifecycle
+	endGameRetry   endGameRetryPolicy
 	deleteRoom     func(roomCode string)
 	endGame        chan struct{} // differnt from done
 
@@ -64,7 +86,7 @@ type Room struct {
 	//Scores
 	scoresMu     sync.Mutex
 	scores       map[*Player]int
-	globalScores map[*Player]int
+	globalScores map[principalScoreKey]PlayerFinalScore
 
 	//draw histroy (optional)
 	// strokesMu sync.Mutex
@@ -107,7 +129,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
-		globalScores:   make(map[*Player]int),
+		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
 		sessions:       make(map[string]*SessionInfo),
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
@@ -118,6 +140,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
 		gameLifecycle:  gameLifecycle,
+		endGameRetry:   defaultEndGameRetryPolicy,
 		done:           make(chan struct{}),
 		endGame:        make(chan struct{}),
 		deleteRoom:     deleteRoom,
@@ -138,7 +161,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		directMessage:  make(chan DirectMessage),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
-		globalScores:   make(map[*Player]int),
+		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
 		sessions:       make(map[string]*SessionInfo),
 		messages:       make([]Message, 0),
 		startTime:      time.Now(),
@@ -147,6 +170,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		correctGuesses: 0,
 		currentRoundNo: 0,
 		roundInfo:      make(chan string, 20),
+		endGameRetry:   defaultEndGameRetryPolicy,
 		done:           make(chan struct{}),
 	}
 
@@ -192,6 +216,12 @@ func (r *Room) Run() {
 }
 func (r *Room) GetScores() map[*Player]int {
 	return r.scores
+}
+
+func (r *Room) close() {
+	r.doneOnce.Do(func() {
+		close(r.done)
+	})
 }
 
 // func runServer(code string) {

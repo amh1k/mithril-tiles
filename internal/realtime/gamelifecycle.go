@@ -3,10 +3,16 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
+)
+
+var (
+	ErrGameEndNotRetryable     = errors.New("game end error is not retryable")
+	ErrGameEndRetriesExhausted = errors.New("game end retries exhausted")
 )
 
 type GamePersistenceRequest struct {
@@ -55,7 +61,20 @@ type PlayerFinalScore struct {
 	Points    int
 }
 
+type principalScoreKey struct {
+	Type data.PrincipalType
+	ID   uuid.UUID
+}
+
+func newPrincipalScoreKey(principal data.Principal) principalScoreKey {
+	return principalScoreKey{
+		Type: principal.Type,
+		ID:   principal.ID(),
+	}
+}
+
 type GameEndRequest struct {
+	GameID   uuid.UUID
 	RoomCode string
 	Scores   []PlayerFinalScore
 }

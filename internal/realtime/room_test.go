@@ -60,7 +60,7 @@ func TestBroadcast(t *testing.T) {
 	}
 	waitForMessage(t, player1.Outgoing, "Hi there bros")
 	waitForMessage(t, player2.Outgoing, "Hi there bros")
-	close(roomTest.done)
+	roomTest.close()
 
 }
 func waitForMessage(t *testing.T, outgoing <-chan string, expected string) {
@@ -142,7 +142,7 @@ func TestDrawStroke(t *testing.T) {
 	roomTest.drawStroke <- drawStrokeTest
 	waitForMessage(t, player1.Outgoing, string(data))
 	// waitForMessage(t, player2.Outgoing, string(data))
-	close(roomTest.done)
+	roomTest.close()
 }
 func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	room, err := NewRoomUnitTest("abc")
@@ -187,6 +187,83 @@ func TestHandleJoinRejectsPlayerWhenRoomIsFull(t *testing.T) {
 	}
 }
 
+func TestBeginEndGameTransitionsOnlyOnce(t *testing.T) {
+	room, err := NewRoomUnitTest("abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.gameState = GameStateStarted
+	room.RoundState = RoundStateStarted
+
+	if !room.beginEndGame() {
+		t.Fatal("expected started game to begin ending")
+	}
+	if room.gameState != GameStateEnding {
+		t.Fatalf("expected game state %q, got %q", GameStateEnding, room.gameState)
+	}
+	if room.RoundState != RoundStateIdle {
+		t.Fatalf("expected round state %q, got %q", RoundStateIdle, room.RoundState)
+	}
+	if room.beginEndGame() {
+		t.Fatal("expected duplicate end-game transition to be rejected")
+	}
+}
+
+func TestFinalScoreSnapshotUsesPrincipalIdentity(t *testing.T) {
+	room, err := NewRoomUnitTest("abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := data.Principal{
+		Type: data.PrincipalUser,
+		User: &data.User{
+			ID:          uuid.New(),
+			DisplayName: "Test User",
+		},
+	}
+	firstPlayer := &Player{
+		Principal: principal,
+		Outgoing:  make(chan string, 10),
+	}
+	room.handleJoin(joinRequest{
+		player: firstPlayer,
+		result: make(chan error, 1),
+	})
+
+	key := newPrincipalScoreKey(principal)
+	score := room.globalScores[key]
+	score.Points = 2
+	room.globalScores[key] = score
+	room.handleLeave(firstPlayer)
+	if room.globalScores[key].Points != 2 {
+		t.Fatal("leaving removed the principal's final score")
+	}
+
+	reconnectedPlayer := &Player{
+		Principal: principal,
+		Outgoing:  make(chan string, 10),
+	}
+	room.handleJoin(joinRequest{
+		player: reconnectedPlayer,
+		result: make(chan error, 1),
+	})
+
+	if len(room.globalScores) != 1 {
+		t.Fatalf("expected one score identity, got %d", len(room.globalScores))
+	}
+	if room.globalScores[key].Points != 2 {
+		t.Fatal("rejoining reset the principal's score")
+	}
+
+	snapshot := room.finalScoreSnapshot()
+	score = room.globalScores[key]
+	score.Points = 3
+	room.globalScores[key] = score
+	if snapshot[0].Points != 2 {
+		t.Fatal("final score snapshot changed with live room state")
+	}
+}
+
 func TestStartGameReturnsActorValidationError(t *testing.T) {
 	room, err := NewRoomUnitTest("abc")
 	if err != nil {
@@ -194,7 +271,7 @@ func TestStartGameReturnsActorValidationError(t *testing.T) {
 	}
 	go room.Run()
 	t.Cleanup(func() {
-		close(room.done)
+		room.close()
 	})
 
 	_, err = room.StartGame(context.Background(), GameStartRequest{

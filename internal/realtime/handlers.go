@@ -3,7 +3,9 @@ package realtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"time"
 
@@ -57,7 +59,10 @@ func (r *Room) handleJoin(request joinRequest) {
 	}
 	r.mu.Unlock()
 	r.scoresMu.Lock()
-	r.globalScores[player] = 0
+	key := newPrincipalScoreKey(player.Principal)
+	if _, exists := r.globalScores[key]; !exists {
+		r.globalScores[key] = PlayerFinalScore{Principal: player.Principal}
+	}
 	r.scoresMu.Unlock()
 	player.markActive()
 	r.sendHistory(player, 10)
@@ -79,7 +84,6 @@ func (r *Room) handleLeave(player *Player) {
 
 	r.scoresMu.Lock()
 	delete(r.scores, player)
-	delete(r.globalScores, player)
 	r.scoresMu.Unlock()
 
 	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), playerCount)
@@ -341,7 +345,7 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	switch {
 	case r.gameState == GameStateStarting:
 		err = ErrGameStartInProgress
-	case r.gameState == GameStateStarted:
+	case r.gameState != GameStateIdle:
 		err = ErrGameAlreadyStarted
 	case len(r.players) < 2:
 		err = ErrNotEnoughPlayers
@@ -398,7 +402,7 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	if completion.err != nil {
 		r.mu.Lock()
-		r.gameState = GameStateIdle
+		r.gameState = GameStateStarted
 		r.mu.Unlock()
 		completion.command.result <- GameStartResult{Err: completion.err}
 		return
@@ -415,6 +419,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 
 	r.mu.Lock()
 	r.gameState = GameStateStarted
+	r.gameID = result.Game.ID
 	r.currentRoundNo = result.Round.RoundNumber
 	r.currentDrawer = completion.drawer
 	r.currentWord = result.Word
@@ -447,50 +452,193 @@ func (r *Room) handleCorrectGuess(player *Player) {
 		return
 	}
 	r.scores[player]++
-	r.globalScores[player]++
+	key := newPrincipalScoreKey(player.Principal)
+	finalScore := r.globalScores[key]
+	finalScore.Principal = player.Principal
+	finalScore.Points++
+	r.globalScores[key] = finalScore
 	r.correctGuesses++
 }
 func (r *Room) handleEndGame() {
-
-	// we have to cleanup the room
-	r.scoresMu.Lock()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	scores := make([]PlayerFinalScore, 0)
-	for player, points := range r.globalScores {
-		scores = append(scores, PlayerFinalScore{
-			Principal: player.Principal,
-			Points:    points,
-		})
+	if !r.beginEndGame() {
+		return
 	}
-	r.scoresMu.Unlock()
-	defer cancel()
-	req := GameEndRequest{
+
+	r.mu.Lock()
+	gameID := r.gameID
+	r.mu.Unlock()
+	request := GameEndRequest{
+		GameID:   gameID,
 		RoomCode: r.roomCode,
-		Scores:   scores,
+		Scores:   r.finalScoreSnapshot(),
 	}
-	_, err := r.gameLifecycle.EndGame(ctx, req)
+
+	_, err := r.persistEndGame(request)
 	if err != nil {
-		fmt.Printf("Error in persisting final scores so ending game not possible")
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
+		if errors.Is(err, ErrRoomClosed) {
+			return
+		}
+		r.setGameState(GameStateEndFailed)
+		slog.Error(
+			"game completion failed",
+			"room_code", r.roomCode,
+			"game_id", gameID,
+			"error", err,
+		)
+		select {
+		case r.broadcast <- "Game completion failed. The room has been frozen for recovery.":
+		case <-r.done:
+		}
+		return
+	}
 
-	L1:
-		for {
+	r.setGameState(GameStateCompleted)
+	select {
+	case r.broadcast <- "Game has ended":
+	case <-r.done:
+		return
+	}
+	if r.deleteRoom != nil {
+		r.deleteRoom(r.roomCode)
+	}
+	r.close()
+}
+
+func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {
+	policy := r.endGameRetry.normalized()
+	var lastErr error
+
+	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
+		select {
+		case <-r.done:
+			return nil, ErrRoomClosed
+		default:
+		}
+
+		attemptCtx, cancel := context.WithTimeout(context.Background(), policy.AttemptTimeout)
+		go func() {
 			select {
-			case <-ticker.C:
-				_, err := r.gameLifecycle.EndGame(ctx, req)
-				if err == nil {
-					break L1
-
-				}
-
+			case <-r.done:
+				cancel()
+			case <-attemptCtx.Done():
 			}
+		}()
 
+		result, err := r.gameLifecycle.EndGame(attemptCtx, request)
+		cancel()
+		if err == nil {
+			if attempt > 1 {
+				slog.Info(
+					"game completion recovered",
+					"room_code", request.RoomCode,
+					"game_id", request.GameID,
+					"attempt", attempt,
+				)
+			}
+			return result, nil
+		}
+		select {
+		case <-r.done:
+			return nil, ErrRoomClosed
+		default:
+		}
+
+		lastErr = err
+		retryable := !errors.Is(err, ErrGameEndNotRetryable)
+		slog.Warn(
+			"game completion attempt failed",
+			"room_code", request.RoomCode,
+			"game_id", request.GameID,
+			"attempt", attempt,
+			"max_attempts", policy.MaxAttempts,
+			"retryable", retryable,
+			"error", err,
+		)
+		if !retryable {
+			return nil, err
+		}
+		if attempt == policy.MaxAttempts {
+			break
+		}
+
+		timer := time.NewTimer(policy.backoffAfter(attempt))
+		select {
+		case <-timer.C:
+		case <-r.done:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return nil, ErrRoomClosed
 		}
 	}
 
-	r.broadcast <- "Game has ended"
-	r.deleteRoom(r.roomCode)
-	close(r.done)
+	return nil, fmt.Errorf(
+		"%w after %d attempts: %w",
+		ErrGameEndRetriesExhausted,
+		policy.MaxAttempts,
+		lastErr,
+	)
+}
 
+func (r *Room) finalScoreSnapshot() []PlayerFinalScore {
+	r.scoresMu.Lock()
+	defer r.scoresMu.Unlock()
+
+	scores := make([]PlayerFinalScore, 0, len(r.globalScores))
+	for _, score := range r.globalScores {
+		scores = append(scores, score)
+	}
+	return scores
+}
+
+func (r *Room) beginEndGame() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.gameState != GameStateStarted {
+		return false
+	}
+
+	r.gameState = GameStateEnding
+	r.RoundState = RoundStateIdle
+	return true
+}
+
+func (r *Room) setGameState(state GameState) {
+	r.mu.Lock()
+	r.gameState = state
+	r.mu.Unlock()
+}
+
+func (p endGameRetryPolicy) normalized() endGameRetryPolicy {
+	if p.MaxAttempts <= 0 {
+		p.MaxAttempts = defaultEndGameRetryPolicy.MaxAttempts
+	}
+	if p.AttemptTimeout <= 0 {
+		p.AttemptTimeout = defaultEndGameRetryPolicy.AttemptTimeout
+	}
+	if p.InitialBackoff <= 0 {
+		p.InitialBackoff = defaultEndGameRetryPolicy.InitialBackoff
+	}
+	if p.MaxBackoff <= 0 {
+		p.MaxBackoff = defaultEndGameRetryPolicy.MaxBackoff
+	}
+	if p.MaxBackoff < p.InitialBackoff {
+		p.MaxBackoff = p.InitialBackoff
+	}
+	return p
+}
+
+func (p endGameRetryPolicy) backoffAfter(failedAttempt int) time.Duration {
+	delay := p.InitialBackoff
+	for i := 1; i < failedAttempt && delay < p.MaxBackoff; i++ {
+		delay *= 2
+		if delay > p.MaxBackoff {
+			return p.MaxBackoff
+		}
+	}
+	return delay
 }

@@ -2,9 +2,9 @@
 
 ## Overall assessment
 
-The backend now has a credible multiplayer lifecycle: user authentication works, WebSocket reader/writer shutdown is coordinated, drawing no longer panics before drawer selection, game start is transactional, only one active game is allowed per room code, rounds are capped, and final scores plus game completion are persisted atomically.
+The backend now has a credible multiplayer lifecycle: user authentication works, WebSocket reader/writer shutdown is coordinated, drawing no longer panics before drawer selection, room admission and capacity enforcement are serialized by the room actor, game start is transactional, only one active game is allowed per room code, rounds are capped, and final scores plus game completion are persisted atomically with bounded recovery.
 
-It is still an early alpha rather than production-ready. The main remaining risks are browser WebSocket authentication, misleading user routes, race-prone room admission, incomplete gameplay validation, fragile failure recovery at game completion, and missing database invariants.
+It is still an early alpha rather than production-ready. The main remaining risks are browser WebSocket authentication, broken round-state transitions and locking, misleading user routes, incomplete gameplay validation, and missing database invariants.
 
 ## Release blockers
 
@@ -31,28 +31,25 @@ The ID is ignored, so clients must supply a meaningless value. The routes should
 
 This is not merely cosmetic: the current `TestUserLifecycle` calls the update path without an ID and receives `404` instead of the expected `200`, causing the full test suite to fail.
 
-### 3. Room admission and capacity enforcement are not atomic
+### 3. Round-state enforcement breaks the first round and can deadlock the room
 
-`RoomManager.GetOrCreateRoom()` returns an existing room before checking whether it can accept another player. For new rooms, capacity is checked separately from the later join operation.
+Rooms begin with `RoundStateIdle`, but the initial-round completion path in `handleGameStartCompleted()` never changes the state to `RoundStateStarted`. Only subsequent rounds started through `startRound()` make that transition.
 
-Concurrent connections can therefore observe stale capacity and overfill a room. Admission, capacity checking, and insertion must be one operation owned by the room event loop.
+Consequences include:
 
-### 4. End-game persistence failure leaves the room stuck
+- Correct guesses during round one are rejected as though no round were active. This currently causes `TestChat` to fail.
+- A drawing event during round one returns from the reader and disconnects that player.
+- During later active rounds, both drawing and guessing acquire `room.mu` but never release it on the active path.
+- Once that mutex is retained, joins, leaves, round transitions, and other state operations that need it can block indefinitely.
+- `endRound()` writes `RoundStateIdle` without holding `room.mu`, so state access is not consistently synchronized.
 
-After the final round, `handleEndGame()` persists final scores and marks the game completed. On a database error it returns without:
+Round-state reads should copy the required values while holding the mutex and then unlock immediately. Every successful round-start path must perform the same state transition.
 
-- Retrying the operation.
-- Scheduling another completion attempt.
-- Moving the room into a recoverable failure state.
-- Informing clients how to recover.
-
-The final-round event has already been consumed, so the room can remain permanently active and its room code can remain blocked by the active-game index. Completion should be idempotent and retryable, with an explicit lifecycle state and bounded retry/backoff policy.
-
-### 5. Drawing authorization remains incomplete
+### 4. Drawing authorization remains incomplete
 
 The nil-drawer panic has been fixed, but:
 
-- Drawing is not explicitly restricted to an active round.
+- Active-round gating is currently broken by the round-state transition and mutex problems described above.
 - The sender is compared to the drawer using a display name rather than an immutable principal ID.
 - Coordinates, brush size, colour, payload size, and event frequency are not validated or bounded.
 
@@ -77,7 +74,8 @@ Every broadcast is appended to `r.messages`, with no retention limit. Use a boun
 
 Some gameplay state is protected by mutexes while other state is read directly. Examples include:
 
-- Reading `currentWord` during guess handling without `r.mu`.
+- Active drawing and guessing paths retain `room.mu` instead of releasing it.
+- `RoundState` is written without locking at round end.
 - Reading `currentRoundNo` outside its protecting lock.
 - Returning the internal score map from `GetScores()` without locking and copying it.
 
@@ -88,7 +86,7 @@ Prefer a single ownership model: either all gameplay mutations and snapshots go 
 Repeat correct guesses in the same round are now rejected, but:
 
 - The drawer can guess.
-- Guessing is not explicitly restricted to an active round.
+- The initial round is incorrectly treated as inactive, while later active guesses retain `room.mu`.
 - Comparison is case-sensitive and does not normalize whitespace.
 - Multi-word guesses are truncated because only one split token is checked.
 - Score mutation depends on successfully enqueueing the “correct guess” response to the player's outgoing channel.
@@ -120,6 +118,7 @@ Game completion now exists, but:
 - The three-round limit is hard-coded while the existing game-round configuration is unused.
 - Drawer selection is random each round rather than a deterministic fair rotation.
 - A timer is created before the final-round completion check, leaving unnecessary timer work.
+- Round-end persistence failure leaves the live room in its previous active state with no retry or recovery transition.
 - Production round duration is hard-coded to ten seconds.
 - The persisted settings snapshot does not drive the live room rules.
 
@@ -172,18 +171,17 @@ Current verification results:
 
 - `go vet ./...`: passed.
 - Compile-only `go test ./... -run '^$' -count=1`: passed.
-- `go test ./... -count=1`: failed in `TestUserLifecycle` because the update request receives `404`.
+- `go test ./... -count=1`: failed in `TestChat` because round one remains idle and in `TestUserLifecycle` because the update request receives `404`.
 - Race-enabled `internal/realtime` tests: passed.
-- Race-enabled `TestChat` and `TestStartGameTransaction`: passed.
 - `go mod tidy -diff`: clean.
 
 Passing race tests do not prove that realtime state is race-free; the current tests do not exercise enough concurrent joins, leaves, guesses, drawing events, and lifecycle transitions.
 
 Specific test gaps:
 
-- End-game persistence, final ranking, completed status, and `ended_at` are not covered by a database-backed integration test.
-- End-game persistence failure and retry behavior are untested.
+- Real database outage and lost-commit-acknowledgement behavior are not covered by fault-injection integration tests.
 - Room tests do not fully initialize end-game and room-deletion callbacks, so they cannot safely exercise completion.
+- Full-room rejection now has a boundary test, but concurrent admission is not tested.
 - The chat E2E test overwrites the first guest-token error before checking it.
 - Several channel reads and loops have no timeout and may hang indefinitely.
 - The chat test assumes a player may guess even when that player is randomly selected as drawer.
@@ -192,12 +190,11 @@ Specific test gaps:
 - A draw-stroke recipient assertion is commented out.
 - `principal_test.go` contains no tests.
 - `player_test_helper.go` is production code instead of `_test.go` code and prints debug text.
-- There are no focused tests for concurrent room admission, capacity boundaries, abandoned-room cleanup, reconnection, or duplicate connections.
+- There are no focused tests for concurrent room admission, abandoned-room cleanup, reconnection, or duplicate connections.
 
 ## Operational and maintainability shortcomings
 
-- Twenty Go files are not formatted according to `gofmt`.
-- Several edited files contain trailing whitespace.
+- `internal/realtime/room_manager.go` is not formatted according to `gofmt` and contains trailing whitespace.
 - A compiled 1.8 MB `api` binary is committed to Git.
 - `README.md` contains only the project name.
 - No CI workflow, Dockerfile, release process, or production runbook exists.
@@ -212,15 +209,14 @@ Specific test gaps:
 
 ## Recommended order of work
 
-1. Make WebSocket authentication browser-compatible and enforce an origin allowlist.
-2. Correct the current-user route contract and restore a fully passing test suite.
-3. Make room admission atomic, enforce capacity, and reclaim idle or abandoned rooms.
-4. Make end-game completion idempotent and recoverable, then add database-backed completion tests.
+1. Fix initial round-state activation and release `room.mu` correctly in every drawing and guessing path.
+2. Make WebSocket authentication browser-compatible and enforce an origin allowlist.
+3. Correct the current-user route contract and restore a fully passing test suite.
+4. Reclaim idle or abandoned rooms and bound message history.
 5. Enforce drawing and guessing eligibility using principal IDs and decouple scoring from message delivery.
 6. Preserve participant scores across disconnects and complete or remove the reconnect subsystem.
 7. Centralize game configuration and move shared gameplay state under one ownership model.
 8. Add the remaining database constraints and atomic identity/token creation.
-9. Introduce rate limits, avatar validation, authorization roles, and token revocation.
-10. Standardize the realtime protocol, then finish formatting, CI, documentation, and graceful shutdown.
+9. Introduce rate limits, standardize the realtime protocol, and finish operational hardening.
 
 The next milestone should be a correct, recoverable, and browser-usable multiplayer lifecycle. New gameplay features should wait until the lifecycle and its failure paths are covered by tests.

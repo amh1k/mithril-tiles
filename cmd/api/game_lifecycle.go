@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
@@ -302,23 +304,31 @@ func (s *gameLifecycleService) EndGame(
 	ctx context.Context,
 	request realtime.GameEndRequest,
 ) (*realtime.GameEndResult, error) {
+	if request.GameID == uuid.Nil {
+		return nil, nonRetryableGameEndError("game ID is required")
+	}
 	if request.RoomCode == "" {
-		return nil, fmt.Errorf("room code is required")
+		return nil, nonRetryableGameEndError("room code is required")
 	}
 	if len(request.Scores) == 0 {
-		return nil, fmt.Errorf("at least one final score is required")
+		return nil, nonRetryableGameEndError("at least one final score is required")
 	}
-
 	scores := append([]realtime.PlayerFinalScore(nil), request.Scores...)
 	seenPrincipals := make(map[string]struct{}, len(scores))
 	for i := range scores {
 		principal := scores[i].Principal
 		if principal.ID() == uuid.Nil {
-			return nil, fmt.Errorf("final score %d has an invalid principal", i)
+			return nil, nonRetryableGameEndError(
+				"final score %d has an invalid principal",
+				i,
+			)
 		}
 		key := fmt.Sprintf("%s:%s", principal.Type, principal.ID())
 		if _, exists := seenPrincipals[key]; exists {
-			return nil, fmt.Errorf("duplicate final score for principal %s", key)
+			return nil, nonRetryableGameEndError(
+				"duplicate final score for principal %s",
+				key,
+			)
 		}
 		seenPrincipals[key] = struct{}{}
 	}
@@ -337,9 +347,43 @@ func (s *gameLifecycleService) EndGame(
 		return nil, fmt.Errorf("begin game-end transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
-	game, err := s.models.Games.GetActiveForRoomWithTx(ctx, tx, request.RoomCode)
+	game, err := s.models.Games.GetByIDForUpdate(ctx, tx, request.GameID)
 	if err != nil {
-		return nil, fmt.Errorf("get active game: %w", err)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, nonRetryableGameEndError("game %s was not found", request.GameID)
+		}
+		return nil, classifyGameEndPersistenceError("get game for update", err)
+	}
+	if game.RoomCode != request.RoomCode {
+		return nil, nonRetryableGameEndError(
+			"game does not belong to room %q",
+			request.RoomCode,
+		)
+	}
+	if game.Status == "completed" {
+		finalScores, err := s.models.GameFinalScores.GetAllForGameWithTx(ctx, tx, game.ID)
+		if err != nil {
+			return nil, classifyGameEndPersistenceError(
+				"get completed game final scores",
+				err,
+			)
+		}
+		if len(finalScores) == 0 {
+			return nil, nonRetryableGameEndError(
+				"completed game %s has no final scores",
+				game.ID,
+			)
+		}
+		return &realtime.GameEndResult{
+			GameID:      game.ID,
+			FinalScores: finalScores,
+		}, nil
+	}
+	if game.Status != "started" {
+		return nil, nonRetryableGameEndError(
+			"cannot complete game in status %q",
+			game.Status,
+		)
 	}
 
 	finalScores := make([]*data.GameFinalScore, 0, len(scores))
@@ -352,7 +396,17 @@ func (s *gameLifecycleService) EndGame(
 			&score.Principal,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("resolve final-score participant: %w", err)
+			if errors.Is(err, data.ErrRecordNotFound) {
+				return nil, nonRetryableGameEndError(
+					"final-score participant %s is not part of game %s",
+					score.Principal.ID(),
+					game.ID,
+				)
+			}
+			return nil, classifyGameEndPersistenceError(
+				"resolve final-score participant",
+				err,
+			)
 		}
 
 		finalScores = append(finalScores, &data.GameFinalScore{
@@ -370,13 +424,19 @@ func (s *gameLifecycleService) EndGame(
 		finalScores,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("insert game final scores: %w", err)
+		return nil, classifyGameEndPersistenceError("insert game final scores", err)
 	}
 
 	endedAt := time.Now()
 	game, err = s.models.Games.CompleteWithTx(ctx, tx, game.ID, endedAt)
 	if err != nil {
-		return nil, fmt.Errorf("complete game: %w", err)
+		if errors.Is(err, data.ErrRecordNotFound) {
+			return nil, nonRetryableGameEndError(
+				"game %s is no longer startable",
+				game.ID,
+			)
+		}
+		return nil, classifyGameEndPersistenceError("complete game", err)
 	}
 
 	if err = tx.Commit(ctx); err != nil {
@@ -387,4 +447,23 @@ func (s *gameLifecycleService) EndGame(
 		GameID:      game.ID,
 		FinalScores: finalScores,
 	}, nil
+}
+
+func nonRetryableGameEndError(format string, args ...any) error {
+	return fmt.Errorf(
+		"%w: %s",
+		realtime.ErrGameEndNotRetryable,
+		fmt.Sprintf(format, args...),
+	)
+}
+
+func classifyGameEndPersistenceError(operation string, err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) &&
+		(strings.HasPrefix(pgErr.Code, "22") ||
+			strings.HasPrefix(pgErr.Code, "23") ||
+			strings.HasPrefix(pgErr.Code, "42")) {
+		return nonRetryableGameEndError("%s: %v", operation, err)
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }

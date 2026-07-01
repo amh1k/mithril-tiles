@@ -119,7 +119,26 @@ func (m *GameFinalScoreModel) GetAllForGame(
 	ctx context.Context,
 	gameID uuid.UUID,
 ) ([]*GameFinalScore, error) {
-	query := `
+	rows, err := m.DB.Query(ctx, selectGameFinalScoresQuery, gameID)
+	if err != nil {
+		return nil, err
+	}
+	return collectGameFinalScores(rows)
+}
+
+func (m *GameFinalScoreModel) GetAllForGameWithTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	gameID uuid.UUID,
+) ([]*GameFinalScore, error) {
+	rows, err := tx.Query(ctx, selectGameFinalScoresQuery, gameID)
+	if err != nil {
+		return nil, err
+	}
+	return collectGameFinalScores(rows)
+}
+
+const selectGameFinalScoresQuery = `
 	SELECT
 		id,
 		game_id,
@@ -132,10 +151,7 @@ func (m *GameFinalScoreModel) GetAllForGame(
 	WHERE game_id = $1
 	ORDER BY final_rank`
 
-	rows, err := m.DB.Query(ctx, query, gameID)
-	if err != nil {
-		return nil, err
-	}
+func collectGameFinalScores(rows pgx.Rows) ([]*GameFinalScore, error) {
 	defer rows.Close()
 
 	gameFinalScores := make([]*GameFinalScore, 0)

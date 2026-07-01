@@ -58,7 +58,7 @@ func TestHandlePlayerStopsAfterClientDisconnect(t *testing.T) {
 	}
 	go room.Run()
 	t.Cleanup(func() {
-		close(room.done)
+		room.close()
 	})
 
 	principal := data.NewGuestPrincipal(&data.GuestSession{

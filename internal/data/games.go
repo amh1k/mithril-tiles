@@ -27,6 +27,48 @@ type Game struct {
 	CreatedAt         time.Time       `json:"created_at"`
 }
 
+func (m *GameModel) GetByIDForUpdate(
+	ctx context.Context,
+	tx pgx.Tx,
+	gameID uuid.UUID,
+) (*Game, error) {
+	query := `
+	SELECT
+		id,
+		room_code,
+		host_participant_id,
+		word_pack_id,
+		status,
+		settings_snapshot,
+		started_at,
+		ended_at,
+		created_at
+	FROM games
+	WHERE id = $1
+	FOR UPDATE`
+
+	game := &Game{}
+	err := tx.QueryRow(ctx, query, gameID).Scan(
+		&game.ID,
+		&game.RoomCode,
+		&game.HostParticipantID,
+		&game.WordPackID,
+		&game.Status,
+		&game.SettingsSnapshot,
+		&game.StartedAt,
+		&game.EndedAt,
+		&game.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return game, nil
+}
+
 func (m *GameModel) CompleteWithTx(
 	ctx context.Context,
 	tx pgx.Tx,
