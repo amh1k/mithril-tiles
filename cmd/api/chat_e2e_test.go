@@ -236,8 +236,8 @@ L1:
 	if gameRound.WordTextSnapshot != word.Text {
 		t.Fatalf("expected word snapshot %q, got %q", word.Text, gameRound.WordTextSnapshot)
 	}
-	if gameRound.DurationSeconds != 10 {
-		t.Fatalf("expected round duration 10, got %d", gameRound.DurationSeconds)
+	if gameRound.DurationSeconds != 5 {
+		t.Fatalf("expected round duration 5, got %d", gameRound.DurationSeconds)
 	}
 	if gameRound.StartedAt.IsZero() {
 		t.Fatal("expected round start time")
@@ -260,6 +260,8 @@ L1:
 	player1.Send <- "/guess apple"
 	msg := <-player1.Receive
 	if msg != "Correct Guess! Congrats" {
+		fmt.Println(msg)
+		
 		t.Fatal("Guess should be correct")
 	}
 	// this will block
@@ -334,4 +336,24 @@ L1:
 	if len(seenScores) != len(expectedScores) {
 		t.Fatal("not all participant scores were persisted")
 	}
+	for msg :=  range player1.Receive {
+		if msg == "Round2 has started" {
+			break
+		}
+	}
+	guess2 := "/guess apple"
+	player1.Send <- guess2
+	msg = <-player1.Receive
+	if msg != "Correct Guess! Congrats" {
+		t.Fatal("Guess should be correct")
+	}
+	// this will block
+	for msg := range player1.Receive {
+		if msg == "Round2 has ended" {
+			break
+		}
+	}
+
+
+
 }

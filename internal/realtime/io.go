@@ -306,13 +306,13 @@ func handleCommand(player *Player, room *Room, command string) {
 			case player.Outgoing <- "Round isnt active yet so no need to guess":
 
 			default:
-
 			}
 			room.mu.Unlock()
 			return
 
 		}
 		targetWord := room.currentWord
+		room.mu.Unlock()
 		guessedWord := parts[1]
 		if targetWord != guessedWord {
 			select {

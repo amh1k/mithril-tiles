@@ -259,8 +259,8 @@ func (r *Room) endRound() {
 	r.mu.Unlock()
 	// close(r.done)
 	r.broadcast <- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
-	timer := time.NewTimer(10 * time.Second)
-	if r.currentRoundNo == 3 {
+	timer := time.NewTimer(2 * time.Second)
+	if r.currentRoundNo == totalRounds {
 		select {
 		case r.endGame <- struct{}{}:
 			return
@@ -280,6 +280,7 @@ func (r *Room) endRound() {
 }
 
 func (r *Room) startRound() {
+	fmt.Println("Start round called")
 	r.mu.Lock()
 	if r.gameState != GameStateStarted || len(r.players) < 2 {
 		r.mu.Unlock()
@@ -424,9 +425,11 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.currentDrawer = completion.drawer
 	r.currentWord = result.Word
 	r.startTime = result.Round.StartedAt
+	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
 
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
+	
 	time.AfterFunc(roundDuration, func() {
 		select {
 		case r.roundInfo <- "end round":
@@ -507,7 +510,6 @@ func (r *Room) handleEndGame() {
 func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {
 	policy := r.endGameRetry.normalized()
 	var lastErr error
-
 	for attempt := 1; attempt <= policy.MaxAttempts; attempt++ {
 		select {
 		case <-r.done:
