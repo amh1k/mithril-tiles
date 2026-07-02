@@ -525,7 +525,6 @@ func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {
 			case <-attemptCtx.Done():
 			}
 		}()
-
 		result, err := r.gameLifecycle.EndGame(attemptCtx, request)
 		cancel()
 		if err == nil {

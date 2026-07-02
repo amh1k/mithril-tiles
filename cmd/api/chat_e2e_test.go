@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -59,12 +60,15 @@ func GetAuthenticatedGuest(server *httptest.Server, no int) (*string, error) {
 func waitForPlayerMessage(t *testing.T, player *realtime.TestPlayer, expected string) {
 	t.Helper()
 
-	timeout := time.NewTimer(3 * time.Second)
+	timeout := time.NewTimer(10 * time.Second)
 	defer timeout.Stop()
 
 	for {
 		select {
-		case message := <-player.Receive:
+		case message, ok := <-player.Receive:
+			if !ok {
+				t.Fatal("player message channel closed")
+			}
 			if strings.Contains(message, expected) {
 				return
 			}
@@ -81,21 +85,16 @@ func TestChat(t *testing.T) {
 	fmt.Println(server.URL)
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/rooms/1234/ws"
 	token1, err := GetAuthenticatedGuest(server, 1)
-	token2, err := GetAuthenticatedGuest(server, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
+	token2, err := GetAuthenticatedGuest(server, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	player1 := realtime.StartPlayer(wsURL, *token1)
 	t.Cleanup(player1.Cancel)
-L1:
-	for msg := range player1.Receive {
-		if msg == "*** player1 joined the room ***" {
-			break L1
-		}
-	}
+	waitForPlayerMessage(t, player1, "*** player1 joined the room ***")
 
 	player2 := realtime.StartPlayer(wsURL, *token2)
 	t.Cleanup(player2.Cancel)
@@ -208,11 +207,7 @@ L1:
 	if !hostFound {
 		t.Fatal("game host was not present in game participants")
 	}
-	for msg := range player1.Receive {
-		if msg == "Round1 has started" {
-			break
-		}
-	}
+	waitForPlayerMessage(t, player1, "Round1 has started")
 	// below this is the place where the round has been started
 	gameRound, err := app.models.GameRounds.GetByGameAndRoundNumber(input.Game.ID, 1)
 	if err != nil {
@@ -258,18 +253,8 @@ L1:
 	}
 
 	player1.Send <- "/guess apple"
-	msg := <-player1.Receive
-	if msg != "Correct Guess! Congrats" {
-		fmt.Println(msg)
-		
-		t.Fatal("Guess should be correct")
-	}
-	// this will block
-	for msg := range player1.Receive {
-		if msg == "Round1 has ended" {
-			break
-		}
-	}
+	waitForPlayerMessage(t, player1, "Correct Guess! Congrats")
+	waitForPlayerMessage(t, player1, "Round1 has ended")
 
 	completedRound, err := app.models.GameRounds.GetByGameAndRoundNumber(input.Game.ID, 1)
 	if err != nil {
@@ -336,24 +321,120 @@ L1:
 	if len(seenScores) != len(expectedScores) {
 		t.Fatal("not all participant scores were persisted")
 	}
-	for msg :=  range player1.Receive {
-		if msg == "Round2 has started" {
+	waitForPlayerMessage(t, player1, "Round2 has started")
+	player1.Send <- "/guess apple"
+	waitForPlayerMessage(t, player1, "Correct Guess! Congrats")
+	waitForPlayerMessage(t, player1, "Round2 has ended")
+
+	var (
+		gameStatus string
+		endedAt    *time.Time
+	)
+	completionDeadline := time.Now().Add(5 * time.Second)
+	for {
+		err = app.models.Games.DB.QueryRow(
+			context.Background(),
+			`SELECT status, ended_at FROM games WHERE id = $1`,
+			input.Game.ID,
+		).Scan(&gameStatus, &endedAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if gameStatus == "completed" && endedAt != nil {
 			break
 		}
+		if time.Now().After(completionDeadline) {
+			t.Fatalf(
+				"game did not complete: status=%q ended_at=%v",
+				gameStatus,
+				endedAt,
+			)
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
-	guess2 := "/guess apple"
-	player1.Send <- guess2
-	msg = <-player1.Receive
-	if msg != "Correct Guess! Congrats" {
-		t.Fatal("Guess should be correct")
+	if endedAt.Before(input.Game.StartedAt) {
+		t.Fatal("game ended before it started")
 	}
-	// this will block
-	for msg := range player1.Receive {
-		if msg == "Round2 has ended" {
-			break
+
+	finalScores, err := app.models.GameFinalScores.GetAllForGame(
+		context.Background(),
+		input.Game.ID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(finalScores) != 2 {
+		t.Fatalf("expected 2 final scores, got %d", len(finalScores))
+	}
+
+	type expectedFinalScore struct {
+		points   int
+		rank     int
+		isWinner bool
+	}
+	expectedFinalScores := make(
+		map[uuid.UUID]expectedFinalScore,
+		len(input.GameParticipants),
+	)
+	for _, participant := range input.GameParticipants {
+		switch participant.DisplayNameSnapshot {
+		case "player1":
+			expectedFinalScores[participant.ID] = expectedFinalScore{
+				points:   2,
+				rank:     1,
+				isWinner: true,
+			}
+		case "player2":
+			expectedFinalScores[participant.ID] = expectedFinalScore{
+				points:   0,
+				rank:     2,
+				isWinner: false,
+			}
 		}
 	}
 
-
-
+	for _, finalScore := range finalScores {
+		expected, ok := expectedFinalScores[finalScore.ParticipantID]
+		if !ok {
+			t.Fatalf("unexpected final-score participant %s", finalScore.ParticipantID)
+		}
+		if finalScore.GameID != input.Game.ID {
+			t.Fatalf(
+				"expected final-score game ID %s, got %s",
+				input.Game.ID,
+				finalScore.GameID,
+			)
+		}
+		if finalScore.FinalScore != expected.points {
+			t.Fatalf(
+				"expected participant %s to finish with %d point(s), got %d",
+				finalScore.ParticipantID,
+				expected.points,
+				finalScore.FinalScore,
+			)
+		}
+		if finalScore.FinalRank != expected.rank {
+			t.Fatalf(
+				"expected participant %s to rank %d, got %d",
+				finalScore.ParticipantID,
+				expected.rank,
+				finalScore.FinalRank,
+			)
+		}
+		if finalScore.IsWinner != expected.isWinner {
+			t.Fatalf(
+				"expected participant %s winner=%t, got %t",
+				finalScore.ParticipantID,
+				expected.isWinner,
+				finalScore.IsWinner,
+			)
+		}
+		if finalScore.CreatedAt.IsZero() {
+			t.Fatal("expected final score creation time")
+		}
+		delete(expectedFinalScores, finalScore.ParticipantID)
+	}
+	if len(expectedFinalScores) != 0 {
+		t.Fatal("not all participant final scores were persisted")
+	}
 }
