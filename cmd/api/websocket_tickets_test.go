@@ -2,10 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
@@ -221,4 +227,142 @@ func TestWebSocketTicketLifecycle(t *testing.T) {
 	if stored != 0 {
 		t.Fatal("expected suspended-user ticket to be consumed")
 	}
+}
+
+func TestWebSocketTicketAuthentication(t *testing.T) {
+	_, server := NewTestApplicationE2E(t)
+	unauthenticated, err := http.Post(
+		server.URL+"/v1/rooms/browser-room/ws-ticket",
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unauthenticated.Body.Close()
+	if unauthenticated.StatusCode != http.StatusUnauthorized {
+		t.Fatalf(
+			"expected unauthenticated ticket status 401, got %s",
+			unauthenticated.Status,
+		)
+	}
+
+	token, err := GetAuthenticatedGuest(server, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ticket := requestWebSocketTicket(t, server, *token, "browser-room")
+	conn := dialWebSocketWithTicket(t, server, "browser-room", ticket.Plaintext)
+	readCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	_, welcome, err := conn.Read(readCtx)
+	cancel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(welcome), "Welcome, player1!") {
+		t.Fatalf("unexpected welcome message %q", welcome)
+	}
+	conn.CloseNow()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/browser-room/ws?ticket=" + url.QueryEscape(ticket.Plaintext)
+	reused, response, err := websocket.Dial(context.Background(), wsURL, nil)
+	if reused != nil {
+		reused.CloseNow()
+	}
+	if err == nil {
+		t.Fatal("expected reused ticket to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected reused ticket status 401, got %#v", response)
+	}
+	response.Body.Close()
+
+	roomBound := requestWebSocketTicket(t, server, *token, "correct-room")
+	wrongURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/wrong-room/ws?ticket=" + url.QueryEscape(roomBound.Plaintext)
+	wrongRoom, response, err := websocket.Dial(context.Background(), wrongURL, nil)
+	if wrongRoom != nil {
+		wrongRoom.CloseNow()
+	}
+	if err == nil {
+		t.Fatal("expected wrong-room ticket to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected wrong-room ticket status 401, got %#v", response)
+	}
+	response.Body.Close()
+
+	correctRoom := dialWebSocketWithTicket(t, server, "correct-room", roomBound.Plaintext)
+	correctRoom.CloseNow()
+
+	missingURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/missing-ticket/ws"
+	missing, response, err := websocket.Dial(context.Background(), missingURL, nil)
+	if missing != nil {
+		missing.CloseNow()
+	}
+	if err == nil {
+		t.Fatal("expected missing ticket to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected missing ticket status 401, got %#v", response)
+	}
+	response.Body.Close()
+}
+
+func requestWebSocketTicket(
+	t *testing.T,
+	server *httptest.Server,
+	token string,
+	roomCode string,
+) *data.WebSocketTicket {
+	t.Helper()
+
+	request, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/v1/rooms/"+roomCode+"/ws-ticket",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("expected ticket status 201, got %s", response.Status)
+	}
+
+	var body struct {
+		Ticket data.WebSocketTicket `json:"websocket_ticket"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	return &body.Ticket
+}
+
+func dialWebSocketWithTicket(
+	t *testing.T,
+	server *httptest.Server,
+	roomCode string,
+	ticket string,
+) *websocket.Conn {
+	t.Helper()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/" + roomCode + "/ws?ticket=" + url.QueryEscape(ticket)
+	conn, response, err := websocket.Dial(context.Background(), wsURL, nil)
+	if err != nil {
+		if response != nil {
+			response.Body.Close()
+		}
+		t.Fatal(err)
+	}
+	return conn
 }

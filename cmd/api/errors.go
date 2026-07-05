@@ -48,3 +48,7 @@ func (app *application) authenticationRequiredResponse(w http.ResponseWriter, r 
 	message := "you must be authenticated to access this resource"
 	app.errorResponse(w, r, http.StatusUnauthorized, message)
 }
+func (app *application) invalidWebSocketTicketResponse(w http.ResponseWriter, r *http.Request) {
+	message := "invalid or expired websocket ticket"
+	app.errorResponse(w, r, http.StatusUnauthorized, message)
+}
