@@ -4,23 +4,11 @@
 
 The backend now has a credible multiplayer lifecycle: user authentication works, WebSocket reader/writer shutdown is coordinated, drawing no longer panics before drawer selection, room admission and capacity enforcement are serialized by the room actor, game start is transactional, only one active game is allowed per room code, rounds are capped, and final scores plus game completion are persisted atomically with bounded recovery.
 
-It is still an early alpha rather than production-ready. The main remaining risks are browser WebSocket authentication, drawing-path locking and validation, misleading user routes, incomplete gameplay rules, and operational hardening.
+It is still an early alpha rather than production-ready. The main remaining risks are drawing-path locking and validation, misleading user routes, incomplete gameplay rules, and operational hardening.
 
 ## Release blockers
 
-### 1. Browser clients cannot authenticate the WebSocket
-
-The WebSocket route requires an `Authorization: Bearer` header. A normal browser `WebSocket` client cannot attach arbitrary authorization headers, even though the Go test client can.
-
-Use one of:
-
-- Secure HTTP-only authentication cookies.
-- A short-lived, single-use WebSocket ticket acquired over authenticated HTTP.
-- An ephemeral credential carried in a WebSocket subprotocol.
-
-The WebSocket server also accepts every origin. This must be replaced with an explicit production allowlist, particularly if cookie authentication is introduced, or the endpoint will be exposed to cross-site WebSocket hijacking.
-
-### 2. Current-user routes require an unused ID and the E2E test fails
+### 1. Current-user routes require an unused ID and the E2E test fails
 
 The update and deletion handlers operate on the authenticated principal, but the routes still require an `:id`:
 
@@ -31,7 +19,7 @@ The ID is ignored, so clients must supply a meaningless value. The routes should
 
 This is not merely cosmetic: the current `TestUserLifecycle` calls the update path without an ID and receives `404` instead of the expected `200`, causing the full test suite to fail.
 
-### 3. Drawing can deadlock the room and remains insufficiently validated
+### 2. Drawing can deadlock the room and remains insufficiently validated
 
 The drawing path acquires `room.mu` but does not release it during an active round before sending to `drawStroke`. This can block joins, leaves, round transitions, and other state operations indefinitely. Sending a stroke while the round is idle also disconnects the reader instead of rejecting or ignoring the event.
 
@@ -161,7 +149,7 @@ Specific test gaps:
 - No CI workflow, Dockerfile, release process, or production runbook exists.
 - Startup requires a `.env` file even when real environment variables are supplied.
 - There is no graceful HTTP shutdown or coordinated shutdown of active rooms.
-- `application.wg` and CORS configuration are unused.
+- `application.wg` is unused.
 - The healthcheck does not verify database readiness.
 - Migration paths depend on the process working directory.
 - Realtime logging uses `fmt.Printf` instead of structured logging.
@@ -171,12 +159,11 @@ Specific test gaps:
 ## Recommended order of work
 
 1. Fix drawing-path locking and enforce drawer eligibility using principal IDs.
-2. Make WebSocket authentication browser-compatible and enforce an origin allowlist.
-3. Correct the current-user route contract and restore a fully passing test suite.
-4. Reclaim idle or abandoned rooms and bound message history.
-5. Correct guess eligibility and decouple scoring from message delivery.
-6. Persist participant departure and complete or remove the reconnect subsystem.
-7. Centralize game configuration and move shared gameplay state under one ownership model.
-8. Make identity/token creation atomic, add rate limits, standardize the realtime protocol, and finish operational hardening.
+2. Correct the current-user route contract and restore a fully passing test suite.
+3. Reclaim idle or abandoned rooms and bound message history.
+4. Correct guess eligibility and decouple scoring from message delivery.
+5. Persist participant departure and complete or remove the reconnect subsystem.
+6. Centralize game configuration and move shared gameplay state under one ownership model.
+7. Make identity/token creation atomic, add rate limits, standardize the realtime protocol, and finish operational hardening.
 
-The next milestone should be a correct, recoverable, and browser-usable multiplayer lifecycle. New gameplay features should wait until the lifecycle and its failure paths are covered by tests.
+The next milestone should be a correct and recoverable multiplayer lifecycle. New gameplay features should wait until the lifecycle and its failure paths are covered by tests.
