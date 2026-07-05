@@ -230,7 +230,9 @@ func TestWebSocketTicketLifecycle(t *testing.T) {
 }
 
 func TestWebSocketTicketAuthentication(t *testing.T) {
-	_, server := NewTestApplicationE2E(t)
+	app, server := NewTestApplicationE2E(t)
+	app.config.cors.trustedOrigins = []string{"https://app.example.com"}
+
 	unauthenticated, err := http.Post(
 		server.URL+"/v1/rooms/browser-room/ws-ticket",
 		"application/json",
@@ -276,6 +278,47 @@ func TestWebSocketTicketAuthentication(t *testing.T) {
 	}
 	if response == nil || response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected reused ticket status 401, got %#v", response)
+	}
+	response.Body.Close()
+
+	allowedOriginTicket := requestWebSocketTicket(t, server, *token, "allowed-origin")
+	allowedOriginURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/allowed-origin/ws?ticket=" +
+		url.QueryEscape(allowedOriginTicket.Plaintext)
+	allowedOrigin, response, err := websocket.Dial(
+		context.Background(),
+		allowedOriginURL,
+		&websocket.DialOptions{
+			HTTPHeader: http.Header{"Origin": []string{"https://app.example.com"}},
+		},
+	)
+	if err != nil {
+		if response != nil {
+			response.Body.Close()
+		}
+		t.Fatalf("expected trusted WebSocket origin to be accepted: %v", err)
+	}
+	allowedOrigin.CloseNow()
+
+	rejectedOriginTicket := requestWebSocketTicket(t, server, *token, "rejected-origin")
+	rejectedOriginURL := "ws" + strings.TrimPrefix(server.URL, "http") +
+		"/v1/rooms/rejected-origin/ws?ticket=" +
+		url.QueryEscape(rejectedOriginTicket.Plaintext)
+	rejectedOrigin, response, err := websocket.Dial(
+		context.Background(),
+		rejectedOriginURL,
+		&websocket.DialOptions{
+			HTTPHeader: http.Header{"Origin": []string{"https://evil.example.com"}},
+		},
+	)
+	if rejectedOrigin != nil {
+		rejectedOrigin.CloseNow()
+	}
+	if err == nil {
+		t.Fatal("expected untrusted WebSocket origin to be rejected")
+	}
+	if response == nil || response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected untrusted WebSocket origin status 403, got %#v", response)
 	}
 	response.Body.Close()
 

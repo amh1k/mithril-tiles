@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +43,7 @@ type application struct {
 
 func main() {
 	var cfg config
+	var corsTrustedOrigins string
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -55,7 +58,17 @@ func main() {
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.minIdleConns, "db-min-idle-conns", 2, "PostgreSQL minimum idle connections")
 	flag.DurationVar(&cfg.db.maxIdleTime, "db-max-idle-time", 15*time.Minute, "PostgreSQL max connection idle time")
+	flag.StringVar(
+		&corsTrustedOrigins,
+		"cors-trusted-origins",
+		os.Getenv("CORS_TRUSTED_ORIGINS"),
+		"Trusted CORS origins (comma separated)",
+	)
 	flag.Parse()
+	cfg.cors.trustedOrigins, err = parseTrustedOrigins(corsTrustedOrigins)
+	if err != nil {
+		log.Fatal(err)
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	ctx := context.Background()
 	db, err := openDB(cfg, ctx)
@@ -82,6 +95,31 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+func parseTrustedOrigins(value string) ([]string, error) {
+	values := strings.Fields(strings.ReplaceAll(value, ",", " "))
+	origins := make([]string, 0, len(values))
+
+	for _, value := range values {
+		origin, err := url.Parse(value)
+		if err != nil ||
+			(origin.Scheme != "http" && origin.Scheme != "https") ||
+			origin.Host == "" ||
+			origin.User != nil ||
+			origin.Path != "" ||
+			origin.RawQuery != "" ||
+			origin.Fragment != "" {
+			return nil, fmt.Errorf(
+				"invalid trusted origin %q: use a full HTTP origin such as https://app.example.com",
+				value,
+			)
+		}
+		origins = append(origins, origin.Scheme+"://"+origin.Host)
+	}
+
+	return origins, nil
+}
+
 func openDB(cfg config, ctx context.Context) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(cfg.db.dsn)
 	if err != nil {

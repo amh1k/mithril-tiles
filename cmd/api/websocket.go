@@ -21,7 +21,6 @@ func (app *application) createWebSocketTicketHandler(w http.ResponseWriter, r *h
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
 	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	ticket, err := app.models.WebSocketTickets.Issue(
@@ -73,7 +72,7 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
+		OriginPatterns: app.config.cors.trustedOrigins,
 	})
 	if err != nil {
 		app.logger.Error("websocket accept failed", "error", err)
