@@ -52,3 +52,7 @@ func (app *application) invalidWebSocketTicketResponse(w http.ResponseWriter, r 
 	message := "invalid or expired websocket ticket"
 	app.errorResponse(w, r, http.StatusUnauthorized, message)
 }
+func (app *application) rateLimitExceededResponse(w http.ResponseWriter, r *http.Request) {
+	message := "rate limit exceeded"
+	app.errorResponse(w, r, http.StatusTooManyRequests, message)
+}

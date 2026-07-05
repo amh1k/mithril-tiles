@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"mithrilTiles.abdulmoiz.net/internal/data"
@@ -19,6 +20,25 @@ func (app *application) recoverPanic(next http.Handler) http.Handler {
 				app.serverErrorResponse(w, r, fmt.Errorf("%v", pv))
 			}
 		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *application) rateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if app.config.limiter.enabled {
+			ip := clientIP(r, app.config.limiter.trustedProxies)
+			allowed, retryAfter := app.requestLimiter.allow(ip)
+			if !allowed {
+				w.Header().Set(
+					"Retry-After",
+					strconv.Itoa(retryAfterSeconds(retryAfter)),
+				)
+				app.rateLimitExceededResponse(w, r)
+				return
+			}
+		}
+
 		next.ServeHTTP(w, r)
 	})
 }

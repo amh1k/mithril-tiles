@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -32,18 +33,26 @@ type config struct {
 	cors struct {
 		trustedOrigins []string
 	}
+	limiter struct {
+		rps            float64
+		burst          int
+		enabled        bool
+		trustedProxies []netip.Prefix
+	}
 }
 type application struct {
-	config      config
-	logger      *slog.Logger
-	models      data.Models
-	wg          sync.WaitGroup
-	roomManager *realtime.RoomManager
+	config         config
+	logger         *slog.Logger
+	models         data.Models
+	wg             sync.WaitGroup
+	roomManager    *realtime.RoomManager
+	requestLimiter *clientRateLimiter
 }
 
 func main() {
 	var cfg config
 	var corsTrustedOrigins string
+	var trustedProxies string
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -54,6 +63,15 @@ func main() {
 		"db-dsn",
 		os.Getenv("DATABASE_URL"),
 		"PostgreSQL DSN",
+	)
+	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
+	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
+	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+	flag.StringVar(
+		&trustedProxies,
+		"limiter-trusted-proxies",
+		os.Getenv("RATE_LIMIT_TRUSTED_PROXIES"),
+		"Trusted reverse-proxy CIDRs (comma separated)",
 	)
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
 	flag.IntVar(&cfg.db.minIdleConns, "db-min-idle-conns", 2, "PostgreSQL minimum idle connections")
@@ -67,6 +85,13 @@ func main() {
 	flag.Parse()
 	cfg.cors.trustedOrigins, err = parseTrustedOrigins(corsTrustedOrigins)
 	if err != nil {
+		log.Fatal(err)
+	}
+	cfg.limiter.trustedProxies, err = parseTrustedProxyCIDRs(trustedProxies)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := validateLimiterConfig(cfg); err != nil {
 		log.Fatal(err)
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -84,10 +109,11 @@ func main() {
 	gameLifecycle := newGameLifecycleService(models)
 	roomManager := realtime.NewRoomManager(gameLifecycle)
 	app := &application{
-		config:      cfg,
-		logger:      logger,
-		models:      models,
-		roomManager: roomManager,
+		config:         cfg,
+		logger:         logger,
+		models:         models,
+		roomManager:    roomManager,
+		requestLimiter: newClientRateLimiter(cfg.limiter.rps, cfg.limiter.burst),
 	}
 	err = app.serve()
 	if err != nil {
