@@ -15,7 +15,6 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/realtime"
 )
-
 func GetAuthenticatedGuest(server *httptest.Server, no int) (*string, error) {
 	playerName := fmt.Sprintf("player%d", no)
 	body := map[string]any{

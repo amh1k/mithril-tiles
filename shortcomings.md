@@ -4,7 +4,7 @@
 
 The backend now has a credible multiplayer lifecycle: user authentication works, WebSocket reader/writer shutdown is coordinated, drawing no longer panics before drawer selection, room admission and capacity enforcement are serialized by the room actor, game start is transactional, only one active game is allowed per room code, rounds are capped, and final scores plus game completion are persisted atomically with bounded recovery.
 
-It is still an early alpha rather than production-ready. The main remaining risks are browser WebSocket authentication, broken round-state transitions and locking, misleading user routes, incomplete gameplay validation, and missing database invariants.
+It is still an early alpha rather than production-ready. The main remaining risks are browser WebSocket authentication, drawing-path locking and validation, misleading user routes, incomplete gameplay rules, and operational hardening.
 
 ## Release blockers
 
@@ -31,27 +31,16 @@ The ID is ignored, so clients must supply a meaningless value. The routes should
 
 This is not merely cosmetic: the current `TestUserLifecycle` calls the update path without an ID and receives `404` instead of the expected `200`, causing the full test suite to fail.
 
-### 3. Round-state enforcement breaks the first round and can deadlock the room
+### 3. Drawing can deadlock the room and remains insufficiently validated
 
-Rooms begin with `RoundStateIdle`, but the initial-round completion path in `handleGameStartCompleted()` never changes the state to `RoundStateStarted`. Only subsequent rounds started through `startRound()` make that transition.
+The drawing path acquires `room.mu` but does not release it during an active round before sending to `drawStroke`. This can block joins, leaves, round transitions, and other state operations indefinitely. Sending a stroke while the round is idle also disconnects the reader instead of rejecting or ignoring the event.
 
-Consequences include:
+Additional authorization and validation gaps are:
 
-- Correct guesses during round one are rejected as though no round were active. This currently causes `TestChat` to fail.
-- A drawing event during round one returns from the reader and disconnects that player.
-- During later active rounds, both drawing and guessing acquire `room.mu` but never release it on the active path.
-- Once that mutex is retained, joins, leaves, round transitions, and other state operations that need it can block indefinitely.
-- `endRound()` writes `RoundStateIdle` without holding `room.mu`, so state access is not consistently synchronized.
-
-Round-state reads should copy the required values while holding the mutex and then unlock immediately. Every successful round-start path must perform the same state transition.
-
-### 4. Drawing authorization remains incomplete
-
-The nil-drawer panic has been fixed, but:
-
-- Active-round gating is currently broken by the round-state transition and mutex problems described above.
 - The sender is compared to the drawer using a display name rather than an immutable principal ID.
 - Coordinates, brush size, colour, payload size, and event frequency are not validated or bounded.
+
+Copy the round state and drawer identity while holding the mutex, unlock immediately, validate the payload, and only then enqueue the stroke.
 
 ## Realtime and gameplay shortcomings
 
@@ -74,7 +63,6 @@ Every broadcast is appended to `r.messages`, with no retention limit. Use a boun
 
 Some gameplay state is protected by mutexes while other state is read directly. Examples include:
 
-- Active drawing and guessing paths retain `room.mu` instead of releasing it.
 - `RoundState` is written without locking at round end.
 - Reading `currentRoundNo` outside its protecting lock.
 - Returning the internal score map from `GetScores()` without locking and copying it.
@@ -86,26 +74,15 @@ Prefer a single ownership model: either all gameplay mutations and snapshots go 
 Repeat correct guesses in the same round are now rejected, but:
 
 - The drawer can guess.
-- The initial round is incorrectly treated as inactive, while later active guesses retain `room.mu`.
 - Comparison is case-sensitive and does not normalize whitespace.
 - Multi-word guesses are truncated because only one split token is checked.
 - Score mutation depends on successfully enqueueing the “correct guess” response to the player's outgoing channel.
 
 Scoring must be independent of message delivery, and eligibility should be based on stable principal IDs.
 
-### Disconnects corrupt durable participation and scoring history
+### Disconnect and reconnect lifecycle is incomplete
 
-When a player leaves, the room removes that player's round and global scores. If the player participated in the persisted game, their final contribution may disappear before final-score persistence.
-
-In addition:
-
-- `game_participants.left_at` is never populated.
-- Global scores are keyed by `*Player`, so reconnecting creates a different identity.
-- Reconnecting players do not reliably recover their prior score or role.
-
-Use the authenticated principal ID as the in-memory identity, retain durable scores after disconnect, and record participant departure separately from score ownership.
-
-### Reconnection support is not functional end to end
+Final scores now use stable principal identity and survive disconnects, but leaving players are removed from the current round score map and `game_participants.left_at` is never populated. Durable history therefore cannot accurately distinguish a participant who left mid-round, and reconnecting players do not reliably recover their current-round role or score.
 
 Session and reconnect-token helpers exist, but they are not wired into the active connection flow. Clients do not receive and exercise a complete reconnect protocol, and the room does not send an authoritative state snapshot after reconnection.
 
@@ -115,11 +92,10 @@ Either finish the feature with token issuance, expiry, identity restoration, and
 
 Game completion now exists, but:
 
-- The three-round limit is hard-coded while the existing game-round configuration is unused.
+- Round count, duration, and cooldown are hard-coded instead of being supplied by an immutable game configuration.
 - Drawer selection is random each round rather than a deterministic fair rotation.
 - A timer is created before the final-round completion check, leaving unnecessary timer work.
 - Round-end persistence failure leaves the live room in its previous active state with no retry or recovery transition.
-- Production round duration is hard-coded to ten seconds.
 - The persisted settings snapshot does not drive the live room rules.
 
 Create one immutable game configuration and use it for persistence, runtime behavior, and tests.
@@ -131,18 +107,6 @@ Some server events are plain text while drawing events are structured JSON. This
 Use a versioned event envelope with stable event types and structured data. Add an authoritative room-state snapshot for late joiners and reconnecting clients.
 
 ## Data integrity shortcomings
-
-Important missing constraints include:
-
-- At most one active round per game.
-- One participant row per user or guest per game.
-- One score entry per round, participant, and scoring reason.
-- Assurance that a score's participant belongs to the same game as its round.
-- Assurance that a round's word belongs to the word pack selected for its game.
-
-The current foreign keys establish that referenced rows exist, but do not enforce all of these cross-table relationships.
-
-Other data-layer issues:
 
 - User/guest creation and authentication-token insertion are separate transactions. Token insertion failure leaves a created identity behind, and a retry may then fail as a duplicate.
 - Email addresses and handles are not consistently canonicalized, making case behavior surprising.
@@ -171,7 +135,8 @@ Current verification results:
 
 - `go vet ./...`: passed.
 - Compile-only `go test ./... -run '^$' -count=1`: passed.
-- `go test ./... -count=1`: failed in `TestChat` because round one remains idle and in `TestUserLifecycle` because the update request receives `404`.
+- `TestChat`, including final-score persistence, passes normally and with the race detector.
+- The full suite still fails in `TestUserLifecycle` because the update request receives `404`.
 - Race-enabled `internal/realtime` tests: passed.
 - `go mod tidy -diff`: clean.
 
@@ -180,17 +145,13 @@ Passing race tests do not prove that realtime state is race-free; the current te
 Specific test gaps:
 
 - Real database outage and lost-commit-acknowledgement behavior are not covered by fault-injection integration tests.
-- Room tests do not fully initialize end-game and room-deletion callbacks, so they cannot safely exercise completion.
-- Full-room rejection now has a boundary test, but concurrent admission is not tested.
-- The chat E2E test overwrites the first guest-token error before checking it.
-- Several channel reads and loops have no timeout and may hang indefinitely.
 - The chat test assumes a player may guess even when that player is randomly selected as drawer.
 - Some unit tests ignore constructor errors.
 - Tests use `time.Sleep()` for synchronization.
 - A draw-stroke recipient assertion is commented out.
 - `principal_test.go` contains no tests.
 - `player_test_helper.go` is production code instead of `_test.go` code and prints debug text.
-- There are no focused tests for concurrent room admission, abandoned-room cleanup, reconnection, or duplicate connections.
+- Capacity boundaries are tested, but there are no focused tests for concurrent room admission, abandoned-room cleanup, reconnection, or duplicate connections.
 
 ## Operational and maintainability shortcomings
 
@@ -209,14 +170,13 @@ Specific test gaps:
 
 ## Recommended order of work
 
-1. Fix initial round-state activation and release `room.mu` correctly in every drawing and guessing path.
+1. Fix drawing-path locking and enforce drawer eligibility using principal IDs.
 2. Make WebSocket authentication browser-compatible and enforce an origin allowlist.
 3. Correct the current-user route contract and restore a fully passing test suite.
 4. Reclaim idle or abandoned rooms and bound message history.
-5. Enforce drawing and guessing eligibility using principal IDs and decouple scoring from message delivery.
-6. Preserve participant scores across disconnects and complete or remove the reconnect subsystem.
+5. Correct guess eligibility and decouple scoring from message delivery.
+6. Persist participant departure and complete or remove the reconnect subsystem.
 7. Centralize game configuration and move shared gameplay state under one ownership model.
-8. Add the remaining database constraints and atomic identity/token creation.
-9. Introduce rate limits, standardize the realtime protocol, and finish operational hardening.
+8. Make identity/token creation atomic, add rate limits, standardize the realtime protocol, and finish operational hardening.
 
 The next milestone should be a correct, recoverable, and browser-usable multiplayer lifecycle. New gameplay features should wait until the lifecycle and its failure paths are covered by tests.
