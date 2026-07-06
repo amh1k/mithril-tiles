@@ -12,17 +12,14 @@ import (
 
 	"golang.org/x/time/rate"
 )
-
 const (
 	rateLimiterClientTTL       = 3 * time.Minute
 	rateLimiterCleanupInterval = time.Minute
 )
-
 type rateLimitClient struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
 }
-
 type clientRateLimiter struct {
 	mu              sync.Mutex
 	clients         map[string]*rateLimitClient
@@ -33,7 +30,6 @@ type clientRateLimiter struct {
 	lastCleanup     time.Time
 	now             func() time.Time
 }
-
 func newClientRateLimiter(rps float64, burst int) *clientRateLimiter {
 	return &clientRateLimiter{
 		clients:         make(map[string]*rateLimitClient),

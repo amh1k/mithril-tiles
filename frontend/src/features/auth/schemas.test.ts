@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  authSessionResponseSchema,
   guestAuthResponseSchema,
   registerFormSchema,
   registerRequestSchema,
@@ -60,5 +61,18 @@ describe("authentication schemas", () => {
     expect(result.error.flatten().fieldErrors.password_confirmation).toEqual([
       "Passwords do not match",
     ]);
+  });
+
+  it("accepts a registered session without an avatar URL", () => {
+    const response = {
+      principal: {
+        type: "user",
+        id: "1a34b2da-1280-4f70-aeca-08c8f34426c6",
+        display_name: "Player One",
+        handle: "player-one",
+      },
+    };
+
+    expect(authSessionResponseSchema.parse(response)).toEqual(response);
   });
 });

@@ -1,28 +1,13 @@
 "use client";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import {
-  useForm,
-  type UseFormRegisterReturn,
-} from "react-hook-form";
-
+import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthRequestError, registerUser } from "./api-client";
-import {
-  registerFormSchema,
-  type RegisterFormValues,
-} from "./schemas";
-
-const fieldNames = [
-  "display_name",
-  "handle",
-  "email",
-  "password",
-] as const;
-
+import { registerFormSchema, type RegisterFormValues } from "./schemas";
+const fieldNames = ["display_name", "handle", "email", "password"] as const;
 export function RegisterForm() {
   const router = useRouter();
   const {
@@ -40,7 +25,6 @@ export function RegisterForm() {
       password_confirmation: "",
     },
   });
-
   const onSubmit = handleSubmit(async (values) => {
     try {
       await registerUser({

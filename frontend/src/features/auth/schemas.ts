@@ -101,7 +101,7 @@ export const userPrincipalSchema = z.object({
   id: z.uuid(),
   display_name: z.string(),
   handle: z.string(),
-  avatar_url: z.string(),
+  avatar_url: z.string().optional(),
 });
 export const guestPrincipalSchema = z.object({
   type: z.literal("guest"),

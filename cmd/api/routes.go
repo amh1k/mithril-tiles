@@ -9,6 +9,7 @@ import (
 func (app *application) routes() http.Handler {
 	router := httprouter.New()
 	router.HandlerFunc(http.MethodGet, "/v1/healthcheck", app.healthcheckHandler)
+	router.HandlerFunc(http.MethodGet, "/v1/session", app.handleGetSession)
 	router.HandlerFunc(http.MethodPost, "/v1/guest-sessions", app.rateLimit(app.createGuestSessionHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/users/register", app.rateLimit(app.registerUserHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/users/login", app.rateLimit(app.loginUserHandler))
