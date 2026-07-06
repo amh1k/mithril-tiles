@@ -38,6 +38,18 @@ export const registerRequestSchema = z
   })
   .strict();
 
+export const registerFormSchema = registerRequestSchema
+  .omit({ avatar_url: true })
+  .extend({
+    password_confirmation: z
+      .string()
+      .min(1, "Confirm your password"),
+  })
+  .refine((values) => values.password === values.password_confirmation, {
+    message: "Passwords do not match",
+    path: ["password_confirmation"],
+  });
+
 export const loginRequestSchema = z
   .object({
     email: z.email("Enter a valid email address"),
@@ -113,6 +125,7 @@ export const userSessionResponseSchema = z.object({
 });
 
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
+export type RegisterFormValues = z.infer<typeof registerFormSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type GuestRequest = z.infer<typeof guestRequestSchema>;
 export type AuthenticationToken = z.infer<typeof authenticationTokenSchema>;

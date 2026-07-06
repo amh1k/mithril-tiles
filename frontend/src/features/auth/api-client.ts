@@ -3,6 +3,7 @@ import {
   type GuestPrincipal,
   type GuestRequest,
   type LoginRequest,
+  type RegisterRequest,
   type UserPrincipal,
   userSessionResponseSchema,
 } from "@/features/auth/schemas";
@@ -36,6 +37,18 @@ export async function createGuestSession(
 export async function login(request: LoginRequest): Promise<UserPrincipal> {
   const response = await postAuthentication(
     "/api/auth/login",
+    request,
+    userSessionResponseSchema,
+  );
+
+  return response.principal;
+}
+
+export async function registerUser(
+  request: RegisterRequest,
+): Promise<UserPrincipal> {
+  const response = await postAuthentication(
+    "/api/auth/register",
     request,
     userSessionResponseSchema,
   );

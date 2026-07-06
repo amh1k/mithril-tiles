@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   guestAuthResponseSchema,
+  registerFormSchema,
   registerRequestSchema,
 } from "./schemas";
 
@@ -39,5 +40,25 @@ describe("authentication schemas", () => {
         issue.message.includes("must not exceed 60 bytes"),
       ),
     ).toBe(true);
+  });
+
+  it("requires matching registration passwords", () => {
+    const result = registerFormSchema.safeParse({
+      display_name: "Player One",
+      handle: "player-one",
+      email: "player@example.com",
+      password: "password-one",
+      password_confirmation: "password-two",
+    });
+
+    expect(result.success).toBe(false);
+
+    if (result.success) {
+      return;
+    }
+
+    expect(result.error.flatten().fieldErrors.password_confirmation).toEqual([
+      "Passwords do not match",
+    ]);
   });
 });
