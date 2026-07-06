@@ -1,10 +1,8 @@
 import {
   ArrowRight,
   Brush,
-  LogIn,
   MessageCircle,
   Sparkles,
-  UserPlus,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -32,51 +30,11 @@ const steps = [
 
 export default function Home() {
   return (
-    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-background">
+    <div className="relative flex flex-1 flex-col overflow-hidden bg-background">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(148,163,184,0.16),transparent_42%)]"
         aria-hidden="true"
       />
-
-      <header className="relative z-10 border-b border-border/70 bg-background/80 backdrop-blur">
-        <nav
-          className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6"
-          aria-label="Main navigation"
-        >
-          <Link
-            className="flex items-center gap-2 font-semibold tracking-tight"
-            href="/"
-          >
-            <span className="flex size-9 items-center justify-center rounded-lg border border-border bg-card shadow-sm">
-              <Sparkles className="size-4" aria-hidden="true" />
-            </span>
-            Mithril Tiles
-          </Link>
-
-          <div className="flex items-center gap-2">
-            <Link
-              className={cn(
-                buttonVariants({ variant: "ghost" }),
-                "h-10 px-3",
-              )}
-              href="/login"
-            >
-              <LogIn aria-hidden="true" />
-              <span className="hidden sm:inline">Sign in</span>
-            </Link>
-            <Link
-              className={cn(
-                buttonVariants({ variant: "outline" }),
-                "h-10 px-3",
-              )}
-              href="/register"
-            >
-              <UserPlus aria-hidden="true" />
-              Register
-            </Link>
-          </div>
-        </nav>
-      </header>
 
       <main className="relative z-10 flex-1">
         <section className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-24 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:py-32">

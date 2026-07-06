@@ -1,15 +1,21 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AuthRequestError, registerUser } from "./api-client";
+import {
+  authSessionQueryKey,
+  AuthRequestError,
+  registerUser,
+} from "./api-client";
 import { registerFormSchema, type RegisterFormValues } from "./schemas";
 const fieldNames = ["display_name", "handle", "email", "password"] as const;
 export function RegisterForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -27,13 +33,14 @@ export function RegisterForm() {
   });
   const onSubmit = handleSubmit(async (values) => {
     try {
-      await registerUser({
+      const principal = await registerUser({
         display_name: values.display_name,
         handle: values.handle,
         email: values.email,
         password: values.password,
         avatar_url: "",
       });
+      queryClient.setQueryData(authSessionQueryKey, principal);
       router.replace("/play");
     } catch (error) {
       if (error instanceof AuthRequestError) {
