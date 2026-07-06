@@ -14,13 +14,24 @@ export type FrontendApiErrorCode =
   | "rate_limited"
   | "server_error";
 
-export type FrontendApiError = {
-  status: number;
-  code: FrontendApiErrorCode;
-  message: string;
-  fieldErrors?: Record<string, string>;
-  retryAfterSeconds?: number;
-};
+export const frontendApiErrorSchema = z.object({
+  status: z.number().int(),
+  code: z.enum([
+    "bad_request",
+    "unauthorized",
+    "forbidden",
+    "not_found",
+    "conflict",
+    "validation_failed",
+    "rate_limited",
+    "server_error",
+  ]),
+  message: z.string(),
+  fieldErrors: z.record(z.string(), z.string()).optional(),
+  retryAfterSeconds: z.number().nonnegative().optional(),
+});
+
+export type FrontendApiError = z.infer<typeof frontendApiErrorSchema>;
 
 export function normalizeValidationError(
   error: z.ZodError,

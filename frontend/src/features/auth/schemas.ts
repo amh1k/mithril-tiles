@@ -84,6 +84,34 @@ export const guestAuthResponseSchema = z.object({
   authentication_token: authenticationTokenSchema,
 });
 
+export const userPrincipalSchema = z.object({
+  type: z.literal("user"),
+  id: z.uuid(),
+  display_name: z.string(),
+  handle: z.string(),
+  avatar_url: z.string(),
+});
+export const guestPrincipalSchema = z.object({
+  type: z.literal("guest"),
+  id: z.uuid(),
+  display_name: z.string(),
+});
+export const principalSchema = z.discriminatedUnion("type", [
+  userPrincipalSchema,
+  guestPrincipalSchema,
+]);
+export const authSessionResponseSchema = z.object({
+  principal: principalSchema,
+});
+
+export const guestSessionResponseSchema = z.object({
+  principal: guestPrincipalSchema,
+});
+
+export const userSessionResponseSchema = z.object({
+  principal: userPrincipalSchema,
+});
+
 export type RegisterRequest = z.infer<typeof registerRequestSchema>;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type GuestRequest = z.infer<typeof guestRequestSchema>;
@@ -92,3 +120,7 @@ export type User = z.infer<typeof userSchema>;
 export type GuestSession = z.infer<typeof guestSessionSchema>;
 export type UserAuthResponse = z.infer<typeof userAuthResponseSchema>;
 export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;
+export type Principal = z.infer<typeof principalSchema>;
+export type GuestPrincipal = z.infer<typeof guestPrincipalSchema>;
+export type UserPrincipal = z.infer<typeof userPrincipalSchema>;
+export type AuthSessionResponse = z.infer<typeof authSessionResponseSchema>;

@@ -22,7 +22,6 @@ export async function setSessionCookie(
   if (Number.isNaN(expires.getTime())) {
     throw new Error("Cannot set a session cookie with an invalid expiry");
   }
-
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     ...sessionCookieOptions,
