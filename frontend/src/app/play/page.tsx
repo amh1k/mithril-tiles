@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { lookupSession } from "@/features/auth/server/session";
+import { RoomEntry } from "@/features/rooms/room-entry";
 import { getSessionToken } from "@/lib/auth/session-cookie";
 
 export const metadata: Metadata = {
@@ -47,21 +47,6 @@ export default async function PlayPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-xl">
-        <CardHeader>
-          <CardTitle className="text-xl">Choose your room</CardTitle>
-          <CardDescription>
-            Welcome back, {session.principal.display_name}. Your session has
-            been verified.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Room creation and joining are the next implementation step.
-          </p>
-        </CardContent>
-      </Card>
-    </main>
+    <RoomEntry displayName={session.principal.display_name} />
   );
 }
