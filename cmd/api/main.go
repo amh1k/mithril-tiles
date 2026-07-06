@@ -39,6 +39,9 @@ type config struct {
 		enabled        bool
 		trustedProxies []netip.Prefix
 	}
+	realtime struct {
+		messageHistoryCapacity int
+	}
 }
 type application struct {
 	config         config
@@ -67,6 +70,12 @@ func main() {
 	flag.Float64Var(&cfg.limiter.rps, "limiter-rps", 2, "Rate limiter maximum requests per second")
 	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 4, "Rate limiter maximum burst")
 	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+	flag.IntVar(
+		&cfg.realtime.messageHistoryCapacity,
+		"message-history-capacity",
+		realtime.DefaultMessageHistoryCapacity,
+		"Maximum number of messages retained per room",
+	)
 	flag.StringVar(
 		&trustedProxies,
 		"limiter-trusted-proxies",
@@ -94,6 +103,9 @@ func main() {
 	if err := validateLimiterConfig(cfg); err != nil {
 		log.Fatal(err)
 	}
+	if cfg.realtime.messageHistoryCapacity <= 0 {
+		log.Fatal("message-history-capacity must be greater than zero")
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	ctx := context.Background()
 	db, err := openDB(cfg, ctx)
@@ -107,7 +119,10 @@ func main() {
 	logger.Info("database connection pool established")
 	models := data.NewModels(db)
 	gameLifecycle := newGameLifecycleService(models)
-	roomManager := realtime.NewRoomManager(gameLifecycle)
+	roomManager := realtime.NewRoomManagerWithMessageHistoryCapacity(
+		gameLifecycle,
+		cfg.realtime.messageHistoryCapacity,
+	)
 	app := &application{
 		config:         cfg,
 		logger:         logger,

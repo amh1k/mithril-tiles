@@ -100,7 +100,7 @@ type Room struct {
 	startTime     time.Time
 
 	// Message history
-	messages      []Message
+	messages      *RingBuffer[Message]
 	messageMu     sync.Mutex
 	nextMessageID int
 
@@ -115,8 +115,26 @@ type Room struct {
 }
 
 func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomCode string)) (*Room, error) {
+	return newRoom(
+		roomCode,
+		gameLifecycle,
+		deleteRoom,
+		DefaultMessageHistoryCapacity,
+	)
+}
+
+func newRoom(
+	roomCode string,
+	gameLifecycle GameLifecycle,
+	deleteRoom func(roomCode string),
+	messageHistoryCapacity int,
+) (*Room, error) {
 	if gameLifecycle == nil {
 		return nil, fmt.Errorf("game lifecycle is required")
+	}
+	messages, err := NewRingBuffer[Message](messageHistoryCapacity)
+	if err != nil {
+		return nil, fmt.Errorf("create message history: %w", err)
 	}
 
 	cr := &Room{
@@ -132,7 +150,7 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
 		sessions:       make(map[string]*SessionInfo),
-		messages:       make([]Message, 0),
+		messages:       messages,
 		startTime:      time.Now(),
 		roomCode:       roomCode,
 		gameState:      GameStateIdle,
@@ -150,6 +168,10 @@ func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomC
 	return cr, nil
 }
 func NewRoomUnitTest(roomCode string) (*Room, error) {
+	messages, err := NewRingBuffer[Message](DefaultMessageHistoryCapacity)
+	if err != nil {
+		return nil, fmt.Errorf("create message history: %w", err)
+	}
 
 	cr := &Room{
 		players:        make(map[*Player]bool),
@@ -164,7 +186,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
 		sessions:       make(map[string]*SessionInfo),
-		messages:       make([]Message, 0),
+		messages:       messages,
 		startTime:      time.Now(),
 		roomCode:       roomCode,
 		gameState:      GameStateIdle,
