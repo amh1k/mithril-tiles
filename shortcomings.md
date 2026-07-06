@@ -41,11 +41,7 @@ Successfully completed games now remove their room, but rooms are not removed wh
 - Start or end persistence fails.
 - A room is created but never starts.
 
-Because clients may choose room codes, this still permits unbounded room, goroutine, timer, history, and session accumulation. Add an idle-room policy and make shutdown/removal idempotent.
-
-### Message history grows indefinitely
-
-Every broadcast is appended to `r.messages`, with no retention limit. Use a bounded ring buffer or persist only the event history that reconnecting clients actually need.
+Because clients may choose room codes, this still permits unbounded room, goroutine, timer, and session accumulation. Add an idle-room policy and make shutdown/removal idempotent.
 
 ### Room state ownership is inconsistent
 
@@ -107,7 +103,7 @@ Use a versioned event envelope with stable event types and structured data. Add 
 
 ## API and security shortcomings
 
-- No rate limiting exists for login, registration, guest creation, WebSocket connections, chat, guesses, or drawing events.
+- Rate limiting protects login, registration, and guest creation, but WebSocket connections, chat, guesses, and drawing events remain unlimited.
 - There is no duplicate-connection policy; one credential can create multiple players in the same room.
 - Display names are not unique, while direct messages and some realtime state use them as identifiers.
 - Avatar MIME type, decoded content, dimensions, and size are not fully validated.
@@ -143,7 +139,6 @@ Specific test gaps:
 
 ## Operational and maintainability shortcomings
 
-- `internal/realtime/room_manager.go` is not formatted according to `gofmt` and contains trailing whitespace.
 - A compiled 1.8 MB `api` binary is committed to Git.
 - `README.md` contains only the project name.
 - No CI workflow, Dockerfile, release process, or production runbook exists.
@@ -160,10 +155,10 @@ Specific test gaps:
 
 1. Fix drawing-path locking and enforce drawer eligibility using principal IDs.
 2. Correct the current-user route contract and restore a fully passing test suite.
-3. Reclaim idle or abandoned rooms and bound message history.
+3. Reclaim idle or abandoned rooms.
 4. Correct guess eligibility and decouple scoring from message delivery.
 5. Persist participant departure and complete or remove the reconnect subsystem.
 6. Centralize game configuration and move shared gameplay state under one ownership model.
-7. Make identity/token creation atomic, add rate limits, standardize the realtime protocol, and finish operational hardening.
+7. Make identity/token creation atomic, add realtime rate limits, standardize the realtime protocol, and finish operational hardening.
 
 The next milestone should be a correct and recoverable multiplayer lifecycle. New gameplay features should wait until the lifecycle and its failure paths are covered by tests.
