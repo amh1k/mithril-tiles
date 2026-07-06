@@ -1,0 +1,94 @@
+import { z } from "zod";
+const byteLength = (value: string) => new TextEncoder().encode(value).length;
+const displayNameSchema = z
+  .string()
+  .refine((value) => value.trim().length > 0, "Display name is required")
+  .refine((value) => byteLength(value) >= 3, "Display name is too short")
+  .refine(
+    (value) => byteLength(value) <= 60,
+    "Display name must not exceed 60 bytes",
+  );
+const handleSchema = z
+  .string()
+  .refine((value) => value.trim().length > 0, "Handle is required")
+  .refine((value) => byteLength(value) >= 3, "Handle is too short")
+  .refine(
+    (value) => byteLength(value) <= 60,
+    "Handle must not exceed 60 bytes",
+  );
+
+const passwordSchema = z
+  .string()
+  .refine(
+    (value) => byteLength(value) >= 8,
+    "Password must be at least 8 bytes",
+  )
+  .refine(
+    (value) => byteLength(value) <= 72,
+    "Password must not exceed 72 bytes",
+  );
+
+export const registerRequestSchema = z
+  .object({
+    display_name: displayNameSchema,
+    handle: handleSchema,
+    email: z.email("Enter a valid email address"),
+    password: passwordSchema,
+    avatar_url: z.string(),
+  })
+  .strict();
+
+export const loginRequestSchema = z
+  .object({
+    email: z.email("Enter a valid email address"),
+    password: z.string().min(1, "Password is required"),
+  })
+  .strict();
+
+export const guestRequestSchema = z
+  .object({
+    display_name: displayNameSchema,
+  })
+  .strict();
+
+export const authenticationTokenSchema = z.object({
+  token: z.string().min(1),
+  expiry: z.iso.datetime({ offset: true }),
+});
+
+export const userSchema = z.object({
+  id: z.uuid(),
+  created_at: z.iso.datetime({ offset: true }),
+  updated_at: z.iso.datetime({ offset: true }),
+  display_name: z.string(),
+  account_status: z.string(),
+  handle: z.string(),
+  email: z.email(),
+  activated: z.boolean(),
+  avatar_url: z.string(),
+});
+
+export const guestSessionSchema = z.object({
+  id: z.uuid(),
+  display_name: z.string(),
+  created_at: z.iso.datetime({ offset: true }),
+});
+
+export const userAuthResponseSchema = z.object({
+  user: userSchema,
+  authentication_token: authenticationTokenSchema,
+});
+
+export const guestAuthResponseSchema = z.object({
+  guest_session: guestSessionSchema,
+  authentication_token: authenticationTokenSchema,
+});
+
+export type RegisterRequest = z.infer<typeof registerRequestSchema>;
+export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type GuestRequest = z.infer<typeof guestRequestSchema>;
+export type AuthenticationToken = z.infer<typeof authenticationTokenSchema>;
+export type User = z.infer<typeof userSchema>;
+export type GuestSession = z.infer<typeof guestSessionSchema>;
+export type UserAuthResponse = z.infer<typeof userAuthResponseSchema>;
+export type GuestAuthResponse = z.infer<typeof guestAuthResponseSchema>;

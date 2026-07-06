@@ -22,6 +22,44 @@ export type FrontendApiError = {
   retryAfterSeconds?: number;
 };
 
+export function normalizeValidationError(
+  error: z.ZodError,
+): FrontendApiError {
+  const fieldErrors: Record<string, string> = {};
+
+  for (const issue of error.issues) {
+    const field = issue.path[0];
+
+    if (typeof field === "string" && fieldErrors[field] === undefined) {
+      fieldErrors[field] = issue.message;
+    }
+  }
+
+  return {
+    status: 422,
+    code: "validation_failed",
+    message: "One or more fields are invalid.",
+    fieldErrors,
+  };
+}
+
+export function frontendApiErrorResponse(
+  error: FrontendApiError,
+): Response {
+  const headers = new Headers({
+    "Cache-Control": "no-store",
+  });
+
+  if (error.retryAfterSeconds !== undefined) {
+    headers.set("Retry-After", String(error.retryAfterSeconds));
+  }
+
+  return Response.json(error, {
+    status: error.status,
+    headers,
+  });
+}
+
 const fallbackMessages: Record<FrontendApiErrorCode, string> = {
   bad_request: "The request could not be processed.",
   unauthorized: "Authentication is required.",
