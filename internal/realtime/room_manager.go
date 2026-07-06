@@ -6,15 +6,27 @@ import (
 )
 
 type RoomManager struct {
-	mu            sync.Mutex
-	rooms         map[string]*Room
-	gameLifecycle GameLifecycle
+	mu                     sync.Mutex
+	rooms                  map[string]*Room
+	gameLifecycle          GameLifecycle
+	messageHistoryCapacity int
 }
 
 func NewRoomManager(gameLifecycle GameLifecycle) *RoomManager {
+	return NewRoomManagerWithMessageHistoryCapacity(
+		gameLifecycle,
+		DefaultMessageHistoryCapacity,
+	)
+}
+
+func NewRoomManagerWithMessageHistoryCapacity(
+	gameLifecycle GameLifecycle,
+	messageHistoryCapacity int,
+) *RoomManager {
 	return &RoomManager{
-		rooms:         make(map[string]*Room),
-		gameLifecycle: gameLifecycle,
+		rooms:                  make(map[string]*Room),
+		gameLifecycle:          gameLifecycle,
+		messageHistoryCapacity: messageHistoryCapacity,
 	}
 }
 func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
@@ -26,7 +38,12 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 		return room, nil
 	}
 
-	room, err := NewRoom(roomCode, rm.gameLifecycle, rm.DeleteRoom) //main way though which we are able to manipulate database in realtime
+	room, err := newRoom(
+		roomCode,
+		rm.gameLifecycle,
+		rm.DeleteRoom,
+		rm.messageHistoryCapacity,
+	) //main way though which we are able to manipulate database in realtime
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +55,6 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 
 	go room.Run()
 	// if len(room.players)
-	
 
 	return room, nil
 }

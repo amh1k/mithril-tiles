@@ -23,7 +23,7 @@ func (r *Room) handleBroadcast(message string) {
 		Channel: "global",
 	}
 	r.nextMessageID++
-	r.messages = append(r.messages, msg)
+	r.messages.Add(msg)
 	r.messageMu.Unlock()
 	r.mu.Lock()
 	players := make([]*Player, 0, len(r.players))
@@ -95,13 +95,9 @@ func (r *Room) handleLeave(player *Player) {
 func (r *Room) sendHistory(player *Player, count int) {
 	r.messageMu.Lock()
 	defer r.messageMu.Unlock()
-	start := len(r.messages) - count
-	if start < 0 {
-		start = 0
-	}
+	messages := r.messages.Latest(count)
 	historyMsg := "Recent messages:\n"
-	for i := start; i < len(r.messages); i++ {
-		msg := r.messages[i]
+	for _, msg := range messages {
 		historyMsg += fmt.Sprintf(" [%s]: %s\n", msg.From, msg.Content)
 	}
 	select {
@@ -429,7 +425,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.mu.Unlock()
 
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
-	
+
 	time.AfterFunc(roundDuration, func() {
 		select {
 		case r.roundInfo <- "end round":
