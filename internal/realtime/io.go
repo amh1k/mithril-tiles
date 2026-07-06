@@ -160,6 +160,7 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 			stroke.From = player.Principal.DisplayName()
 			stroke.RoomCode = room.roomCode
 			room.drawStroke <- stroke
+			room.mu.Unlock()
 
 		}
 
