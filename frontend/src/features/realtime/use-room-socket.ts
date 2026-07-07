@@ -89,9 +89,7 @@ export function useRoomSocket({
     if (socket === null || socket.readyState !== WebSocket.OPEN) {
       return false;
     }
-
     socket.send(createDrawStrokeMessage(stroke));
-
     return true;
   }, []);
   const [state, setState] = useState<RoomSocketState>({

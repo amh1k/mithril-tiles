@@ -59,6 +59,10 @@ describe("DrawingCanvas", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
+    canvasContext.lineCap = "butt";
+    canvasContext.lineJoin = "miter";
+    canvasContext.lineWidth = 1;
+    canvasContext.strokeStyle = "#000000";
   });
 
   it("draws local strokes with pointer events", async () => {
@@ -91,6 +95,71 @@ describe("DrawingCanvas", () => {
     ]);
 
     expect(canvasContext.beginPath).toHaveBeenCalled();
+    expect(canvasContext.moveTo).toHaveBeenCalledWith(40, 40);
+    expect(canvasContext.lineTo).toHaveBeenCalledWith(120, 80);
+    expect(canvasContext.stroke).toHaveBeenCalled();
+  });
+
+  it("emits normalized local strokes", async () => {
+    const user = userEvent.setup();
+    const onStroke = vi.fn();
+    render(<DrawingCanvas onStroke={onStroke} />);
+
+    const canvas = screen.getByLabelText("Drawing canvas");
+
+    await user.pointer([
+      {
+        coords: {
+          clientX: 40,
+          clientY: 40,
+        },
+        keys: "[MouseLeft>]",
+        target: canvas,
+      },
+      {
+        coords: {
+          clientX: 120,
+          clientY: 80,
+        },
+        pointerName: "mouse",
+        target: canvas,
+      },
+      {
+        keys: "[/MouseLeft]",
+        target: canvas,
+      },
+    ]);
+
+    expect(onStroke).toHaveBeenCalledWith({
+      brush_size: 0.012,
+      color: "#111827",
+      from_x: 0.1,
+      from_y: 0.2,
+      to_x: 0.3,
+      to_y: 0.4,
+    });
+  });
+
+  it("renders remote strokes", () => {
+    render(
+      <DrawingCanvas
+        remoteStrokes={[
+          {
+            id: 1,
+            stroke: {
+              brush_size: 0.01,
+              color: "#0ea5e9",
+              from_x: 0.1,
+              from_y: 0.2,
+              to_x: 0.3,
+              to_y: 0.4,
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(canvasContext.strokeStyle).toBe("#0ea5e9");
     expect(canvasContext.moveTo).toHaveBeenCalledWith(40, 40);
     expect(canvasContext.lineTo).toHaveBeenCalledWith(120, 80);
     expect(canvasContext.stroke).toHaveBeenCalled();

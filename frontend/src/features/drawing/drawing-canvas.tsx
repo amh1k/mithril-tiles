@@ -7,6 +7,7 @@ import {
   normalizeCanvasPoint,
   type NormalizedPoint,
 } from "@/features/drawing/geometry";
+import type { DrawStroke } from "@/features/realtime/protocol";
 import { cn } from "@/lib/utils";
 
 type LocalStrokeSegment = {
@@ -22,6 +23,11 @@ type DrawingCanvasProps = {
   color?: string;
   disabled?: boolean;
   isErasing?: boolean;
+  onStroke?: (stroke: DrawStroke) => void;
+  remoteStrokes?: Array<{
+    id: number;
+    stroke: DrawStroke;
+  }>;
 };
 
 export function DrawingCanvas({
@@ -30,9 +36,12 @@ export function DrawingCanvas({
   color = "#111827",
   disabled = false,
   isErasing = false,
+  onStroke,
+  remoteStrokes = [],
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingPointRef = useRef<NormalizedPoint | null>(null);
+  const renderedRemoteStrokeIdsRef = useRef(new Set<number>());
   const strokesRef = useRef<LocalStrokeSegment[]>([]);
   const [canvasReady, setCanvasReady] = useState(false);
 
@@ -100,6 +109,7 @@ export function DrawingCanvas({
 
     strokesRef.current.push(stroke);
     renderStroke(stroke);
+    onStroke?.(localSegmentToDrawStroke(stroke));
     drawingPointRef.current = nextPoint;
   }
 
@@ -124,6 +134,19 @@ export function DrawingCanvas({
 
     drawStrokeSegment(context, stroke, canvas.getBoundingClientRect());
   }
+
+  useEffect(() => {
+    for (const remoteStroke of remoteStrokes) {
+      if (renderedRemoteStrokeIdsRef.current.has(remoteStroke.id)) {
+        continue;
+      }
+
+      renderedRemoteStrokeIdsRef.current.add(remoteStroke.id);
+      const stroke = drawStrokeToLocalSegment(remoteStroke.stroke);
+      strokesRef.current.push(stroke);
+      renderStroke(stroke);
+    }
+  }, [remoteStrokes]);
 
   return (
     <div
@@ -192,4 +215,30 @@ function drawStrokeSegment(
   context.moveTo(stroke.from.x * bounds.width, stroke.from.y * bounds.height);
   context.lineTo(stroke.to.x * bounds.width, stroke.to.y * bounds.height);
   context.stroke();
+}
+
+function localSegmentToDrawStroke(stroke: LocalStrokeSegment): DrawStroke {
+  return {
+    brush_size: stroke.brushSize,
+    color: stroke.color,
+    from_x: stroke.from.x,
+    from_y: stroke.from.y,
+    to_x: stroke.to.x,
+    to_y: stroke.to.y,
+  };
+}
+
+function drawStrokeToLocalSegment(stroke: DrawStroke): LocalStrokeSegment {
+  return {
+    brushSize: stroke.brush_size,
+    color: stroke.color,
+    from: {
+      x: stroke.from_x,
+      y: stroke.from_y,
+    },
+    to: {
+      x: stroke.to_x,
+      y: stroke.to_y,
+    },
+  };
 }

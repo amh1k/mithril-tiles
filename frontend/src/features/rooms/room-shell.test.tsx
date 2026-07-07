@@ -27,21 +27,37 @@ const principal: Principal = {
 };
 
 function renderRoomShell({
+  drawStrokes = [],
   errorMessage,
   messages = [],
   sendChatMessage = vi.fn(),
+  sendDrawStroke = vi.fn(),
   status = "connected",
 }: {
+  drawStrokes?: Array<{
+    id: number;
+    stroke: {
+      brush_size: number;
+      color: string;
+      from_x: number;
+      from_y: number;
+      to_x: number;
+      to_y: number;
+    };
+  }>;
   errorMessage?: string;
   messages?: Array<{ id: number; text: string }>;
   sendChatMessage?: ReturnType<typeof vi.fn>;
+  sendDrawStroke?: ReturnType<typeof vi.fn>;
   status?: RoomSocketStatus;
 } = {}) {
   useRoomSocketMock.mockReturnValue({
+    drawStrokes,
     errorMessage,
     messages,
     retryAttempt: 0,
     sendChatMessage,
+    sendDrawStroke,
     status,
   });
 
@@ -51,6 +67,7 @@ function renderRoomShell({
 
   return {
     sendChatMessage,
+    sendDrawStroke,
   };
 }
 

@@ -173,7 +173,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </div>
           </CardHeader>
           <CardContent className="flex flex-1">
-            <DrawingCanvas color={drawingColor} isErasing={isErasing} />
+            <DrawingCanvas
+              color={drawingColor}
+              isErasing={isErasing}
+              onStroke={socket.sendDrawStroke}
+              remoteStrokes={socket.drawStrokes}
+            />
           </CardContent>
         </Card>
 
