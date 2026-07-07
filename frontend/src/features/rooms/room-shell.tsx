@@ -2,10 +2,13 @@
 
 import {
   Clock,
+  Crown,
   Eraser,
   MessageSquareText,
   Palette,
+  Play,
   Send,
+  ShieldCheck,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +27,10 @@ import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
 import type { RoomCode } from "@/features/rooms/room-code";
+import {
+  createPlaceholderRoomSnapshot,
+  type RoomPlayer,
+} from "@/features/rooms/room-state";
 
 type RoomShellProps = {
   principal: Principal;
@@ -67,6 +74,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [chatMessage, setChatMessage] = useState("");
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
   const isErasing = drawingColor === ERASER_COLOR;
+  const roomSnapshot = createPlaceholderRoomSnapshot(principal);
+  const currentPlayer = roomSnapshot.players[0];
+  const socketStatusLabel = formatSocketStatus(socket.status);
 
   function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,22 +94,35 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             Room {roomCode}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Waiting room
+            Lobby
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Signed in as {principal.display_name}. Socket connection, lobby
-            updates, chat, and drawing will plug into this screen next.
+            Signed in as {principal.display_name}. Chat and free drawing are
+            live; authoritative players, roles, rounds, and scores will replace
+            the placeholders once the backend room snapshot lands.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
-          <StatusTile icon={Users} label="Players" value="Pending" />
-          <StatusTile icon={Clock} label="Round" value="Lobby" />
-          <StatusTile icon={Palette} label="Drawer" value="TBD" />
+          <StatusTile
+            icon={Users}
+            label="Players"
+            value={`${roomSnapshot.players.length} online`}
+          />
+          <StatusTile
+            icon={Clock}
+            label="Round"
+            value={roomSnapshot.roundLabel}
+          />
+          <StatusTile
+            icon={Palette}
+            label="Mode"
+            value={roomSnapshot.modeLabel}
+          />
           <StatusTile
             icon={MessageSquareText}
             label="Socket"
-            value={formatSocketStatus(socket.status)}
+            value={socketStatusLabel}
           />
         </div>
       </section>
@@ -117,14 +140,29 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="min-h-0">
           <CardHeader>
-            <CardTitle>Players</CardTitle>
-            <CardDescription>
-              Host, drawer, and scores will appear here.
-            </CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Players</CardTitle>
+                <CardDescription>
+                  Lobby snapshot placeholder.
+                </CardDescription>
+              </div>
+              <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                {socketStatusLabel}
+              </span>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              Player snapshot not connected yet.
+          <CardContent className="space-y-4">
+            <PlayerCard player={currentPlayer} />
+
+            <Button className="w-full gap-2" disabled type="button">
+              <Play className="size-4" aria-hidden="true" />
+              Start game
+            </Button>
+
+            <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
+              Start game stays disabled until the frontend receives an
+              authoritative host/player snapshot and word-pack selection flow.
             </div>
           </CardContent>
         </Card>
@@ -135,8 +173,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <div>
                 <CardTitle>Canvas</CardTitle>
                 <CardDescription>
-                  The drawing surface will mount here after the realtime
-                  connection is in place.
+                  Free draw preview is enabled now. Drawer-only permissions will
+                  be enforced when round state is wired.
                 </CardDescription>
               </div>
 
@@ -273,5 +311,52 @@ function StatusTile({ icon: Icon, label, value }: StatusTileProps) {
       </div>
       <p className="mt-2 font-medium">{value}</p>
     </div>
+  );
+}
+
+type PlayerCardProps = {
+  player: RoomPlayer;
+};
+
+function PlayerCard({ player }: PlayerCardProps) {
+  return (
+    <div className="rounded-xl border bg-background/70 p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          {player.displayName.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-sm font-medium">
+              {player.displayName}
+            </p>
+            <span className="text-xs font-semibold text-muted-foreground">
+              {player.score}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <PlayerBadge
+              icon={Crown}
+              label={player.isHost ? "Host" : "Host pending"}
+            />
+            <PlayerBadge icon={ShieldCheck} label={player.principalType} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type PlayerBadgeProps = {
+  icon: LucideIcon;
+  label: string;
+};
+
+function PlayerBadge({ icon: Icon, label }: PlayerBadgeProps) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+      <Icon className="size-3" aria-hidden="true" />
+      {label}
+    </span>
   );
 }

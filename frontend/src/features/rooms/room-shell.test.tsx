@@ -92,7 +92,7 @@ describe("RoomShell", () => {
     });
 
     expect(screen.getByText("Room ROOM01")).toBeInTheDocument();
-    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getAllByText("Connected")).not.toHaveLength(0);
     expect(
       screen.getByText("Welcome, Player One!"),
     ).toBeInTheDocument();
@@ -183,7 +183,7 @@ describe("RoomShell", () => {
       status: "failed",
     });
 
-    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getAllByText("Failed")).not.toHaveLength(0);
     expect(
       screen.getByText("The realtime ticket request was rejected."),
     ).toBeInTheDocument();
