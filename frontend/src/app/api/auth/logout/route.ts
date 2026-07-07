@@ -1,4 +1,4 @@
-ketimport { frontendApiErrorResponse } from "@/lib/api/errors";
+import { frontendApiErrorResponse } from "@/lib/api/errors";
 import { hasTrustedMutationOrigin } from "@/lib/api/mutation-request";
 import { clearSessionCookie } from "@/lib/auth/session-cookie";
 import { serverEnv } from "@/lib/env/server";
