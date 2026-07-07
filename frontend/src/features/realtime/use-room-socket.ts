@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { parseRoomSocketMessage } from "@/features/realtime/protocol";
+import {
+  parseRoomSocketMessage,
+  type DrawStroke,
+} from "@/features/realtime/protocol";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { websocketTicketResponseSchema } from "@/features/rooms/tickets";
 import { clientEnv } from "@/lib/env/client";
@@ -17,6 +20,7 @@ export type RoomSocketStatus =
   | "failed";
 
 type RoomSocketState = {
+  drawStrokes: RoomDrawStroke[];
   errorMessage?: string;
   messages: RoomChatMessage[];
   retryAttempt: number;
@@ -25,11 +29,17 @@ type RoomSocketState = {
 
 type RoomSocketResult = RoomSocketState & {
   sendChatMessage: (message: string) => boolean;
+  sendDrawStroke: (stroke: DrawStroke) => boolean;
 };
 
 export type RoomChatMessage = {
   id: number;
   text: string;
+};
+
+export type RoomDrawStroke = {
+  id: number;
+  stroke: DrawStroke;
 };
 
 type UseRoomSocketOptions = {
@@ -39,6 +49,7 @@ type UseRoomSocketOptions = {
 
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_CHAT_MESSAGES = 100;
+const MAX_DRAW_STROKES = 2_000;
 
 export function useRoomSocket({
   roomCode,
@@ -46,6 +57,7 @@ export function useRoomSocket({
 }: UseRoomSocketOptions): RoomSocketResult {
   const socketRef = useRef<WebSocket | null>(null);
   const nextMessageIdRef = useRef(1);
+  const nextStrokeIdRef = useRef(1);
   const ticketEndpoint = useMemo(
     () => `/api/rooms/${encodeURIComponent(roomCode)}/ticket`,
     [roomCode],
@@ -71,7 +83,19 @@ export function useRoomSocket({
 
     return true;
   }, []);
+  const sendDrawStroke = useCallback((stroke: DrawStroke) => {
+    const socket = socketRef.current;
+
+    if (socket === null || socket.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    socket.send(createDrawStrokeMessage(stroke));
+
+    return true;
+  }, []);
   const [state, setState] = useState<RoomSocketState>({
+    drawStrokes: [],
     messages: [],
     retryAttempt: 0,
     status: "idle",
@@ -142,16 +166,26 @@ export function useRoomSocket({
 
         const parsedMessage = parseRoomSocketMessage(event.data);
 
-        if (parsedMessage.type !== "legacy_text") {
+        if (parsedMessage.type === "legacy_text") {
+          setState((currentState) => ({
+            ...currentState,
+            messages: appendBoundedMessage(currentState.messages, {
+              id: nextMessageIdRef.current++,
+              text: parsedMessage.text,
+            }),
+          }));
           return;
         }
-        setState((currentState) => ({
-          ...currentState,
-          messages: appendBoundedMessage(currentState.messages, {
-            id: nextMessageIdRef.current++,
-            text: parsedMessage.text,
-          }),
-        }));
+
+        if (parsedMessage.type === "draw_stroke") {
+          setState((currentState) => ({
+            ...currentState,
+            drawStrokes: appendBoundedStroke(currentState.drawStrokes, {
+              id: nextStrokeIdRef.current++,
+              stroke: parsedMessage.stroke,
+            }),
+          }));
+        }
       });
 
       socket.addEventListener("close", () => {
@@ -212,12 +246,20 @@ export function useRoomSocket({
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [maxRetries, roomCode, sendChatMessage, ticketEndpoint]);
+  }, [maxRetries, roomCode, sendChatMessage, sendDrawStroke, ticketEndpoint]);
 
   return {
     ...state,
     sendChatMessage,
+    sendDrawStroke,
   };
+}
+
+export function createDrawStrokeMessage(stroke: DrawStroke): string {
+  return JSON.stringify({
+    type: "draw_stroke",
+    data: stroke,
+  });
 }
 
 async function requestRoomTicket(
@@ -266,4 +308,11 @@ function appendBoundedMessage(
   message: RoomChatMessage,
 ): RoomChatMessage[] {
   return [...messages, message].slice(-MAX_CHAT_MESSAGES);
+}
+
+function appendBoundedStroke(
+  strokes: RoomDrawStroke[],
+  stroke: RoomDrawStroke,
+): RoomDrawStroke[] {
+  return [...strokes, stroke].slice(-MAX_DRAW_STROKES);
 }

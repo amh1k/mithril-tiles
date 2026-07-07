@@ -19,7 +19,7 @@ describe("parseRoomSocketMessage", () => {
     });
   });
 
-  it("does not handle structured drawing events in the chat slice", () => {
+  it("parses structured drawing events", () => {
     expect(
       parseRoomSocketMessage(
         JSON.stringify({
@@ -35,8 +35,57 @@ describe("parseRoomSocketMessage", () => {
         }),
       ),
     ).toEqual({
+      stroke: {
+        brush_size: 0.01,
+        color: "#111827",
+        from_x: 0,
+        from_y: 0,
+        to_x: 1,
+        to_y: 1,
+      },
+      type: "draw_stroke",
+    });
+  });
+
+  it("rejects invalid structured drawing events", () => {
+    expect(
+      parseRoomSocketMessage(
+        JSON.stringify({
+          type: "draw_stroke",
+          data: {
+            from_x: -1,
+            from_y: 0,
+            to_x: 1,
+            to_y: 1,
+            color: "#111827",
+            brush_size: 0.01,
+          },
+        }),
+      ),
+    ).toEqual({
       type: "protocol_error",
-      reason: "Structured WebSocket events are not handled by chat yet.",
+      reason: "Unsupported structured WebSocket event.",
+    });
+  });
+
+  it("rejects unsupported structured events", () => {
+    expect(
+      parseRoomSocketMessage(
+        JSON.stringify({
+          type: "unknown",
+          data: {},
+        }),
+      ),
+    ).toEqual({
+      type: "protocol_error",
+      reason: "Unsupported structured WebSocket event.",
+    });
+  });
+
+  it("rejects malformed structured JSON", () => {
+    expect(parseRoomSocketMessage("{")).toEqual({
+      type: "protocol_error",
+      reason: "Structured WebSocket event is invalid JSON.",
     });
   });
 
