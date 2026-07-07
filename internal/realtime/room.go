@@ -212,7 +212,7 @@ func (r *Room) Run() {
 		case player := <-r.leave:
 			r.handleLeave(player)
 
-		case message := <-r.broadcast:
+	case message := <-r.broadcast:
 			r.handleBroadcast(message)
 
 		case player := <-r.listPlayers:

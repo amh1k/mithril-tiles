@@ -128,3 +128,48 @@
     @apply font-sans;
   }
 }
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes hero-glint {
+  0%,
+  35% {
+    transform: translateX(-120%);
+  }
+  70%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes hero-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateX(-50%) scale(1.12);
+  }
+}
+
+@keyframes hero-scan {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: translateX(-40%);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateX(40%);
+  }
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"mithrilTiles.abdulmoiz.net/internal/data"
@@ -152,4 +153,31 @@ func (app *application) deleteWordPackHandler(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application)getWordPackById(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		fmt.Println("Word pack not found") 
+		app.notFoundResponse(w, r)
+		return
+	}
+	wordPack, err := app.models.WordPacks.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"word-pack":wordPack,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+
+	}
+
 }
