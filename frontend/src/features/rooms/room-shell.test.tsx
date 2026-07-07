@@ -36,6 +36,7 @@ function renderRoomShell({
   messages = [],
   sendChatMessage = vi.fn(),
   sendDrawStroke = vi.fn(),
+  startGameResponse,
   status = "connected",
 }: {
   drawStrokes?: Array<{
@@ -53,22 +54,13 @@ function renderRoomShell({
   messages?: Array<{ id: number; text: string }>;
   sendChatMessage?: ReturnType<typeof vi.fn>;
   sendDrawStroke?: ReturnType<typeof vi.fn>;
+  startGameResponse?: unknown;
   status?: RoomSocketStatus;
 } = {}) {
-  fetchMock.mockResolvedValue({
-    json: async () => ({
-      word_pack: {
-        created_at: "2026-07-07T00:00:00Z",
-        description: "Temporary room word pack",
-        id: "550e8400-e29b-41d4-a716-446655440001",
-        is_active: true,
-        name: "Room ROOM01 Starter Pack",
-        slug: "room-room01-test",
-        updated_at: "2026-07-07T00:00:00Z",
-      },
-    }),
-    ok: true,
-  });
+  mockPreparedWordPackResponse();
+  if (startGameResponse !== undefined) {
+    fetchMock.mockResolvedValueOnce(startGameResponse);
+  }
 
   useRoomSocketMock.mockReturnValue({
     drawStrokes,
@@ -221,4 +213,72 @@ describe("RoomShell", () => {
       await screen.findByText("Room ROOM01 Starter Pack"),
     ).toBeInTheDocument();
   });
+
+  it("starts the game with the prepared word pack", async () => {
+    const user = userEvent.setup();
+    renderRoomShell({
+      startGameResponse: {
+        json: async () => ({
+          game: {
+            id: "550e8400-e29b-41d4-a716-446655440010",
+            room_code: "ROOM01",
+            host_participant_id: "550e8400-e29b-41d4-a716-446655440011",
+            word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+            status: "started",
+            settings_snapshot: {},
+            started_at: "2026-07-07T00:00:00Z",
+            ended_at: null,
+          },
+          game_participants: [],
+          round: {
+            id: "550e8400-e29b-41d4-a716-446655440012",
+            game_id: "550e8400-e29b-41d4-a716-446655440010",
+            round_number: 1,
+            drawer_participant_id: "550e8400-e29b-41d4-a716-446655440011",
+            word_id: "550e8400-e29b-41d4-a716-446655440013",
+            word_text_snapshot: "castle",
+            status: "started",
+            duration_seconds: 60,
+            started_at: "2026-07-07T00:00:00Z",
+            ended_at: null,
+          },
+        }),
+        ok: true,
+      },
+    });
+
+    await screen.findByText("Room ROOM01 Starter Pack");
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/rooms/ROOM01/start", {
+      body: JSON.stringify({
+        word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+    expect(
+      await screen.findByText("Game start request accepted."),
+    ).toBeInTheDocument();
+  });
 });
+
+function mockPreparedWordPackResponse() {
+  fetchMock.mockResolvedValueOnce({
+    json: async () => ({
+      word_pack: {
+        created_at: "2026-07-07T00:00:00Z",
+        description: "Temporary room word pack",
+        id: "550e8400-e29b-41d4-a716-446655440001",
+        is_active: true,
+        name: "Room ROOM01 Starter Pack",
+        slug: "room-room01-test",
+        updated_at: "2026-07-07T00:00:00Z",
+      },
+    }),
+    ok: true,
+  });
+}

@@ -27,6 +27,7 @@ import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
 import type { RoomCode } from "@/features/rooms/room-code";
+import { startGameResponseSchema } from "@/features/rooms/start-game";
 import {
   createPlaceholderRoomSnapshot,
   type RoomPlayer,
@@ -81,6 +82,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
   const [wordPackStatus, setWordPackStatus] = useState<
     "idle" | "preparing" | "ready" | "failed"
+  >("idle");
+  const [startGameError, setStartGameError] = useState<string | null>(null);
+  const [startGameStatus, setStartGameStatus] = useState<
+    "idle" | "starting" | "started"
   >("idle");
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
@@ -148,6 +153,63 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       setChatMessage("");
     }
   }
+
+  async function handleStartGame() {
+    if (wordPack === null || startGameStatus === "starting") {
+      return;
+    }
+
+    setStartGameError(null);
+    setStartGameStatus("starting");
+
+    const response = await fetch(
+      `/api/rooms/${encodeURIComponent(roomCode)}/start`,
+      {
+        body: JSON.stringify({
+          word_pack_id: wordPack.id,
+        }),
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      },
+    ).catch(() => undefined);
+
+    if (response === undefined) {
+      setStartGameError("The game service is temporarily unavailable.");
+      setStartGameStatus("idle");
+      return;
+    }
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => undefined);
+      setStartGameError(
+        typeof errorBody?.message === "string"
+          ? errorBody.message
+          : "The game could not be started.",
+      );
+      setStartGameStatus("idle");
+      return;
+    }
+
+    const parsedResponse = startGameResponseSchema.safeParse(
+      await response.json().catch(() => undefined),
+    );
+
+    if (!parsedResponse.success) {
+      setStartGameError("The game start response was invalid.");
+      setStartGameStatus("idle");
+      return;
+    }
+
+    setStartGameStatus("started");
+  }
+
+  const canStartGame =
+    wordPackStatus === "ready" &&
+    wordPack !== null &&
+    startGameStatus !== "starting";
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
@@ -218,16 +280,27 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           <CardContent className="space-y-4">
             <PlayerCard player={currentPlayer} />
 
-            <Button className="w-full gap-2" disabled type="button">
+            <Button
+              className="w-full gap-2"
+              disabled={!canStartGame}
+              onClick={handleStartGame}
+              type="button"
+            >
               <Play className="size-4" aria-hidden="true" />
-              Start game
+              {startGameStatus === "starting" ? "Starting…" : "Start game"}
             </Button>
 
             <WordPackStatus wordPack={wordPack} status={wordPackStatus} />
 
+            <StartGameStatus
+              errorMessage={startGameError}
+              status={startGameStatus}
+            />
+
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
-              Start game stays disabled until the frontend receives an
-              authoritative host/player snapshot and word-pack selection flow.
+              Start game uses the temporary word pack for now. The backend may
+              still reject the request until enough players have joined and the
+              current user is the room host.
             </div>
           </CardContent>
         </Card>
@@ -457,4 +530,29 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
       Preparing temporary word pack…
     </div>
   );
+}
+
+type StartGameStatusProps = {
+  errorMessage: string | null;
+  status: "idle" | "starting" | "started";
+};
+
+function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
+  if (status === "started") {
+    return (
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+        Game start request accepted.
+      </div>
+    );
+  }
+
+  if (errorMessage !== null) {
+    return (
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+        {errorMessage}
+      </div>
+    );
+  }
+
+  return null;
 }
