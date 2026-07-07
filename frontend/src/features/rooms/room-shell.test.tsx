@@ -11,6 +11,7 @@ import {
 import type { Principal } from "@/features/auth/schemas";
 import type { RoomSocketStatus } from "@/features/realtime/use-room-socket";
 import type { RoomCode } from "@/features/rooms/room-code";
+import { useRoomStore } from "@/stores/room-store";
 import { renderWithQueryClient } from "@/test/render-with-query-client";
 import { RoomShell } from "./room-shell";
 
@@ -74,6 +75,7 @@ function renderRoomShell({
 describe("RoomShell", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    useRoomStore.getState().resetRoom();
   });
 
   it("renders room context and received chat messages", () => {

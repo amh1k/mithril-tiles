@@ -12,7 +12,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,7 @@ import {
   createPlaceholderRoomSnapshot,
   type RoomPlayer,
 } from "@/features/rooms/room-state";
+import { useRoomStore } from "@/stores/room-store";
 
 type RoomShellProps = {
   principal: Principal;
@@ -74,9 +75,19 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [chatMessage, setChatMessage] = useState("");
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
   const isErasing = drawingColor === ERASER_COLOR;
-  const roomSnapshot = createPlaceholderRoomSnapshot(principal);
+  const placeholderRoomSnapshot = useMemo(
+    () => createPlaceholderRoomSnapshot(principal),
+    [principal],
+  );
+  const roomSnapshot =
+    useRoomStore((state) => state.snapshot) ?? placeholderRoomSnapshot;
+  const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const currentPlayer = roomSnapshot.players[0];
   const socketStatusLabel = formatSocketStatus(socket.status);
+
+  useEffect(() => {
+    setRoomSnapshot(placeholderRoomSnapshot);
+  }, [placeholderRoomSnapshot, setRoomSnapshot]);
 
   function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -214,7 +225,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             <DrawingCanvas
               color={drawingColor}
               isErasing={isErasing}
-              onStroke={socket.sendDrawStroke}
+              // Keep free drawing local in the placeholder lobby. The current
+              // backend closes idle-room sockets when it receives draw_stroke.
+              onStroke={undefined}
               remoteStrokes={socket.drawStrokes}
             />
           </CardContent>
