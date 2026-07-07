@@ -82,6 +82,49 @@ describe("RoomShell", () => {
     expect(screen.getByText("[Player Two]: hello")).toBeInTheDocument();
   });
 
+  it("keeps chat messages inside a scrollable panel", () => {
+    renderRoomShell({
+      messages: Array.from({ length: 40 }, (_, index) => ({
+        id: index + 1,
+        text: `message ${index + 1}`,
+      })),
+      status: "connected",
+    });
+
+    expect(screen.getByTestId("chat-message-list")).toHaveClass(
+      "overflow-y-auto",
+    );
+    expect(screen.getByText("message 40")).toBeInTheDocument();
+  });
+
+  it("lets players choose a drawing color", async () => {
+    const user = userEvent.setup();
+    renderRoomShell();
+
+    const black = screen.getByRole("radio", { name: "Black" });
+    const red = screen.getByRole("radio", { name: "Red" });
+
+    expect(black).toHaveAttribute("aria-checked", "true");
+
+    await user.click(red);
+
+    expect(red).toHaveAttribute("aria-checked", "true");
+    expect(black).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("lets players choose the eraser tool", async () => {
+    const user = userEvent.setup();
+    renderRoomShell();
+
+    const black = screen.getByRole("radio", { name: "Black" });
+    const eraser = screen.getByRole("radio", { name: "Eraser" });
+
+    await user.click(eraser);
+
+    expect(eraser).toHaveAttribute("aria-checked", "true");
+    expect(black).toHaveAttribute("aria-checked", "false");
+  });
+
   it("sends chat messages through the room socket", async () => {
     const user = userEvent.setup();
     const sendChatMessage = vi.fn(() => true);
