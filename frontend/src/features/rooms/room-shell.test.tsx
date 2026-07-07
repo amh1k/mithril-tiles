@@ -16,10 +16,13 @@ import { renderWithQueryClient } from "@/test/render-with-query-client";
 import { RoomShell } from "./room-shell";
 
 const useRoomSocketMock = vi.hoisted(() => vi.fn());
+const fetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/realtime/use-room-socket", () => ({
   useRoomSocket: useRoomSocketMock,
 }));
+
+vi.stubGlobal("fetch", fetchMock);
 
 const principal: Principal = {
   type: "guest",
@@ -52,6 +55,21 @@ function renderRoomShell({
   sendDrawStroke?: ReturnType<typeof vi.fn>;
   status?: RoomSocketStatus;
 } = {}) {
+  fetchMock.mockResolvedValue({
+    json: async () => ({
+      word_pack: {
+        created_at: "2026-07-07T00:00:00Z",
+        description: "Temporary room word pack",
+        id: "550e8400-e29b-41d4-a716-446655440001",
+        is_active: true,
+        name: "Room ROOM01 Starter Pack",
+        slug: "room-room01-test",
+        updated_at: "2026-07-07T00:00:00Z",
+      },
+    }),
+    ok: true,
+  });
+
   useRoomSocketMock.mockReturnValue({
     drawStrokes,
     errorMessage,
@@ -188,6 +206,19 @@ describe("RoomShell", () => {
     expect(screen.getAllByText("Failed")).not.toHaveLength(0);
     expect(
       screen.getByText("The realtime ticket request was rejected."),
+    ).toBeInTheDocument();
+  });
+
+  it("prepares a temporary word pack for the room", async () => {
+    renderRoomShell();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/rooms/ROOM01/word-pack", {
+      cache: "no-store",
+      method: "POST",
+      signal: expect.any(AbortSignal),
+    });
+    expect(
+      await screen.findByText("Room ROOM01 Starter Pack"),
     ).toBeInTheDocument();
   });
 });

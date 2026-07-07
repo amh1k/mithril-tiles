@@ -153,3 +153,25 @@ func (app *application) deleteWordPackHandler(w http.ResponseWriter, r *http.Req
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application)getWordPackById(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+		return
+	}
+	wordPack, err := app.models.WordPacks.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+	app.writeJSON(w, http.StatusOK, envelope{
+		"word-pack":wordPack,
+	}, nil)
+
+}

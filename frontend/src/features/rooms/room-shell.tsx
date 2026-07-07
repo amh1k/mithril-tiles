@@ -31,6 +31,10 @@ import {
   createPlaceholderRoomSnapshot,
   type RoomPlayer,
 } from "@/features/rooms/room-state";
+import {
+  wordPackResponseSchema,
+  type WordPack,
+} from "@/features/rooms/word-pack";
 import { useRoomStore } from "@/stores/room-store";
 
 type RoomShellProps = {
@@ -74,6 +78,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const socket = useRoomSocket({ roomCode });
   const [chatMessage, setChatMessage] = useState("");
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
+  const [wordPack, setWordPack] = useState<WordPack | null>(null);
+  const [wordPackStatus, setWordPackStatus] = useState<
+    "idle" | "preparing" | "ready" | "failed"
+  >("idle");
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -88,6 +96,50 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   useEffect(() => {
     setRoomSnapshot(placeholderRoomSnapshot);
   }, [placeholderRoomSnapshot, setRoomSnapshot]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    async function prepareWordPack() {
+      setWordPackStatus("preparing");
+
+      const response = await fetch(
+        `/api/rooms/${encodeURIComponent(roomCode)}/word-pack`,
+        {
+          cache: "no-store",
+          method: "POST",
+          signal: abortController.signal,
+        },
+      ).catch(() => undefined);
+
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      if (response === undefined || !response.ok) {
+        setWordPackStatus("failed");
+        return;
+      }
+
+      const parsedResponse = wordPackResponseSchema.safeParse(
+        await response.json().catch(() => undefined),
+      );
+
+      if (!parsedResponse.success) {
+        setWordPackStatus("failed");
+        return;
+      }
+
+      setWordPack(parsedResponse.data.word_pack);
+      setWordPackStatus("ready");
+    }
+
+    void prepareWordPack();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [roomCode]);
 
   function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -170,6 +222,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <Play className="size-4" aria-hidden="true" />
               Start game
             </Button>
+
+            <WordPackStatus wordPack={wordPack} status={wordPackStatus} />
 
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
               Start game stays disabled until the frontend receives an
@@ -371,5 +425,36 @@ function PlayerBadge({ icon: Icon, label }: PlayerBadgeProps) {
       <Icon className="size-3" aria-hidden="true" />
       {label}
     </span>
+  );
+}
+
+type WordPackStatusProps = {
+  status: "idle" | "preparing" | "ready" | "failed";
+  wordPack: WordPack | null;
+};
+
+function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
+  if (status === "ready" && wordPack !== null) {
+    return (
+      <div className="rounded-lg border bg-primary/5 p-3 text-xs">
+        <p className="font-medium text-primary">Word pack ready</p>
+        <p className="mt-1 text-muted-foreground">{wordPack.name}</p>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        Word pack could not be prepared. Registered users can retry by
+        re-entering the room.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+      Preparing temporary word pack…
+    </div>
   );
 }
