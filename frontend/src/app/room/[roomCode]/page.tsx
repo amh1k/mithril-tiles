@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   Card,
@@ -8,14 +8,39 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { lookupSession } from "@/features/auth/server/session";
-import { RoomEntry } from "@/features/rooms/room-entry";
+import { roomCodeInputSchema } from "@/features/rooms/room-code";
+import { RoomShell } from "@/features/rooms/room-shell";
 import { getSessionToken } from "@/lib/auth/session-cookie";
 
-export const metadata: Metadata = {
-  title: "Play | Mithril Tiles",
+type RoomPageProps = {
+  params: Promise<{
+    roomCode: string;
+  }>;
 };
 
-export default async function PlayPage() {
+export async function generateMetadata({
+  params,
+}: RoomPageProps): Promise<Metadata> {
+  const parsedRoomCode = roomCodeInputSchema.safeParse(
+    (await params).roomCode,
+  );
+
+  return {
+    title: parsedRoomCode.success
+      ? `Room ${parsedRoomCode.data} | Mithril Tiles`
+      : "Room | Mithril Tiles",
+  };
+}
+
+export default async function RoomPage({ params }: RoomPageProps) {
+  const parsedRoomCode = roomCodeInputSchema.safeParse(
+    (await params).roomCode,
+  );
+
+  if (!parsedRoomCode.success) {
+    notFound();
+  }
+
   const token = await getSessionToken();
 
   if (!token) {
@@ -47,6 +72,9 @@ export default async function PlayPage() {
   }
 
   return (
-    <RoomEntry displayName={session.principal.display_name} />
+    <RoomShell
+      principal={session.principal}
+      roomCode={parsedRoomCode.data}
+    />
   );
 }
