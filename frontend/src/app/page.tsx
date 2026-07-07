@@ -2,7 +2,6 @@ import {
   ArrowRight,
   Brush,
   MessageCircle,
-  Sparkles,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -32,17 +31,24 @@ export default function Home() {
   return (
     <div className="relative flex flex-1 flex-col overflow-hidden bg-[#17181a] text-white">
       <div
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_65%_30%,rgba(239,68,68,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_22%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_68%_28%,rgba(239,68,68,0.18),transparent_32%),radial-gradient(circle_at_18%_78%,rgba(14,165,233,0.1),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.04),transparent_22%)]"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-red-600/10 blur-3xl motion-safe:animate-[hero-pulse_7s_ease-in-out_infinite]"
         aria-hidden="true"
       />
 
       <main className="relative z-10 flex-1">
         <section className="mx-auto grid min-h-[calc(100vh-8rem)] w-full max-w-7xl gap-14 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-24">
           <div className="max-w-2xl text-center lg:text-left">
-            <p className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-sm text-slate-300 shadow-sm backdrop-blur">
-              <Sparkles className="size-3.5" aria-hidden="true" />
-              Live drawing, clever guesses, glorious chaos
-            </p>
+            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-slate-300 shadow-sm backdrop-blur">
+              <span className="relative flex size-2.5">
+                <span className="absolute inline-flex size-full rounded-full bg-red-400 opacity-75 motion-safe:animate-ping" />
+                <span className="relative inline-flex size-2.5 rounded-full bg-red-500" />
+              </span>
+              Multiplayer sketch rooms
+            </div>
             <h1 className="text-4xl font-normal leading-[1.18] tracking-tight text-balance text-white sm:text-5xl lg:text-6xl">
               Draw the word. Outsmart the room.
             </h1>
@@ -55,7 +61,7 @@ export default function Home() {
               <Link
                 className={cn(
                   buttonVariants({ size: "lg" }),
-                  "h-12 min-w-44 rounded-lg bg-red-600 px-7 text-base font-semibold text-white shadow-lg shadow-red-950/30 hover:bg-red-500",
+                  "h-12 min-w-44 rounded-lg bg-red-600 px-7 text-base font-semibold text-white shadow-lg shadow-red-950/30 transition-transform hover:-translate-y-0.5 hover:bg-red-500 hover:shadow-red-900/40",
                 )}
                 href="/guest"
               >
@@ -65,7 +71,7 @@ export default function Home() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "outline", size: "lg" }),
-                  "h-12 min-w-36 rounded-lg border-white/60 bg-transparent px-7 text-base font-semibold text-white hover:bg-white/10 hover:text-white",
+                  "h-12 min-w-36 rounded-lg border-white/60 bg-transparent px-7 text-base font-semibold text-white transition-transform hover:-translate-y-0.5 hover:bg-white/10 hover:text-white",
                 )}
                 href="/login"
               >
@@ -84,7 +90,10 @@ export default function Home() {
           </div>
 
           <div className="relative hidden min-h-[30rem] items-center justify-center lg:flex">
-            <div className="absolute left-4 top-28 h-72 w-12 rounded-md border border-white/10 bg-slate-800/80 shadow-2xl shadow-black/40">
+            <div
+              className="absolute left-4 top-28 h-72 w-12 rounded-md border border-white/10 bg-slate-800/80 shadow-2xl shadow-black/40 motion-safe:animate-[hero-float_6s_ease-in-out_infinite]"
+              aria-hidden="true"
+            >
               <div className="h-10 border-b border-white/5 bg-slate-700/70" />
               <div className="h-10 border-b border-white/5" />
               <div className="h-10 border-b border-white/5" />
@@ -95,7 +104,11 @@ export default function Home() {
               />
             </div>
 
-            <div className="relative w-full max-w-2xl overflow-hidden rounded-md border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
+            <div className="relative w-full max-w-2xl overflow-hidden rounded-md border border-white/10 bg-slate-950 shadow-2xl shadow-black/50 motion-safe:animate-[hero-float_7s_ease-in-out_infinite]">
+              <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-red-300/80 to-transparent motion-safe:animate-[hero-scan_4s_ease-in-out_infinite]"
+                aria-hidden="true"
+              />
               <div className="flex h-7 items-center border-b border-white/10 bg-slate-800 px-3">
                 <div className="flex gap-2">
                   <span className="size-3 rounded-full bg-red-500" />
@@ -108,6 +121,10 @@ export default function Home() {
               </div>
 
               <div className="relative flex min-h-[22rem] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(254,240,138,0.95),rgba(248,113,113,0.82)_42%,rgba(88,28,135,0.72)_100%)] p-8">
+                <div
+                  className="absolute inset-0 bg-[linear-gradient(115deg,transparent_0%,rgba(255,255,255,0.18)_42%,transparent_55%)] opacity-60 motion-safe:animate-[hero-glint_6s_ease-in-out_infinite]"
+                  aria-hidden="true"
+                />
                 <div className="absolute left-6 top-0 rounded-b-md bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-xl">
                   ✎ Draw
                 </div>
@@ -133,7 +150,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="absolute -right-10 top-36 h-56 w-24 rounded border border-white/10 bg-white shadow-2xl shadow-black/40">
+            <div
+              className="absolute -right-10 top-36 h-56 w-24 rounded border border-white/10 bg-white shadow-2xl shadow-black/40 motion-safe:animate-[hero-float_8s_ease-in-out_infinite]"
+              aria-hidden="true"
+            >
               <div className="h-4 rounded-t bg-stone-700" />
               <div className="p-2">
                 <div className="mb-2 flex gap-1">
