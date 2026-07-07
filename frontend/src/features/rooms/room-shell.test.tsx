@@ -17,9 +17,14 @@ import { RoomShell } from "./room-shell";
 
 const useRoomSocketMock = vi.hoisted(() => vi.fn());
 const fetchMock = vi.hoisted(() => vi.fn());
+const drawingCanvasMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/realtime/use-room-socket", () => ({
   useRoomSocket: useRoomSocketMock,
+}));
+
+vi.mock("@/features/drawing/drawing-canvas", () => ({
+  DrawingCanvas: drawingCanvasMock,
 }));
 
 vi.stubGlobal("fetch", fetchMock);
@@ -71,6 +76,9 @@ function renderRoomShell({
     sendDrawStroke,
     status,
   });
+  drawingCanvasMock.mockImplementation(() => (
+    <div data-testid="drawing-canvas" />
+  ));
 
   renderWithQueryClient(
     <RoomShell principal={principal} roomCode={"ROOM01" as RoomCode} />,
@@ -263,6 +271,102 @@ describe("RoomShell", () => {
     expect(
       await screen.findByText("Game start request accepted."),
     ).toBeInTheDocument();
+  });
+
+  it("connects canvas strokes to the room socket after game start", async () => {
+    const user = userEvent.setup();
+    const sendDrawStroke = vi.fn();
+    renderRoomShell({
+      sendDrawStroke,
+      startGameResponse: {
+        json: async () => ({
+          game: {
+            id: "550e8400-e29b-41d4-a716-446655440010",
+            room_code: "ROOM01",
+            host_participant_id: "550e8400-e29b-41d4-a716-446655440011",
+            word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+            status: "started",
+            settings_snapshot: {},
+            started_at: "2026-07-07T00:00:00Z",
+            ended_at: null,
+          },
+          game_participants: [],
+          round: {
+            id: "550e8400-e29b-41d4-a716-446655440012",
+            game_id: "550e8400-e29b-41d4-a716-446655440010",
+            round_number: 1,
+            drawer_participant_id: "550e8400-e29b-41d4-a716-446655440011",
+            word_id: "550e8400-e29b-41d4-a716-446655440013",
+            word_text_snapshot: "castle",
+            status: "started",
+            duration_seconds: 60,
+            started_at: "2026-07-07T00:00:00Z",
+            ended_at: null,
+          },
+        }),
+        ok: true,
+      },
+    });
+
+    expect(drawingCanvasMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        onStroke: undefined,
+      }),
+      undefined,
+    );
+
+    await screen.findByText("Room ROOM01 Starter Pack");
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+    await screen.findByText("Game start request accepted.");
+
+    expect(drawingCanvasMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        onStroke: sendDrawStroke,
+      }),
+      undefined,
+    );
+  });
+
+  it("keeps the game started when an accepted start response is invalid", async () => {
+    const user = userEvent.setup();
+    renderRoomShell({
+      startGameResponse: {
+        json: async () => ({
+          unexpected: true,
+        }),
+        ok: true,
+      },
+    });
+
+    await screen.findByText("Room ROOM01 Starter Pack");
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+
+    expect(
+      await screen.findByText(
+        "Game start was accepted, but the response could not be fully understood.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+  });
+
+  it("treats already-started backend responses as started", async () => {
+    const user = userEvent.setup();
+    renderRoomShell({
+      startGameResponse: {
+        json: async () => ({
+          message: "game has already started",
+        }),
+        ok: false,
+      },
+    });
+
+    await screen.findByText("Room ROOM01 Starter Pack");
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+
+    expect(
+      await screen.findByText("Game start request accepted."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
   });
 });
 

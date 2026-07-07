@@ -184,10 +184,19 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => undefined);
-      setStartGameError(
+      const message =
         typeof errorBody?.message === "string"
           ? errorBody.message
-          : "The game could not be started.",
+          : "The game could not be started.";
+
+      if (message.toLowerCase().includes("already started")) {
+        setStartGameError(null);
+        setStartGameStatus("started");
+        return;
+      }
+
+      setStartGameError(
+        message,
       );
       setStartGameStatus("idle");
       return;
@@ -198,8 +207,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     );
 
     if (!parsedResponse.success) {
-      setStartGameError("The game start response was invalid.");
-      setStartGameStatus("idle");
+      setStartGameError(
+        "Game start was accepted, but the response could not be fully understood.",
+      );
+      setStartGameStatus("started");
       return;
     }
 
@@ -209,7 +220,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const canStartGame =
     wordPackStatus === "ready" &&
     wordPack !== null &&
-    startGameStatus !== "starting";
+    startGameStatus === "idle";
+  const shouldSendDrawStrokes =
+    startGameStatus === "started" && socket.status === "connected";
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
@@ -311,8 +324,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <div>
                 <CardTitle>Canvas</CardTitle>
                 <CardDescription>
-                  Free draw preview is enabled now. Drawer-only permissions will
-                  be enforced when round state is wired.
+                  Drawing stays local in the lobby and syncs through the socket
+                  after the game start request is accepted.
                 </CardDescription>
               </div>
 
@@ -352,9 +365,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             <DrawingCanvas
               color={drawingColor}
               isErasing={isErasing}
-              // Keep free drawing local in the placeholder lobby. The current
-              // backend closes idle-room sockets when it receives draw_stroke.
-              onStroke={undefined}
+              onStroke={
+                shouldSendDrawStrokes ? socket.sendDrawStroke : undefined
+              }
               remoteStrokes={socket.drawStrokes}
             />
           </CardContent>
@@ -538,18 +551,18 @@ type StartGameStatusProps = {
 };
 
 function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
-  if (status === "started") {
+  if (errorMessage !== null) {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
-        Game start request accepted.
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        {errorMessage}
       </div>
     );
   }
 
-  if (errorMessage !== null) {
+  if (status === "started") {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-        {errorMessage}
+      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+        Game start request accepted.
       </div>
     );
   }

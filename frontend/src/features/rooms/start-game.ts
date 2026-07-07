@@ -4,6 +4,8 @@ export const startGameRequestSchema = z.object({
   word_pack_id: z.uuid(),
 });
 
+const backendDateTimeSchema = z.string().min(1);
+
 const gameSchema = z.object({
   id: z.uuid(),
   room_code: z.string(),
@@ -11,8 +13,9 @@ const gameSchema = z.object({
   word_pack_id: z.uuid(),
   status: z.string(),
   settings_snapshot: z.unknown(),
-  started_at: z.iso.datetime({ offset: true }),
-  ended_at: z.iso.datetime({ offset: true }).nullable().optional(),
+  started_at: backendDateTimeSchema,
+  ended_at: backendDateTimeSchema.nullable().optional(),
+  created_at: backendDateTimeSchema.optional(),
 });
 
 const gameParticipantSchema = z.object({
@@ -20,10 +23,12 @@ const gameParticipantSchema = z.object({
   game_id: z.uuid(),
   user_id: z.uuid().nullable().optional(),
   guest_session_id: z.uuid().nullable().optional(),
+  bot_profile_id: z.uuid().nullable().optional(),
   display_name_snapshot: z.string(),
+  participant_type: z.string().optional(),
   is_host: z.boolean(),
-  joined_at: z.iso.datetime({ offset: true }),
-  left_at: z.iso.datetime({ offset: true }).nullable().optional(),
+  joined_at: backendDateTimeSchema,
+  left_at: backendDateTimeSchema.nullable().optional(),
 });
 
 const gameRoundSchema = z.object({
@@ -35,8 +40,8 @@ const gameRoundSchema = z.object({
   word_text_snapshot: z.string(),
   status: z.string(),
   duration_seconds: z.number().int(),
-  started_at: z.iso.datetime({ offset: true }),
-  ended_at: z.iso.datetime({ offset: true }).nullable().optional(),
+  started_at: backendDateTimeSchema,
+  ended_at: backendDateTimeSchema.nullable().optional(),
 });
 
 export const startGameResponseSchema = z.object({
