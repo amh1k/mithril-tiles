@@ -151,4 +151,30 @@ describe("useRoomSocket drawing support", () => {
     });
     expect(result.current.messages).toEqual([]);
   });
+
+  it("marks the game ended while preserving the announcement message", async () => {
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("message", {
+        data: "Game has ended",
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.gameEndedAt).not.toBeNull();
+    });
+    expect(result.current.messages).toEqual([
+      {
+        id: 1,
+        text: "Game has ended",
+      },
+    ]);
+  });
 });

@@ -297,7 +297,6 @@ func (r *Room) startRound() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	result, err := r.gameLifecycle.StartRound(ctx, RoundStartRequest{
 		RoomCode:        r.roomCode,
 		RoundNumber:     roundNumber,
@@ -497,10 +496,16 @@ func (r *Room) handleEndGame() {
 	case <-r.done:
 		return
 	}
-	if r.deleteRoom != nil {
+	timer := time.NewTimer(60 * time.Second)
+	select {
+	case <- timer.C:
+		if r.deleteRoom != nil {
 		r.deleteRoom(r.roomCode)
+		}
+		r.close()
 	}
-	r.close()
+
+	
 }
 
 func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {

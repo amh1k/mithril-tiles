@@ -19,6 +19,13 @@ describe("parseRoomSocketMessage", () => {
     });
   });
 
+  it("parses backend game-ended announcements", () => {
+    expect(parseRoomSocketMessage("Game has ended")).toEqual({
+      text: "Game has ended",
+      type: "game_ended",
+    });
+  });
+
   it("parses structured drawing events", () => {
     expect(
       parseRoomSocketMessage(

@@ -22,6 +22,7 @@ export type RoomSocketStatus =
 type RoomSocketState = {
   drawStrokes: RoomDrawStroke[];
   errorMessage?: string;
+  gameEndedAt: number | null;
   messages: RoomChatMessage[];
   retryAttempt: number;
   status: RoomSocketStatus;
@@ -94,6 +95,7 @@ export function useRoomSocket({
   }, []);
   const [state, setState] = useState<RoomSocketState>({
     drawStrokes: [],
+    gameEndedAt: null,
     messages: [],
     retryAttempt: 0,
     status: "idle",
@@ -167,6 +169,18 @@ export function useRoomSocket({
         if (parsedMessage.type === "legacy_text") {
           setState((currentState) => ({
             ...currentState,
+            messages: appendBoundedMessage(currentState.messages, {
+              id: nextMessageIdRef.current++,
+              text: parsedMessage.text,
+            }),
+          }));
+          return;
+        }
+
+        if (parsedMessage.type === "game_ended") {
+          setState((currentState) => ({
+            ...currentState,
+            gameEndedAt: Date.now(),
             messages: appendBoundedMessage(currentState.messages, {
               id: nextMessageIdRef.current++,
               text: parsedMessage.text,
