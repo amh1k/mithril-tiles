@@ -1,21 +1,31 @@
 "use client";
 
 import {
+  Check,
+  CircleAlert,
   Clock,
+  Copy,
   Crown,
   Eraser,
+  Eye,
+  LoaderCircle,
   MessageSquareText,
+  Paintbrush,
   Palette,
   Play,
   Send,
   ShieldCheck,
   Trophy,
   Users,
+  Wifi,
+  WifiOff,
+  X,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -84,6 +94,7 @@ const ERASER_COLOR = "#ffffff";
 export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const socket = useRoomSocket({ roomCode });
   const [chatMessage, setChatMessage] = useState("");
+  const [roomCodeCopied, setRoomCodeCopied] = useState(false);
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
   const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
@@ -96,6 +107,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     "idle" | "starting" | "started"
   >("idle");
   const [finalScores, setFinalScores] = useState<GameFinalScore[]>([]);
+  const [finalScoresDismissed, setFinalScoresDismissed] = useState(false);
   const [finalScoresStatus, setFinalScoresStatus] = useState<
     "idle" | "loading" | "ready" | "failed"
   >("idle");
@@ -108,6 +120,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const socketStatusLabel = formatSocketStatus(socket.status);
+  const rankedPlayers = useMemo(
+    () =>
+      [...roomSnapshot.players].sort(
+        (firstPlayer, secondPlayer) => secondPlayer.score - firstPlayer.score,
+      ),
+    [roomSnapshot.players],
+  );
 
   useEffect(() => {
     if (storedRoomSnapshot === null) {
@@ -123,6 +142,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     const abortController = new AbortController();
 
     async function loadFinalScores() {
+      setFinalScoresDismissed(false);
       setFinalScoresStatus("loading");
 
       try {
@@ -212,6 +232,15 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     setWordPack(selectedWordPack);
   }
 
+  async function handleCopyRoomCode() {
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setRoomCodeCopied(true);
+    } catch {
+      setRoomCodeCopied(false);
+    }
+  }
+
   async function handleStartGame() {
     if (wordPack === null || startGameStatus === "starting") {
       return;
@@ -271,7 +300,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const canStartGame =
     wordPackStatus === "ready" &&
     wordPack !== null &&
-    startGameStatus === "idle";
+    startGameStatus === "idle" &&
+    socket.status === "connected";
   const isCurrentPlayerDrawer =
     roomSnapshot.drawerName === principal.display_name;
   const isCurrentPlayerHost = roomSnapshot.players.some(
@@ -299,16 +329,41 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-      <section className="grid gap-4 rounded-2xl border bg-card/80 p-4 shadow-sm lg:grid-cols-[1fr_auto] lg:items-center">
+      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">
-            Room {roomCode}
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Lobby</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Signed in as {principal.display_name}. Chat and free drawing are
-            live; authoritative players, roles, rounds, and scores will replace
-            the placeholders once the backend room snapshot lands.
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Room
+            </span>
+            <span className="font-mono text-sm font-semibold tracking-widest">
+              {roomCode}
+            </span>
+            <Button
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={handleCopyRoomCode}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {roomCodeCopied ? (
+                <Check className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Copy className="size-3.5" aria-hidden="true" />
+              )}
+              {roomCodeCopied ? "Copied" : "Copy code"}
+            </Button>
+          </div>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+            {roomSnapshot.phase === "lobby" ? "Game lobby" : "Game in progress"}
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Playing as{" "}
+            <span className="font-medium text-foreground">
+              {principal.display_name}
+            </span>
+            {isCurrentPlayerHost
+              ? ". You control the game setup."
+              : ". Waiting for the host to start the game."}
           </p>
         </div>
 
@@ -336,26 +391,22 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </div>
       </section>
 
-      {socket.status === "failed" && (
-        <div
-          className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-          role="status"
-        >
-          {socket.errorMessage ??
-            "The realtime connection could not be established."}
-        </div>
-      )}
+      <ConnectionNotice
+        errorMessage={socket.errorMessage}
+        retryAttempt={socket.retryAttempt}
+        status={socket.status}
+      />
 
-      <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[16rem_minmax(0,1fr)_20rem]">
-        <Card className="min-h-0">
+      <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+        <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <CardTitle>Players</CardTitle>
                 <CardDescription>
                   {roomSnapshot.phase === "active_round"
-                    ? "Active round state."
-                    : "Lobby snapshot placeholder."}
+                    ? "Current players and round scores."
+                    : "Everyone currently in this room."}
                 </CardDescription>
               </div>
               <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -365,20 +416,44 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              {roomSnapshot.players.map((player) => (
-                <PlayerCard key={player.id} player={player} />
+              {rankedPlayers.map((player, index) => (
+                <PlayerCard key={player.id} player={player} rank={index + 1} />
               ))}
             </div>
 
-            <Button
-              className="w-full gap-2"
-              disabled={!canStartGame}
-              onClick={handleStartGame}
-              type="button"
-            >
-              <Play className="size-4" aria-hidden="true" />
-              {startGameStatus === "starting" ? "Starting…" : "Start game"}
-            </Button>
+            {isCurrentPlayerHost ? (
+              <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">
+                  Host controls
+                </p>
+                <Button
+                  className="w-full gap-2"
+                  disabled={!canStartGame}
+                  onClick={handleStartGame}
+                  size="lg"
+                  type="button"
+                >
+                  <Play className="size-4" aria-hidden="true" />
+                  {startGameStatus === "starting"
+                    ? "Starting game…"
+                    : "Start game"}
+                </Button>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {startGameStatus === "started"
+                    ? "The game has started."
+                    : socket.status !== "connected"
+                      ? "Reconnect to realtime before starting."
+                      : "Start when everyone is ready."}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-sm">
+                <p className="font-medium">Waiting for the host</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  The host will start the game when everyone is ready.
+                </p>
+              </div>
+            )}
 
             <WordPackStatus wordPack={wordPack} status={wordPackStatus} />
 
@@ -386,56 +461,82 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               errorMessage={startGameError}
               status={startGameStatus}
             />
-
-            <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
-              Select a word pack before starting. The backend may still reject
-              the request until enough players have joined and the current user
-              is the room host.
-            </div>
           </CardContent>
         </Card>
 
-        <Card className="min-h-0">
+        <Card
+          className={`order-1 min-h-0 lg:order-2 ${
+            roomSnapshot.phase === "active_round"
+              ? "border-primary/30 shadow-lg shadow-primary/5"
+              : ""
+          }`}
+        >
           <CardHeader>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <CardTitle>Canvas</CardTitle>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle>Canvas</CardTitle>
+                  {roomSnapshot.phase === "active_round" && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                        isCurrentPlayerDrawer
+                          ? "bg-primary/10 text-primary"
+                          : "bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                      }`}
+                    >
+                      {isCurrentPlayerDrawer ? (
+                        <Paintbrush className="size-3.5" aria-hidden="true" />
+                      ) : (
+                        <Eye className="size-3.5" aria-hidden="true" />
+                      )}
+                      {isCurrentPlayerDrawer
+                        ? "Your turn to draw"
+                        : `Watching ${roomSnapshot.drawerName ?? "the drawer"}`}
+                    </span>
+                  )}
+                </div>
                 <CardDescription>
-                  Drawing stays local in the lobby and syncs through the socket
-                  after the game start request is accepted.
+                  {roomSnapshot.phase === "active_round"
+                    ? isCurrentPlayerDrawer
+                      ? "Draw clearly—the room is watching in real time."
+                      : "Watch the drawing and submit your guess in chat."
+                    : "Test the canvas while everyone gets ready."}
                 </CardDescription>
               </div>
 
-              <div
-                className="flex flex-wrap gap-2"
-                aria-label="Drawing tool"
-                role="radiogroup"
-              >
-                {DRAWING_COLORS.map((color) => (
-                  <button
-                    key={color.value}
-                    aria-checked={drawingColor === color.value}
-                    aria-label={color.label}
-                    className="size-7 rounded-full border border-foreground/20 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
-                    onClick={() => setDrawingColor(color.value)}
-                    role="radio"
-                    style={{
-                      backgroundColor: color.value,
-                    }}
-                    type="button"
-                  />
-                ))}
-                <button
-                  aria-checked={isErasing}
-                  aria-label="Eraser"
-                  className="flex size-7 items-center justify-center rounded-full border border-foreground/20 bg-white text-slate-900 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
-                  onClick={() => setDrawingColor(ERASER_COLOR)}
-                  role="radio"
-                  type="button"
+              {(roomSnapshot.phase !== "active_round" ||
+                isCurrentPlayerDrawer) && (
+                <div
+                  className="flex flex-wrap gap-2"
+                  aria-label="Drawing tool"
+                  role="radiogroup"
                 >
-                  <Eraser className="size-4" aria-hidden="true" />
-                </button>
-              </div>
+                  {DRAWING_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      aria-checked={drawingColor === color.value}
+                      aria-label={color.label}
+                      className="size-8 rounded-full border border-foreground/20 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                      onClick={() => setDrawingColor(color.value)}
+                      role="radio"
+                      style={{
+                        backgroundColor: color.value,
+                      }}
+                      type="button"
+                    />
+                  ))}
+                  <button
+                    aria-checked={isErasing}
+                    aria-label="Eraser"
+                    className="flex size-8 items-center justify-center rounded-full border border-foreground/20 bg-white text-slate-900 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                    onClick={() => setDrawingColor(ERASER_COLOR)}
+                    role="radio"
+                    type="button"
+                  >
+                    <Eraser className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent className="flex flex-1">
@@ -453,11 +554,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
 
-        <Card className="min-h-0">
+        <Card className="order-3 min-h-0">
           <CardHeader>
             <CardTitle>Chat & guesses</CardTitle>
             <CardDescription>
-              Messages and system activity will stream here.
+              {roomSnapshot.phase === "active_round"
+                ? "Share reactions or submit a guess."
+                : "Chat with everyone in the room."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
@@ -467,7 +570,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               aria-live="polite"
             >
               {socket.messages.length === 0 ? (
-                <p className="text-muted-foreground">No chat messages yet.</p>
+                <p className="text-muted-foreground">
+                  {roomSnapshot.phase === "active_round"
+                    ? "Guesses and room activity will appear here."
+                    : "No chat messages yet."}
+                </p>
               ) : (
                 socket.messages.map((message) => (
                   <p key={message.id} className="whitespace-pre-wrap">
@@ -485,7 +592,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 onChange={(event) => setChatMessage(event.target.value)}
                 placeholder={
                   socket.status === "connected"
-                    ? "Send a message..."
+                    ? roomSnapshot.phase === "active_round" &&
+                      !isCurrentPlayerDrawer
+                      ? "Type /guess followed by your answer"
+                      : "Send a message..."
                     : "Waiting for connection..."
                 }
                 value={chatMessage}
@@ -505,10 +615,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
       </section>
 
-      <FinalScoresOverlay
-        finalScores={finalScores}
-        status={finalScoresStatus}
-      />
+      {!finalScoresDismissed && (
+        <FinalScoresOverlay
+          finalScores={finalScores}
+          onClose={() => setFinalScoresDismissed(true)}
+          status={finalScoresStatus}
+        />
+      )}
     </main>
   );
 }
@@ -530,6 +643,85 @@ function formatSocketStatus(status: string): string {
     default:
       return "Idle";
   }
+}
+
+type ConnectionNoticeProps = {
+  errorMessage?: string;
+  retryAttempt: number;
+  status: string;
+};
+
+function ConnectionNotice({
+  errorMessage,
+  retryAttempt,
+  status,
+}: ConnectionNoticeProps) {
+  if (status === "connected") {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+        role="status"
+      >
+        <Wifi className="size-4" aria-hidden="true" />
+        <span>Realtime connection established.</span>
+      </div>
+    );
+  }
+
+  if (
+    status === "requesting_ticket" ||
+    status === "connecting" ||
+    status === "reconnecting"
+  ) {
+    const isOffline = errorMessage?.toLowerCase().includes("offline") ?? false;
+    const Icon = isOffline ? WifiOff : LoaderCircle;
+
+    return (
+      <div
+        aria-live="polite"
+        className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+        role="status"
+      >
+        <Icon
+          className={`mt-0.5 size-4 shrink-0 ${isOffline ? "" : "animate-spin"}`}
+          aria-hidden="true"
+        />
+        <div>
+          <p className="font-medium">
+            {isOffline ? "You are offline" : "Restoring realtime connection"}
+          </p>
+          <p className="mt-0.5 text-xs opacity-80">
+            {errorMessage ??
+              "Chat and drawing will become available once connected."}
+            {retryAttempt > 0 && !isOffline
+              ? ` Retry attempt ${retryAttempt}.`
+              : ""}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div
+        aria-live="assertive"
+        className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        role="alert"
+      >
+        <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <div>
+          <p className="font-medium">Realtime connection unavailable</p>
+          <p className="mt-0.5 text-xs opacity-80">
+            {errorMessage ??
+              "Chat and drawing are unavailable. Refresh the page to try again."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 type StatusTileProps = {
@@ -554,27 +746,33 @@ function StatusTile({ icon: Icon, label, value }: StatusTileProps) {
 
 type PlayerCardProps = {
   player: RoomPlayer;
+  rank: number;
 };
 
-function PlayerCard({ player }: PlayerCardProps) {
+function PlayerCard({ player, rank }: PlayerCardProps) {
   return (
     <div className="rounded-xl border bg-background/70 p-3">
       <div className="flex items-center gap-3">
-        <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-          {player.displayName.slice(0, 2).toUpperCase()}
+        <div className="relative">
+          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {player.displayName.slice(0, 2).toUpperCase()}
+          </div>
+          <span className="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border bg-background text-[0.6rem] font-bold text-muted-foreground">
+            {rank}
+          </span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-medium">{player.displayName}</p>
-            <span className="text-xs font-semibold text-muted-foreground">
-              {player.score}
+            <span
+              className="text-xs font-semibold text-muted-foreground"
+              aria-label={`${player.score} points`}
+            >
+              {player.score} pts
             </span>
           </div>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            <PlayerBadge
-              icon={Crown}
-              label={player.isHost ? "Host" : "Host pending"}
-            />
+            {player.isHost && <PlayerBadge icon={Crown} label="Host" />}
             {player.isDrawer && <PlayerBadge icon={Palette} label="Drawer" />}
             <PlayerBadge icon={ShieldCheck} label={player.principalType} />
           </div>
@@ -606,9 +804,25 @@ type WordPackStatusProps = {
 function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
-      <div className="rounded-lg border bg-primary/5 p-3 text-xs">
-        <p className="font-medium text-primary">Word pack locked</p>
-        <p className="mt-1 text-muted-foreground">{wordPack.name}</p>
+      <div className="rounded-xl border bg-background/70 p-3">
+        <div className="flex items-start gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Palette className="size-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Selected word pack
+            </p>
+            <p className="mt-0.5 truncate text-sm font-semibold">
+              {wordPack.name}
+            </p>
+            {wordPack.description && (
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {wordPack.description}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
@@ -774,10 +988,15 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 
 type FinalScoresStatusProps = {
   finalScores: GameFinalScore[];
+  onClose: () => void;
   status: "idle" | "loading" | "ready" | "failed";
 };
 
-function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
+function FinalScoresOverlay({
+  finalScores,
+  onClose,
+  status,
+}: FinalScoresStatusProps) {
   if (status === "idle") {
     return null;
   }
@@ -785,11 +1004,19 @@ function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
   if (status === "loading") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
-        <div className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl">
+        <div
+          aria-labelledby="final-scores-loading-title"
+          aria-modal="true"
+          className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl"
+          role="dialog"
+        >
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Trophy className="size-7 animate-pulse" aria-hidden="true" />
           </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+          <h2
+            className="mt-4 text-2xl font-semibold tracking-tight"
+            id="final-scores-loading-title"
+          >
             Game over
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -803,16 +1030,32 @@ function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
   if (status === "failed") {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
-        <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl">
+        <div
+          aria-labelledby="final-scores-error-title"
+          aria-modal="true"
+          className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl"
+          role="dialog"
+        >
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-300">
             <Trophy className="size-7" aria-hidden="true" />
           </div>
-          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+          <h2
+            className="mt-4 text-2xl font-semibold tracking-tight"
+            id="final-scores-error-title"
+          >
             Game over
           </h2>
           <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-            Final scores could not be loaded yet.
+            Final scores could not be loaded yet. They may still be saving.
           </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Button onClick={onClose} type="button" variant="outline">
+              Return to room
+            </Button>
+            <Link className={buttonVariants()} href="/play">
+              Leave room
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -822,15 +1065,27 @@ function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
     (left, right) => left.final_rank - right.final_rank,
   );
   const winner = sortedScores.find((score) => score.is_winner);
+  const podiumScores = sortedScores.slice(0, 3);
+  const remainingScores = sortedScores.slice(3);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm">
       <div
         aria-labelledby="final-scores-title"
         aria-modal="true"
-        className="w-full max-w-2xl overflow-hidden rounded-3xl border bg-card shadow-2xl"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border bg-card shadow-2xl"
         role="dialog"
       >
+        <Button
+          aria-label="Close final scores"
+          className="absolute right-3 top-3 z-10 rounded-full"
+          onClick={onClose}
+          size="icon"
+          type="button"
+          variant="secondary"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </Button>
         <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
           <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
           <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
@@ -849,48 +1104,91 @@ function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
           </p>
         </div>
 
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4 sm:p-6">
+        <div className="min-h-0 space-y-5 overflow-y-auto p-4 sm:p-6">
           {sortedScores.length === 0 ? (
-            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No final scores were returned for this game.
+            <div className="rounded-2xl border border-dashed p-8 text-center">
+              <p className="font-medium">Scores are still being prepared</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                The game ended successfully, but no persisted scores were
+                returned yet.
+              </p>
             </div>
           ) : (
-            sortedScores.map((score) => (
-              <div
-                className="flex items-center gap-4 rounded-2xl border bg-background/70 p-4"
-                key={score.id}
-              >
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
-                  #{score.final_rank}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-semibold">
-                      {finalScoreDisplayName(score)}
-                    </p>
-                    {score.is_winner && (
-                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
-                        Winner
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Participant {shortParticipantId(score.participant_id)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold tabular-nums">
-                    {score.final_score}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    points
-                  </p>
-                </div>
+            <>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {podiumScores.map((score) => (
+                  <ScorePodiumCard key={score.id} score={score} />
+                ))}
               </div>
-            ))
+              {remainingScores.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Final standings
+                  </p>
+                  {remainingScores.map((score) => (
+                    <ScoreRow key={score.id} score={score} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <Button onClick={onClose} type="button" variant="outline">
+              Return to room
+            </Button>
+            <Link className={buttonVariants()} href="/play">
+              Leave room
+            </Link>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ScorePodiumCard({ score }: { score: GameFinalScore }) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 text-center ${
+        score.is_winner
+          ? "border-amber-500/40 bg-amber-500/10"
+          : "bg-background/70"
+      }`}
+    >
+      <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
+        #{score.final_rank}
+      </div>
+      <p className="mt-3 truncate font-semibold">
+        {finalScoreDisplayName(score)}
+      </p>
+      {score.is_winner && (
+        <span className="mt-1 inline-block rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+          Winner
+        </span>
+      )}
+      <p className="mt-3 text-2xl font-bold tabular-nums">
+        {score.final_score}
+      </p>
+      <p className="text-xs text-muted-foreground">points</p>
+    </div>
+  );
+}
+
+function ScoreRow({ score }: { score: GameFinalScore }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-background/70 p-3">
+      <span className="w-8 text-center text-sm font-bold text-muted-foreground">
+        #{score.final_rank}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">
+          {finalScoreDisplayName(score)}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Participant {shortParticipantId(score.participant_id)}
+        </p>
+      </div>
+      <p className="font-bold tabular-nums">{score.final_score} pts</p>
     </div>
   );
 }
