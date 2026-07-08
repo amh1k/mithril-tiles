@@ -321,12 +321,10 @@ func handleCommand(player *Player, room *Room, command string) {
 			default:
 			}
 		} else {
-			select {
-			case player.Outgoing <- "Correct Guess! Congrats":
+			
 				room.handleCorrectGuess(player)
-			default:
 
-			}
+			
 		}
 	default:
 		select {

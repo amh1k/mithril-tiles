@@ -319,7 +319,7 @@ func (r *Room) startRound() {
 	r.mu.Lock()
 	r.currentRoundNo = roundNumber
 	r.currentDrawer = drawer
-	r.currentWord = result.Word
+	r.currentWord = "apple"// rresult.word have to repalce this
 	r.startTime = result.StartedAt
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
@@ -443,14 +443,24 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 }
 
 func (r *Room) handleCorrectGuess(player *Player) {
+
 	r.scoresMu.Lock()
 	defer r.scoresMu.Unlock()
 	if _, eligible := r.scores[player]; !eligible {
 		return
 	}
 	if r.scores[player] == 1 {
+		select {
+		case  player.Outgoing <- "You have already guessed brother":
+	default:
+	}
 		return
 	}
+	select {
+	case  player.Outgoing <- "Correct Guess! Congrats":
+	default:
+	}
+	
 	r.scores[player]++
 	key := newPrincipalScoreKey(player.Principal)
 	finalScore := r.globalScores[key]

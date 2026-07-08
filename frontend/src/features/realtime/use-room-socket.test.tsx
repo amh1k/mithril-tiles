@@ -93,6 +93,8 @@ describe("useRoomSocket drawing support", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -176,5 +178,142 @@ describe("useRoomSocket drawing support", () => {
         text: "Game has ended",
       },
     ]);
+  });
+
+  it("ignores events emitted by a stale socket after reconnecting", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    const firstSocket = MockWebSocket.instances[0];
+
+    act(() => {
+      firstSocket.emit("close");
+      vi.advanceTimersByTime(1_000);
+    });
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    const currentSocket = MockWebSocket.instances[1];
+
+    act(() => {
+      currentSocket.emit("open");
+      firstSocket.emit("message", {
+        data: "Message from stale socket",
+      });
+      firstSocket.emit("close");
+    });
+
+    expect(result.current.status).toBe("connected");
+    expect(result.current.messages).toEqual([]);
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    expect(MockWebSocket.instances).toHaveLength(2);
+  });
+
+  it("resets the retry count after a replacement socket connects", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("close");
+      vi.advanceTimersByTime(1_000);
+    });
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+
+    act(() => {
+      MockWebSocket.instances[1].emit("open");
+    });
+
+    expect(result.current.status).toBe("connected");
+    expect(result.current.retryAttempt).toBe(0);
+    expect(result.current.errorMessage).toBeUndefined();
+  });
+
+  it("does not reconnect after the hook unmounts", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+
+    const { unmount } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("close");
+    });
+
+    unmount();
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it("pauses retries while offline and reconnects when online", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    let online = true;
+    vi.spyOn(window.navigator, "onLine", "get").mockImplementation(
+      () => online,
+    );
+
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    online = false;
+    act(() => {
+      window.dispatchEvent(new Event("offline"));
+      MockWebSocket.instances[0].emit("close");
+      vi.advanceTimersByTime(10_000);
+    });
+
+    expect(result.current.status).toBe("reconnecting");
+    expect(result.current.retryAttempt).toBe(0);
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    online = true;
+    act(() => {
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("online"));
+    });
+
+    await vi.waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(2);
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
