@@ -62,7 +62,7 @@ function renderRoomShell({
   startGameResponse?: unknown;
   status?: RoomSocketStatus;
 } = {}) {
-  mockPreparedWordPackResponse();
+  mockWordPacksResponse();
   if (startGameResponse !== undefined) {
     fetchMock.mockResolvedValueOnce(startGameResponse);
   }
@@ -209,20 +209,20 @@ describe("RoomShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("prepares a temporary word pack for the room", async () => {
+  it("loads word packs for the room", async () => {
     renderRoomShell();
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/rooms/ROOM01/word-pack", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/word-packs", {
       cache: "no-store",
-      method: "POST",
+      method: "GET",
       signal: expect.any(AbortSignal),
     });
-    expect(
-      await screen.findByText("Room ROOM01 Starter Pack"),
-    ).toBeInTheDocument();
+    expect(await screen.findByLabelText("Word pack")).toHaveValue(
+      "550e8400-e29b-41d4-a716-446655440001",
+    );
   });
 
-  it("starts the game with the prepared word pack", async () => {
+  it("starts the game with the selected word pack", async () => {
     const user = userEvent.setup();
     renderRoomShell({
       startGameResponse: {
@@ -231,7 +231,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByText("Room ROOM01 Starter Pack");
+    await screen.findByLabelText("Word pack");
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(fetchMock).toHaveBeenLastCalledWith("/api/rooms/ROOM01/start", {
@@ -252,6 +252,34 @@ describe("RoomShell", () => {
     expect(screen.getByText("Active round state.")).toBeInTheDocument();
   });
 
+  it("lets the host select a different word pack before starting", async () => {
+    const user = userEvent.setup();
+    renderRoomShell({
+      startGameResponse: {
+        json: async () => validStartGameResponse(),
+        ok: true,
+      },
+    });
+
+    await screen.findByLabelText("Word pack");
+    await user.selectOptions(
+      screen.getByLabelText("Word pack"),
+      "550e8400-e29b-41d4-a716-446655440002",
+    );
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/rooms/ROOM01/start", {
+      body: JSON.stringify({
+        word_pack_id: "550e8400-e29b-41d4-a716-446655440002",
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+  });
+
   it("keeps canvas strokes local for non-drawers after game start", async () => {
     const user = userEvent.setup();
     const sendDrawStroke = vi.fn();
@@ -270,7 +298,7 @@ describe("RoomShell", () => {
       undefined,
     );
 
-    await screen.findByText("Room ROOM01 Starter Pack");
+    await screen.findByLabelText("Word pack");
     await user.click(screen.getByRole("button", { name: "Start game" }));
     await screen.findByText("Game start request accepted.");
 
@@ -305,7 +333,7 @@ describe("RoomShell", () => {
       undefined,
     );
 
-    await screen.findByText("Room ROOM01 Starter Pack");
+    await screen.findByLabelText("Word pack");
     await user.click(screen.getByRole("button", { name: "Start game" }));
     await screen.findByText("Game start request accepted.");
 
@@ -329,7 +357,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByText("Room ROOM01 Starter Pack");
+    await screen.findByLabelText("Word pack");
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(
@@ -351,7 +379,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByText("Room ROOM01 Starter Pack");
+    await screen.findByLabelText("Word pack");
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(
@@ -361,18 +389,29 @@ describe("RoomShell", () => {
   });
 });
 
-function mockPreparedWordPackResponse() {
+function mockWordPacksResponse() {
   fetchMock.mockResolvedValueOnce({
     json: async () => ({
-      word_pack: {
-        created_at: "2026-07-07T00:00:00Z",
-        description: "Temporary room word pack",
-        id: "550e8400-e29b-41d4-a716-446655440001",
-        is_active: true,
-        name: "Room ROOM01 Starter Pack",
-        slug: "room-room01-test",
-        updated_at: "2026-07-07T00:00:00Z",
-      },
+      word_packs: [
+        {
+          created_at: "2026-07-07T00:00:00Z",
+          description: "Fantasy words",
+          id: "550e8400-e29b-41d4-a716-446655440001",
+          is_active: true,
+          name: "Fantasy Pack",
+          slug: "fantasy-pack",
+          updated_at: "2026-07-07T00:00:00Z",
+        },
+        {
+          created_at: "2026-07-07T00:00:00Z",
+          description: "Animal words",
+          id: "550e8400-e29b-41d4-a716-446655440002",
+          is_active: true,
+          name: "Animals Pack",
+          slug: "animals-pack",
+          updated_at: "2026-07-07T00:00:00Z",
+        },
+      ],
     }),
     ok: true,
   });

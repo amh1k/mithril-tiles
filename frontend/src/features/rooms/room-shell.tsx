@@ -39,7 +39,7 @@ import {
   type RoomPlayer,
 } from "@/features/rooms/room-state";
 import {
-  wordPackResponseSchema,
+  wordPacksResponseSchema,
   type WordPack,
 } from "@/features/rooms/word-pack";
 import { useRoomStore } from "@/stores/room-store";
@@ -85,6 +85,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const socket = useRoomSocket({ roomCode });
   const [chatMessage, setChatMessage] = useState("");
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
+  const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
   const [wordPackStatus, setWordPackStatus] = useState<
     "idle" | "preparing" | "ready" | "failed"
@@ -150,17 +151,14 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   useEffect(() => {
     const abortController = new AbortController();
 
-    async function prepareWordPack() {
+    async function loadWordPacks() {
       setWordPackStatus("preparing");
 
-      const response = await fetch(
-        `/api/rooms/${encodeURIComponent(roomCode)}/word-pack`,
-        {
-          cache: "no-store",
-          method: "POST",
-          signal: abortController.signal,
-        },
-      ).catch(() => undefined);
+      const response = await fetch("/api/word-packs", {
+        cache: "no-store",
+        method: "GET",
+        signal: abortController.signal,
+      }).catch(() => undefined);
 
       if (abortController.signal.aborted) {
         return;
@@ -171,7 +169,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         return;
       }
 
-      const parsedResponse = wordPackResponseSchema.safeParse(
+      const parsedResponse = wordPacksResponseSchema.safeParse(
         await response.json().catch(() => undefined),
       );
 
@@ -180,16 +178,21 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         return;
       }
 
-      setWordPack(parsedResponse.data.word_pack);
+      const activeWordPacks = parsedResponse.data.word_packs.filter(
+        (pack) => pack.is_active,
+      );
+
+      setWordPacks(activeWordPacks);
+      setWordPack(activeWordPacks[0] ?? null);
       setWordPackStatus("ready");
     }
 
-    void prepareWordPack();
+    void loadWordPacks();
 
     return () => {
       abortController.abort();
     };
-  }, [roomCode]);
+  }, []);
 
   function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -351,15 +354,26 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
             <WordPackStatus wordPack={wordPack} status={wordPackStatus} />
 
+            <WordPackSelector
+              selectedWordPackId={wordPack?.id ?? ""}
+              status={wordPackStatus}
+              wordPacks={wordPacks}
+              onChange={(wordPackId) => {
+                setWordPack(
+                  wordPacks.find((pack) => pack.id === wordPackId) ?? null,
+                );
+              }}
+            />
+
             <StartGameStatus
               errorMessage={startGameError}
               status={startGameStatus}
             />
 
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
-              Start game uses the temporary word pack for now. The backend may
-              still reject the request until enough players have joined and the
-              current user is the room host.
+              Select a word pack before starting. The backend may still reject
+              the request until enough players have joined and the current user
+              is the room host.
             </div>
           </CardContent>
         </Card>
@@ -576,7 +590,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
       <div className="rounded-lg border bg-primary/5 p-3 text-xs">
-        <p className="font-medium text-primary">Word pack ready</p>
+        <p className="font-medium text-primary">Word pack selected</p>
         <p className="mt-1 text-muted-foreground">{wordPack.name}</p>
       </div>
     );
@@ -585,7 +599,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "failed") {
     return (
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-        Word pack could not be prepared. Registered users can retry by
+        Word packs could not be loaded. Registered users can retry by
         re-entering the room.
       </div>
     );
@@ -593,8 +607,51 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
 
   return (
     <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-      Preparing temporary word pack…
+      Loading word packs…
     </div>
+  );
+}
+
+type WordPackSelectorProps = {
+  onChange: (wordPackId: string) => void;
+  selectedWordPackId: string;
+  status: "idle" | "preparing" | "ready" | "failed";
+  wordPacks: WordPack[];
+};
+
+function WordPackSelector({
+  onChange,
+  selectedWordPackId,
+  status,
+  wordPacks,
+}: WordPackSelectorProps) {
+  if (status !== "ready") {
+    return null;
+  }
+
+  if (wordPacks.length === 0) {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        No active word packs are available.
+      </div>
+    );
+  }
+
+  return (
+    <label className="block space-y-2 text-xs">
+      <span className="font-medium text-muted-foreground">Word pack</span>
+      <select
+        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+        onChange={(event) => onChange(event.target.value)}
+        value={selectedWordPackId}
+      >
+        {wordPacks.map((pack) => (
+          <option key={pack.id} value={pack.id}>
+            {pack.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

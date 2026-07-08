@@ -181,3 +181,15 @@ func (app *application)getWordPackById(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+func(app *application)getAllWordPacks(w http.ResponseWriter, r *http.Request) {
+	wordpacks, err := app.models.WordPacks.GetAllWordPack()
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+	err = app.writeJSON(w, http.StatusOK, envelope{
+		"word-packs": wordpacks,
+	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w,r, err)
+	}
+}
