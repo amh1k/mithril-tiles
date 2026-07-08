@@ -226,31 +226,7 @@ describe("RoomShell", () => {
     const user = userEvent.setup();
     renderRoomShell({
       startGameResponse: {
-        json: async () => ({
-          game: {
-            id: "550e8400-e29b-41d4-a716-446655440010",
-            room_code: "ROOM01",
-            host_participant_id: "550e8400-e29b-41d4-a716-446655440011",
-            word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
-            status: "started",
-            settings_snapshot: {},
-            started_at: "2026-07-07T00:00:00Z",
-            ended_at: null,
-          },
-          game_participants: [],
-          round: {
-            id: "550e8400-e29b-41d4-a716-446655440012",
-            game_id: "550e8400-e29b-41d4-a716-446655440010",
-            round_number: 1,
-            drawer_participant_id: "550e8400-e29b-41d4-a716-446655440011",
-            word_id: "550e8400-e29b-41d4-a716-446655440013",
-            word_text_snapshot: "castle",
-            status: "started",
-            duration_seconds: 60,
-            started_at: "2026-07-07T00:00:00Z",
-            ended_at: null,
-          },
-        }),
+        json: async () => validStartGameResponse(),
         ok: true,
       },
     });
@@ -271,39 +247,18 @@ describe("RoomShell", () => {
     expect(
       await screen.findByText("Game start request accepted."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Round 1")).toBeInTheDocument();
+    expect(screen.getAllByText("Player Two")).not.toHaveLength(0);
+    expect(screen.getByText("Active round state.")).toBeInTheDocument();
   });
 
-  it("connects canvas strokes to the room socket after game start", async () => {
+  it("keeps canvas strokes local for non-drawers after game start", async () => {
     const user = userEvent.setup();
     const sendDrawStroke = vi.fn();
     renderRoomShell({
       sendDrawStroke,
       startGameResponse: {
-        json: async () => ({
-          game: {
-            id: "550e8400-e29b-41d4-a716-446655440010",
-            room_code: "ROOM01",
-            host_participant_id: "550e8400-e29b-41d4-a716-446655440011",
-            word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
-            status: "started",
-            settings_snapshot: {},
-            started_at: "2026-07-07T00:00:00Z",
-            ended_at: null,
-          },
-          game_participants: [],
-          round: {
-            id: "550e8400-e29b-41d4-a716-446655440012",
-            game_id: "550e8400-e29b-41d4-a716-446655440010",
-            round_number: 1,
-            drawer_participant_id: "550e8400-e29b-41d4-a716-446655440011",
-            word_id: "550e8400-e29b-41d4-a716-446655440013",
-            word_text_snapshot: "castle",
-            status: "started",
-            duration_seconds: 60,
-            started_at: "2026-07-07T00:00:00Z",
-            ended_at: null,
-          },
-        }),
+        json: async () => validStartGameResponse(),
         ok: true,
       },
     });
@@ -321,6 +276,42 @@ describe("RoomShell", () => {
 
     expect(drawingCanvasMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        disabled: true,
+        onStroke: undefined,
+      }),
+      undefined,
+    );
+  });
+
+  it("connects canvas strokes to the room socket for the drawer", async () => {
+    const user = userEvent.setup();
+    const sendDrawStroke = vi.fn();
+    renderRoomShell({
+      sendDrawStroke,
+      startGameResponse: {
+        json: async () =>
+          validStartGameResponse({
+            drawerParticipantId: "550e8400-e29b-41d4-a716-446655440011",
+          }),
+        ok: true,
+      },
+    });
+
+    expect(drawingCanvasMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        disabled: false,
+        onStroke: undefined,
+      }),
+      undefined,
+    );
+
+    await screen.findByText("Room ROOM01 Starter Pack");
+    await user.click(screen.getByRole("button", { name: "Start game" }));
+    await screen.findByText("Game start request accepted.");
+
+    expect(drawingCanvasMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        disabled: false,
         onStroke: sendDrawStroke,
       }),
       undefined,
@@ -385,4 +376,57 @@ function mockPreparedWordPackResponse() {
     }),
     ok: true,
   });
+}
+
+function validStartGameResponse({
+  drawerParticipantId = "550e8400-e29b-41d4-a716-446655440012",
+}: {
+  drawerParticipantId?: string;
+} = {}) {
+  return {
+    game: {
+      id: "550e8400-e29b-41d4-a716-446655440010",
+      room_code: "ROOM01",
+      host_participant_id: "550e8400-e29b-41d4-a716-446655440011",
+      word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+      status: "started",
+      settings_snapshot: {},
+      started_at: "2026-07-07T00:00:00Z",
+      ended_at: null,
+    },
+    game_participants: [
+      {
+        id: "550e8400-e29b-41d4-a716-446655440011",
+        game_id: "550e8400-e29b-41d4-a716-446655440010",
+        guest_session_id: "550e8400-e29b-41d4-a716-446655440000",
+        display_name_snapshot: "Player One",
+        participant_type: "guest",
+        is_host: true,
+        joined_at: "2026-07-07T00:00:00Z",
+        left_at: null,
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440012",
+        game_id: "550e8400-e29b-41d4-a716-446655440010",
+        guest_session_id: "550e8400-e29b-41d4-a716-446655440002",
+        display_name_snapshot: "Player Two",
+        participant_type: "guest",
+        is_host: false,
+        joined_at: "2026-07-07T00:00:00Z",
+        left_at: null,
+      },
+    ],
+    round: {
+      id: "550e8400-e29b-41d4-a716-446655440013",
+      game_id: "550e8400-e29b-41d4-a716-446655440010",
+      round_number: 1,
+      drawer_participant_id: drawerParticipantId,
+      word_id: "550e8400-e29b-41d4-a716-446655440014",
+      word_text_snapshot: "castle",
+      status: "started",
+      duration_seconds: 60,
+      started_at: "2026-07-07T00:00:00Z",
+      ended_at: null,
+    },
+  };
 }

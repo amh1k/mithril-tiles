@@ -30,6 +30,7 @@ import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
 import {
   createPlaceholderRoomSnapshot,
+  startGameResponseToRoomSnapshot,
   type RoomPlayer,
 } from "@/features/rooms/room-state";
 import {
@@ -95,7 +96,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const roomSnapshot =
     useRoomStore((state) => state.snapshot) ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
-  const currentPlayer = roomSnapshot.players[0];
   const socketStatusLabel = formatSocketStatus(socket.status);
 
   useEffect(() => {
@@ -195,9 +195,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         return;
       }
 
-      setStartGameError(
-        message,
-      );
+      setStartGameError(message);
       setStartGameStatus("idle");
       return;
     }
@@ -214,6 +212,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       return;
     }
 
+    setRoomSnapshot(startGameResponseToRoomSnapshot(parsedResponse.data));
     setStartGameStatus("started");
   }
 
@@ -221,8 +220,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     wordPackStatus === "ready" &&
     wordPack !== null &&
     startGameStatus === "idle";
+  const isCurrentPlayerDrawer =
+    roomSnapshot.drawerName === principal.display_name;
   const shouldSendDrawStrokes =
-    startGameStatus === "started" && socket.status === "connected";
+    isCurrentPlayerDrawer &&
+    startGameStatus === "started" &&
+    socket.status === "connected";
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
@@ -231,9 +234,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           <p className="text-sm font-medium text-muted-foreground">
             Room {roomCode}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Lobby
-          </h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Lobby</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Signed in as {principal.display_name}. Chat and free drawing are
             live; authoritative players, roles, rounds, and scores will replace
@@ -254,8 +255,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           />
           <StatusTile
             icon={Palette}
-            label="Mode"
-            value={roomSnapshot.modeLabel}
+            label={roomSnapshot.drawerName === null ? "Mode" : "Drawer"}
+            value={roomSnapshot.drawerName ?? roomSnapshot.modeLabel}
           />
           <StatusTile
             icon={MessageSquareText}
@@ -282,7 +283,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <div>
                 <CardTitle>Players</CardTitle>
                 <CardDescription>
-                  Lobby snapshot placeholder.
+                  {roomSnapshot.phase === "active_round"
+                    ? "Active round state."
+                    : "Lobby snapshot placeholder."}
                 </CardDescription>
               </div>
               <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -291,7 +294,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PlayerCard player={currentPlayer} />
+            <div className="space-y-2">
+              {roomSnapshot.players.map((player) => (
+                <PlayerCard key={player.id} player={player} />
+              ))}
+            </div>
 
             <Button
               className="w-full gap-2"
@@ -364,6 +371,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           <CardContent className="flex flex-1">
             <DrawingCanvas
               color={drawingColor}
+              disabled={
+                roomSnapshot.phase === "active_round" && !isCurrentPlayerDrawer
+              }
               isErasing={isErasing}
               onStroke={
                 shouldSendDrawStrokes ? socket.sendDrawStroke : undefined
@@ -480,9 +490,7 @@ function PlayerCard({ player }: PlayerCardProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-medium">
-              {player.displayName}
-            </p>
+            <p className="truncate text-sm font-medium">{player.displayName}</p>
             <span className="text-xs font-semibold text-muted-foreground">
               {player.score}
             </span>
@@ -492,6 +500,7 @@ function PlayerCard({ player }: PlayerCardProps) {
               icon={Crown}
               label={player.isHost ? "Host" : "Host pending"}
             />
+            {player.isDrawer && <PlayerBadge icon={Palette} label="Drawer" />}
             <PlayerBadge icon={ShieldCheck} label={player.principalType} />
           </div>
         </div>

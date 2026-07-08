@@ -172,7 +172,8 @@ func (r *Room) handleDrawStroke(stroke DrawStroke) {
 		return
 	}
 	if currentDrawer.Principal.DisplayName() != stroke.From {
-		fmt.Println("Error happend : (")
+		fmt.Println(currentDrawer.Principal.DisplayName())
+		fmt.Println(stroke.From)
 		return
 	}
 	r.broadcastStroke(stroke)
@@ -238,7 +239,7 @@ func (r *Room) endRound() {
 	}
 	r.scoresMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err := r.gameLifecycle.EndRound(ctx, RoundEndRequest{
@@ -294,7 +295,7 @@ func (r *Room) startRound() {
 		participants = append(participants, player.Principal)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	result, err := r.gameLifecycle.StartRound(ctx, RoundStartRequest{
@@ -308,7 +309,6 @@ func (r *Room) startRound() {
 		fmt.Printf("failed to start round in room %s: %v\n", r.roomCode, err)
 		return
 	}
-
 	r.scoresMu.Lock()
 	r.scores = make(map[*Player]int, len(players))
 	for _, player := range players {
