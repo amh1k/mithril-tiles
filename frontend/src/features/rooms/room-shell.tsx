@@ -9,6 +9,7 @@ import {
   Play,
   Send,
   ShieldCheck,
+  Trophy,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -26,14 +27,19 @@ import { Input } from "@/components/ui/input";
 import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
+import {
+  fetchFinalScores,
+  type GameFinalScore,
+} from "@/features/rooms/final-scores";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
 import {
   createPlaceholderRoomSnapshot,
+  startGameResponseToRoomSnapshot,
   type RoomPlayer,
 } from "@/features/rooms/room-state";
 import {
-  wordPackResponseSchema,
+  wordPacksResponseSchema,
   type WordPack,
 } from "@/features/rooms/word-pack";
 import { useRoomStore } from "@/stores/room-store";
@@ -79,7 +85,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const socket = useRoomSocket({ roomCode });
   const [chatMessage, setChatMessage] = useState("");
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
+  const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
+  const [selectedWordPackId, setSelectedWordPackId] = useState("");
   const [wordPackStatus, setWordPackStatus] = useState<
     "idle" | "preparing" | "ready" | "failed"
   >("idle");
@@ -87,35 +95,73 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [startGameStatus, setStartGameStatus] = useState<
     "idle" | "starting" | "started"
   >("idle");
+  const [finalScores, setFinalScores] = useState<GameFinalScore[]>([]);
+  const [finalScoresStatus, setFinalScoresStatus] = useState<
+    "idle" | "loading" | "ready" | "failed"
+  >("idle");
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
     [principal],
   );
-  const roomSnapshot =
-    useRoomStore((state) => state.snapshot) ?? placeholderRoomSnapshot;
+  const storedRoomSnapshot = useRoomStore((state) => state.snapshot);
+  const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
-  const currentPlayer = roomSnapshot.players[0];
   const socketStatusLabel = formatSocketStatus(socket.status);
 
   useEffect(() => {
-    setRoomSnapshot(placeholderRoomSnapshot);
-  }, [placeholderRoomSnapshot, setRoomSnapshot]);
+    if (storedRoomSnapshot === null) {
+      setRoomSnapshot(placeholderRoomSnapshot);
+    }
+  }, [placeholderRoomSnapshot, setRoomSnapshot, storedRoomSnapshot]);
+
+  useEffect(() => {
+    if (socket.gameEndedAt == null || roomSnapshot.gameId == null) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    async function loadFinalScores() {
+      setFinalScoresStatus("loading");
+
+      try {
+        const response = await fetchFinalScores(
+          roomSnapshot.gameId!,
+          abortController.signal,
+        );
+
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setFinalScores(response.game_final_scores);
+        setFinalScoresStatus("ready");
+      } catch {
+        if (!abortController.signal.aborted) {
+          setFinalScoresStatus("failed");
+        }
+      }
+    }
+
+    void loadFinalScores();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [roomSnapshot.gameId, socket.gameEndedAt]);
 
   useEffect(() => {
     const abortController = new AbortController();
 
-    async function prepareWordPack() {
+    async function loadWordPacks() {
       setWordPackStatus("preparing");
 
-      const response = await fetch(
-        `/api/rooms/${encodeURIComponent(roomCode)}/word-pack`,
-        {
-          cache: "no-store",
-          method: "POST",
-          signal: abortController.signal,
-        },
-      ).catch(() => undefined);
+      const response = await fetch("/api/word-packs", {
+        cache: "no-store",
+        method: "GET",
+        signal: abortController.signal,
+      }).catch(() => undefined);
 
       if (abortController.signal.aborted) {
         return;
@@ -126,7 +172,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         return;
       }
 
-      const parsedResponse = wordPackResponseSchema.safeParse(
+      const parsedResponse = wordPacksResponseSchema.safeParse(
         await response.json().catch(() => undefined),
       );
 
@@ -135,16 +181,21 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         return;
       }
 
-      setWordPack(parsedResponse.data.word_pack);
+      const activeWordPacks = parsedResponse.data.word_packs.filter(
+        (pack) => pack.is_active,
+      );
+
+      setWordPacks(activeWordPacks);
+      setSelectedWordPackId(activeWordPacks[0]?.id ?? "");
       setWordPackStatus("ready");
     }
 
-    void prepareWordPack();
+    void loadWordPacks();
 
     return () => {
       abortController.abort();
     };
-  }, [roomCode]);
+  }, []);
 
   function handleSendChatMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,6 +203,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     if (socket.sendChatMessage(chatMessage)) {
       setChatMessage("");
     }
+  }
+
+  function handleConfirmWordPack() {
+    const selectedWordPack =
+      wordPacks.find((pack) => pack.id === selectedWordPackId) ?? null;
+
+    setWordPack(selectedWordPack);
   }
 
   async function handleStartGame() {
@@ -184,11 +242,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => undefined);
-      setStartGameError(
+      const message =
         typeof errorBody?.message === "string"
           ? errorBody.message
-          : "The game could not be started.",
-      );
+          : "The game could not be started.";
+
+      setStartGameError(message);
       setStartGameStatus("idle");
       return;
     }
@@ -198,18 +257,45 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     );
 
     if (!parsedResponse.success) {
-      setStartGameError("The game start response was invalid.");
+      setStartGameError(
+        "Game start was accepted, but the response could not be fully understood.",
+      );
       setStartGameStatus("idle");
       return;
     }
 
+    setRoomSnapshot(startGameResponseToRoomSnapshot(parsedResponse.data));
     setStartGameStatus("started");
   }
 
   const canStartGame =
     wordPackStatus === "ready" &&
     wordPack !== null &&
-    startGameStatus !== "starting";
+    startGameStatus === "idle";
+  const isCurrentPlayerDrawer =
+    roomSnapshot.drawerName === principal.display_name;
+  const isCurrentPlayerHost = roomSnapshot.players.some(
+    (player) => player.id === principal.id && player.isHost,
+  );
+  const shouldSendDrawStrokes =
+    isCurrentPlayerDrawer &&
+    startGameStatus === "started" &&
+    socket.status === "connected";
+
+  if (wordPack === null) {
+    return (
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
+        <WordPackSelectionPanel
+          selectedWordPackId={selectedWordPackId}
+          status={wordPackStatus}
+          wordPacks={wordPacks}
+          isHost={isCurrentPlayerHost}
+          onConfirm={handleConfirmWordPack}
+          onSelect={setSelectedWordPackId}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
@@ -218,9 +304,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           <p className="text-sm font-medium text-muted-foreground">
             Room {roomCode}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            Lobby
-          </h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Lobby</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Signed in as {principal.display_name}. Chat and free drawing are
             live; authoritative players, roles, rounds, and scores will replace
@@ -241,8 +325,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           />
           <StatusTile
             icon={Palette}
-            label="Mode"
-            value={roomSnapshot.modeLabel}
+            label={roomSnapshot.drawerName === null ? "Mode" : "Drawer"}
+            value={roomSnapshot.drawerName ?? roomSnapshot.modeLabel}
           />
           <StatusTile
             icon={MessageSquareText}
@@ -269,7 +353,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <div>
                 <CardTitle>Players</CardTitle>
                 <CardDescription>
-                  Lobby snapshot placeholder.
+                  {roomSnapshot.phase === "active_round"
+                    ? "Active round state."
+                    : "Lobby snapshot placeholder."}
                 </CardDescription>
               </div>
               <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -278,7 +364,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <PlayerCard player={currentPlayer} />
+            <div className="space-y-2">
+              {roomSnapshot.players.map((player) => (
+                <PlayerCard key={player.id} player={player} />
+              ))}
+            </div>
 
             <Button
               className="w-full gap-2"
@@ -298,9 +388,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             />
 
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
-              Start game uses the temporary word pack for now. The backend may
-              still reject the request until enough players have joined and the
-              current user is the room host.
+              Select a word pack before starting. The backend may still reject
+              the request until enough players have joined and the current user
+              is the room host.
             </div>
           </CardContent>
         </Card>
@@ -311,8 +401,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <div>
                 <CardTitle>Canvas</CardTitle>
                 <CardDescription>
-                  Free draw preview is enabled now. Drawer-only permissions will
-                  be enforced when round state is wired.
+                  Drawing stays local in the lobby and syncs through the socket
+                  after the game start request is accepted.
                 </CardDescription>
               </div>
 
@@ -351,10 +441,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           <CardContent className="flex flex-1">
             <DrawingCanvas
               color={drawingColor}
+              disabled={
+                roomSnapshot.phase === "active_round" && !isCurrentPlayerDrawer
+              }
               isErasing={isErasing}
-              // Keep free drawing local in the placeholder lobby. The current
-              // backend closes idle-room sockets when it receives draw_stroke.
-              onStroke={undefined}
+              onStroke={
+                shouldSendDrawStrokes ? socket.sendDrawStroke : undefined
+              }
               remoteStrokes={socket.drawStrokes}
             />
           </CardContent>
@@ -411,6 +504,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
       </section>
+
+      <FinalScoresOverlay
+        finalScores={finalScores}
+        status={finalScoresStatus}
+      />
     </main>
   );
 }
@@ -467,9 +565,7 @@ function PlayerCard({ player }: PlayerCardProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-medium">
-              {player.displayName}
-            </p>
+            <p className="truncate text-sm font-medium">{player.displayName}</p>
             <span className="text-xs font-semibold text-muted-foreground">
               {player.score}
             </span>
@@ -479,6 +575,7 @@ function PlayerCard({ player }: PlayerCardProps) {
               icon={Crown}
               label={player.isHost ? "Host" : "Host pending"}
             />
+            {player.isDrawer && <PlayerBadge icon={Palette} label="Drawer" />}
             <PlayerBadge icon={ShieldCheck} label={player.principalType} />
           </div>
         </div>
@@ -510,7 +607,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
       <div className="rounded-lg border bg-primary/5 p-3 text-xs">
-        <p className="font-medium text-primary">Word pack ready</p>
+        <p className="font-medium text-primary">Word pack locked</p>
         <p className="mt-1 text-muted-foreground">{wordPack.name}</p>
       </div>
     );
@@ -519,7 +616,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "failed") {
     return (
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-        Word pack could not be prepared. Registered users can retry by
+        Word packs could not be loaded. Registered users can retry by
         re-entering the room.
       </div>
     );
@@ -527,8 +624,126 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
 
   return (
     <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-      Preparing temporary word pack…
+      Choose a word pack to unlock game start.
     </div>
+  );
+}
+
+type WordPackSelectionPanelProps = {
+  isHost: boolean;
+  onConfirm: () => void;
+  onSelect: (wordPackId: string) => void;
+  selectedWordPackId: string;
+  status: "idle" | "preparing" | "ready" | "failed";
+  wordPacks: WordPack[];
+};
+
+function WordPackSelectionPanel({
+  isHost,
+  onConfirm,
+  onSelect,
+  selectedWordPackId,
+  status,
+  wordPacks,
+}: WordPackSelectionPanelProps) {
+  if (status === "preparing" || status === "idle") {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            Loading word packs…
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+            Preparing the lobby
+          </h2>
+        </div>
+      </section>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
+        Word packs could not be loaded. Re-enter the room to retry.
+      </section>
+    );
+  }
+
+  if (wordPacks.length === 0) {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
+        No active word packs are available.
+      </section>
+    );
+  }
+
+  if (!isHost) {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+        <div className="max-w-md">
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">
+            Waiting for host
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            The host is choosing a word pack
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You will enter the room once the host locks the pack for this game.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-4 shadow-sm sm:p-6">
+      <div className="flex max-h-full w-full max-w-2xl flex-col">
+        <div className="text-center">
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">
+            Choose the word pack
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            Pick the theme for this room
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Once selected, this pack is locked for the game.
+          </p>
+        </div>
+
+        <div className="mt-6 grid min-h-0 gap-3 overflow-y-auto pr-1">
+          {wordPacks.map((pack) => (
+            <button
+              className="rounded-2xl border bg-background/70 p-4 text-left transition hover:border-primary/50 hover:bg-primary/5 aria-pressed:border-primary aria-pressed:bg-primary/10"
+              key={pack.id}
+              onClick={() => onSelect(pack.id)}
+              type="button"
+              aria-pressed={selectedWordPackId === pack.id}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold">{pack.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {pack.description || pack.slug}
+                  </p>
+                </div>
+                <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
+                  {pack.slug}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <Button
+          className="mt-6 w-full"
+          disabled={selectedWordPackId === ""}
+          onClick={onConfirm}
+          type="button"
+        >
+          Lock word pack
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -538,6 +753,14 @@ type StartGameStatusProps = {
 };
 
 function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
+  if (errorMessage !== null) {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        {errorMessage}
+      </div>
+    );
+  }
+
   if (status === "started") {
     return (
       <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
@@ -546,13 +769,136 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
     );
   }
 
-  if (errorMessage !== null) {
+  return null;
+}
+
+type FinalScoresStatusProps = {
+  finalScores: GameFinalScore[];
+  status: "idle" | "loading" | "ready" | "failed";
+};
+
+function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
+  if (status === "idle") {
+    return null;
+  }
+
+  if (status === "loading") {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-        {errorMessage}
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Trophy className="size-7 animate-pulse" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+            Game over
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Loading final scores…
+          </p>
+        </div>
       </div>
     );
   }
 
-  return null;
+  if (status === "failed") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-300">
+            <Trophy className="size-7" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+            Game over
+          </h2>
+          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+            Final scores could not be loaded yet.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const sortedScores = [...finalScores].sort(
+    (left, right) => left.final_rank - right.final_rank,
+  );
+  const winner = sortedScores.find((score) => score.is_winner);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm">
+      <div
+        aria-labelledby="final-scores-title"
+        aria-modal="true"
+        className="w-full max-w-2xl overflow-hidden rounded-3xl border bg-card shadow-2xl"
+        role="dialog"
+      >
+        <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
+          <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
+          <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+            <Trophy className="size-8" aria-hidden="true" />
+          </div>
+          <h2
+            className="relative mt-4 text-3xl font-semibold tracking-tight"
+            id="final-scores-title"
+          >
+            Game over
+          </h2>
+          <p className="relative mt-2 text-sm text-muted-foreground">
+            {winner === undefined
+              ? "Final rankings are ready."
+              : `${finalScoreDisplayName(winner)} takes the crown.`}
+          </p>
+        </div>
+
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4 sm:p-6">
+          {sortedScores.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No final scores were returned for this game.
+            </div>
+          ) : (
+            sortedScores.map((score) => (
+              <div
+                className="flex items-center gap-4 rounded-2xl border bg-background/70 p-4"
+                key={score.id}
+              >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                  #{score.final_rank}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold">
+                      {finalScoreDisplayName(score)}
+                    </p>
+                    {score.is_winner && (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        Winner
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Participant {shortParticipantId(score.participant_id)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold tabular-nums">
+                    {score.final_score}
+                  </p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    points
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function finalScoreDisplayName(score: GameFinalScore): string {
+  return `Player ${score.final_rank}`;
+}
+
+function shortParticipantId(participantId: string): string {
+  return participantId.slice(0, 8);
 }

@@ -172,7 +172,8 @@ func (r *Room) handleDrawStroke(stroke DrawStroke) {
 		return
 	}
 	if currentDrawer.Principal.DisplayName() != stroke.From {
-		fmt.Println("Error happend : (")
+		fmt.Println(currentDrawer.Principal.DisplayName())
+		fmt.Println(stroke.From)
 		return
 	}
 	r.broadcastStroke(stroke)
@@ -238,7 +239,7 @@ func (r *Room) endRound() {
 	}
 	r.scoresMu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err := r.gameLifecycle.EndRound(ctx, RoundEndRequest{
@@ -294,9 +295,8 @@ func (r *Room) startRound() {
 		participants = append(participants, player.Principal)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	result, err := r.gameLifecycle.StartRound(ctx, RoundStartRequest{
 		RoomCode:        r.roomCode,
 		RoundNumber:     roundNumber,
@@ -308,7 +308,6 @@ func (r *Room) startRound() {
 		fmt.Printf("failed to start round in room %s: %v\n", r.roomCode, err)
 		return
 	}
-
 	r.scoresMu.Lock()
 	r.scores = make(map[*Player]int, len(players))
 	for _, player := range players {
@@ -342,7 +341,8 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	switch {
 	case r.gameState == GameStateStarting:
 		err = ErrGameStartInProgress
-	case r.gameState != GameStateIdle:
+	case r.gameState != GameStateIdle && r.gameState != GameStateCompleted:
+		fmt.Println(r.gameState)
 		err = ErrGameAlreadyStarted
 	case len(r.players) < 2:
 		err = ErrNotEnoughPlayers
@@ -400,6 +400,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	if completion.err != nil {
 		r.mu.Lock()
 		r.gameState = GameStateStarted
+		fmt.Println(completion.err)
 		r.mu.Unlock()
 		completion.command.result <- GameStartResult{Err: completion.err}
 		return
@@ -497,10 +498,16 @@ func (r *Room) handleEndGame() {
 	case <-r.done:
 		return
 	}
-	if r.deleteRoom != nil {
+	timer := time.NewTimer(60 * time.Second)
+	select {
+	case <- timer.C:
+		if r.deleteRoom != nil {
 		r.deleteRoom(r.roomCode)
+		}
+		r.close()
 	}
-	r.close()
+
+	
 }
 
 func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {

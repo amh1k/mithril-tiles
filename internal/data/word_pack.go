@@ -101,6 +101,49 @@ func (m WordPackModel) Get(id uuid.UUID) (*WordPack, error) {
 
 	return &wordPack, nil
 }
+func (m WordPackModel)GetAllWordPack()([]*WordPack, error) {
+	query := `
+	SELECT id, name, slug, description, is_active, created_at, updated_at
+	FROM word_packs`
+
+	var wordPacks []*WordPack
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.Query(ctx, query)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var wordPack WordPack
+		err := rows.Scan(
+		&wordPack.ID,
+		&wordPack.Name,
+		&wordPack.Slug,
+		&wordPack.Description,
+		&wordPack.IsActive,
+		&wordPack.CreatedAt,
+		&wordPack.UpdatedAt,
+		)
+		if err != nil {
+			return  nil, err
+		}
+		wordPacks = append(wordPacks, &wordPack)
+	}
+	if err := rows.Err(); err != nil {
+    return nil, err
+	}
+	return wordPacks, nil
+
+
+	
+
+}
 
 func (m WordPackModel) Update(wordPack *WordPack) error {
 	query := `

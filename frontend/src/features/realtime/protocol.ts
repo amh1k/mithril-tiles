@@ -24,6 +24,10 @@ export type RoomSocketEvent =
       type: "draw_stroke";
     }
   | {
+      text: string;
+      type: "game_ended";
+    }
+  | {
       type: "legacy_text";
       text: string;
     }
@@ -63,6 +67,13 @@ export function parseRoomSocketMessage(data: unknown): RoomSocketEvent {
     return {
       type: "protocol_error",
       reason: "Unsupported structured WebSocket event.",
+    };
+  }
+
+  if (data.trim() === "Game has ended") {
+    return {
+      text: data,
+      type: "game_ended",
     };
   }
 

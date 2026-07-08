@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const roundDuration = 5 * time.Second
+const roundDuration = 20 * time.Second
 const totalRounds = 2
 
 type GameState string

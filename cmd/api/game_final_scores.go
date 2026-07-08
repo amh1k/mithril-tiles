@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
@@ -36,4 +38,22 @@ func (app *application) createGameFinalScoreHandler(w http.ResponseWriter, r *ht
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application)getGameFinalScoresByGameId(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	gameFinalScore, err := app.models.GameFinalScores.GetAllForGame(ctx, id)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+
+	}
+	app.writeJSON(w, http.StatusOK, envelope {
+		"game-final-score": gameFinalScore,
+	}, nil)
+
 }

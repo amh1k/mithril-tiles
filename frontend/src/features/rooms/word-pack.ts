@@ -14,6 +14,10 @@ export const wordPackResponseSchema = z.object({
   word_pack: wordPackSchema,
 });
 
+export const wordPacksResponseSchema = z.object({
+  word_packs: z.array(wordPackSchema),
+});
+
 export const backendGetWordPackResponseSchema = z
   .union([
     wordPackResponseSchema,
@@ -26,5 +30,18 @@ export const backendGetWordPackResponseSchema = z
       "word_pack" in response ? response.word_pack : response["word-pack"],
   }));
 
+export const backendWordPacksResponseSchema = z
+  .union([
+    wordPacksResponseSchema,
+    z.object({
+      "word-packs": z.array(wordPackSchema),
+    }),
+  ])
+  .transform((response) => ({
+    word_packs:
+      "word_packs" in response ? response.word_packs : response["word-packs"],
+  }));
+
 export type WordPack = z.infer<typeof wordPackSchema>;
 export type WordPackResponse = z.infer<typeof wordPackResponseSchema>;
+export type WordPacksResponse = z.infer<typeof wordPacksResponseSchema>;
