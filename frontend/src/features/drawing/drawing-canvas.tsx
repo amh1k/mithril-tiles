@@ -152,7 +152,6 @@ export function DrawingCanvas({
     <div
       className={cn(
         "relative min-h-[22rem] flex-1 overflow-hidden rounded-xl border bg-white shadow-inner",
-        disabled && "bg-muted/30",
         className,
       )}
     >
@@ -162,7 +161,7 @@ export function DrawingCanvas({
         className={cn(
           "h-full min-h-[22rem] w-full touch-none",
           disabled
-            ? "cursor-not-allowed"
+            ? "cursor-default"
             : isErasing
               ? "cursor-cell"
               : "cursor-crosshair",
@@ -174,8 +173,8 @@ export function DrawingCanvas({
       />
 
       {disabled && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/60 text-center text-sm text-muted-foreground">
-          Drawing controls are disabled until it is your turn.
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full border bg-background/85 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+          Viewing only
         </div>
       )}
 

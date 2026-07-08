@@ -318,7 +318,7 @@ describe("RoomShell", () => {
     );
   });
 
-  it("keeps the game started when an accepted start response is invalid", async () => {
+  it("keeps the game idle when an accepted start response is invalid", async () => {
     const user = userEvent.setup();
     renderRoomShell({
       startGameResponse: {
@@ -337,10 +337,10 @@ describe("RoomShell", () => {
         "Game start was accepted, but the response could not be fully understood.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
 
-  it("treats already-started backend responses as started", async () => {
+  it("keeps the game idle when start game is rejected", async () => {
     const user = userEvent.setup();
     renderRoomShell({
       startGameResponse: {
@@ -355,9 +355,9 @@ describe("RoomShell", () => {
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(
-      await screen.findByText("Game start request accepted."),
+      await screen.findByText("game has already started"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start game" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
 });
 

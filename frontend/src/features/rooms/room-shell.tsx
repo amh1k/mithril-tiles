@@ -9,6 +9,7 @@ import {
   Play,
   Send,
   ShieldCheck,
+  Trophy,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -233,12 +234,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           ? errorBody.message
           : "The game could not be started.";
 
-      if (message.toLowerCase().includes("already started")) {
-        setStartGameError(null);
-        setStartGameStatus("started");
-        return;
-      }
-
       setStartGameError(message);
       setStartGameStatus("idle");
       return;
@@ -252,7 +247,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       setStartGameError(
         "Game start was accepted, but the response could not be fully understood.",
       );
-      setStartGameStatus("started");
+      setStartGameStatus("idle");
       return;
     }
 
@@ -359,11 +354,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             <StartGameStatus
               errorMessage={startGameError}
               status={startGameStatus}
-            />
-
-            <FinalScoresStatus
-              finalScores={finalScores}
-              status={finalScoresStatus}
             />
 
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
@@ -483,6 +473,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
       </section>
+
+      <FinalScoresOverlay
+        finalScores={finalScores}
+        status={finalScoresStatus}
+      />
     </main>
   );
 }
@@ -633,7 +628,7 @@ type FinalScoresStatusProps = {
   status: "idle" | "loading" | "ready" | "failed";
 };
 
-function FinalScoresStatus({
+function FinalScoresOverlay({
   finalScores,
   status,
 }: FinalScoresStatusProps) {
@@ -643,37 +638,121 @@ function FinalScoresStatus({
 
   if (status === "loading") {
     return (
-      <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-        Loading final scores…
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Trophy className="size-7 animate-pulse" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+            Game over
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Loading final scores…
+          </p>
+        </div>
       </div>
     );
   }
 
   if (status === "failed") {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-        Final scores could not be loaded yet.
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-300">
+            <Trophy className="size-7" aria-hidden="true" />
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight">
+            Game over
+          </h2>
+          <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+            Final scores could not be loaded yet.
+          </p>
+        </div>
       </div>
     );
   }
 
+  const sortedScores = [...finalScores].sort(
+    (left, right) => left.final_rank - right.final_rank,
+  );
+  const winner = sortedScores.find((score) => score.is_winner);
+
   return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
-      <p className="font-medium text-primary">Final scores</p>
-      <div className="mt-2 space-y-1.5">
-        {finalScores.map((score) => (
-          <div
-            className="flex items-center justify-between gap-3"
-            key={score.id}
-          >
-            <span className="text-muted-foreground">
-              Rank {score.final_rank}
-              {score.is_winner ? " · Winner" : ""}
-            </span>
-            <span className="font-semibold">{score.final_score}</span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm">
+      <div
+        aria-labelledby="final-scores-title"
+        aria-modal="true"
+        className="w-full max-w-2xl overflow-hidden rounded-3xl border bg-card shadow-2xl"
+        role="dialog"
+      >
+        <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
+          <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
+          <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+            <Trophy className="size-8" aria-hidden="true" />
           </div>
-        ))}
+          <h2
+            className="relative mt-4 text-3xl font-semibold tracking-tight"
+            id="final-scores-title"
+          >
+            Game over
+          </h2>
+          <p className="relative mt-2 text-sm text-muted-foreground">
+            {winner === undefined
+              ? "Final rankings are ready."
+              : `${finalScoreDisplayName(winner)} takes the crown.`}
+          </p>
+        </div>
+
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto p-4 sm:p-6">
+          {sortedScores.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No final scores were returned for this game.
+            </div>
+          ) : (
+            sortedScores.map((score) => (
+              <div
+                className="flex items-center gap-4 rounded-2xl border bg-background/70 p-4"
+                key={score.id}
+              >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                  #{score.final_rank}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate font-semibold">
+                      {finalScoreDisplayName(score)}
+                    </p>
+                    {score.is_winner && (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        Winner
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Participant {shortParticipantId(score.participant_id)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold tabular-nums">
+                    {score.final_score}
+                  </p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    points
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
+}
+
+function finalScoreDisplayName(score: GameFinalScore): string {
+  return `Player ${score.final_rank}`;
+}
+
+function shortParticipantId(participantId: string): string {
+  return participantId.slice(0, 8);
 }

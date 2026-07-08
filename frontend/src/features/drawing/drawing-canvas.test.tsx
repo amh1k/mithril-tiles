@@ -260,8 +260,6 @@ describe("DrawingCanvas", () => {
     ]);
 
     expect(canvasContext.lineTo).not.toHaveBeenCalled();
-    expect(
-      screen.getByText("Drawing controls are disabled until it is your turn."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Viewing only")).toBeInTheDocument();
   });
 });

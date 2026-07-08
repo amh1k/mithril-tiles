@@ -341,7 +341,8 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	switch {
 	case r.gameState == GameStateStarting:
 		err = ErrGameStartInProgress
-	case r.gameState != GameStateIdle:
+	case r.gameState != GameStateIdle && r.gameState != GameStateCompleted:
+		fmt.Println(r.gameState)
 		err = ErrGameAlreadyStarted
 	case len(r.players) < 2:
 		err = ErrNotEnoughPlayers
@@ -399,6 +400,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	if completion.err != nil {
 		r.mu.Lock()
 		r.gameState = GameStateStarted
+		fmt.Println(completion.err)
 		r.mu.Unlock()
 		completion.command.result <- GameStartResult{Err: completion.err}
 		return
