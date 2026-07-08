@@ -25,7 +25,7 @@ describe("createPlaceholderRoomSnapshot", () => {
           displayName: "Player One",
           id: "550e8400-e29b-41d4-a716-446655440000",
           isDrawer: false,
-          isHost: false,
+          isHost: true,
           principalType: "guest",
           score: 0,
         },

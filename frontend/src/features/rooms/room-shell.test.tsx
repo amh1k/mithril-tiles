@@ -96,7 +96,8 @@ describe("RoomShell", () => {
     useRoomStore.getState().resetRoom();
   });
 
-  it("renders room context and received chat messages", () => {
+  it("renders room context and received chat messages", async () => {
+    const user = userEvent.setup();
     renderRoomShell({
       messages: [
         {
@@ -111,6 +112,8 @@ describe("RoomShell", () => {
       status: "connected",
     });
 
+    await lockDefaultWordPack(user);
+
     expect(screen.getByText("Room ROOM01")).toBeInTheDocument();
     expect(screen.getAllByText("Connected")).not.toHaveLength(0);
     expect(
@@ -119,7 +122,8 @@ describe("RoomShell", () => {
     expect(screen.getByText("[Player Two]: hello")).toBeInTheDocument();
   });
 
-  it("keeps chat messages inside a scrollable panel", () => {
+  it("keeps chat messages inside a scrollable panel", async () => {
+    const user = userEvent.setup();
     renderRoomShell({
       messages: Array.from({ length: 40 }, (_, index) => ({
         id: index + 1,
@@ -127,6 +131,8 @@ describe("RoomShell", () => {
       })),
       status: "connected",
     });
+
+    await lockDefaultWordPack(user);
 
     expect(screen.getByTestId("chat-message-list")).toHaveClass(
       "overflow-y-auto",
@@ -137,6 +143,8 @@ describe("RoomShell", () => {
   it("lets players choose a drawing color", async () => {
     const user = userEvent.setup();
     renderRoomShell();
+
+    await lockDefaultWordPack(user);
 
     const black = screen.getByRole("radio", { name: "Black" });
     const red = screen.getByRole("radio", { name: "Red" });
@@ -153,6 +161,8 @@ describe("RoomShell", () => {
     const user = userEvent.setup();
     renderRoomShell();
 
+    await lockDefaultWordPack(user);
+
     const black = screen.getByRole("radio", { name: "Black" });
     const eraser = screen.getByRole("radio", { name: "Eraser" });
 
@@ -167,6 +177,8 @@ describe("RoomShell", () => {
     const sendChatMessage = vi.fn(() => true);
     renderRoomShell({ sendChatMessage, status: "connected" });
 
+    await lockDefaultWordPack(user);
+
     const input = screen.getByLabelText("Chat message");
     await user.type(input, "hello room");
     await user.click(screen.getByRole("button", { name: "Send message" }));
@@ -180,6 +192,8 @@ describe("RoomShell", () => {
     const sendChatMessage = vi.fn(() => false);
     renderRoomShell({ sendChatMessage, status: "connected" });
 
+    await lockDefaultWordPack(user);
+
     const input = screen.getByLabelText("Chat message");
     await user.type(input, "still pending");
     await user.click(screen.getByRole("button", { name: "Send message" }));
@@ -188,8 +202,11 @@ describe("RoomShell", () => {
     expect(input).toHaveValue("still pending");
   });
 
-  it("disables chat while the socket is disconnected", () => {
+  it("disables chat while the socket is disconnected", async () => {
+    const user = userEvent.setup();
     renderRoomShell({ status: "connecting" });
+
+    await lockDefaultWordPack(user);
 
     expect(screen.getByLabelText("Chat message")).toBeDisabled();
     expect(
@@ -197,11 +214,14 @@ describe("RoomShell", () => {
     ).toBeDisabled();
   });
 
-  it("shows socket failure messages", () => {
+  it("shows socket failure messages", async () => {
+    const user = userEvent.setup();
     renderRoomShell({
       errorMessage: "The realtime ticket request was rejected.",
       status: "failed",
     });
+
+    await lockDefaultWordPack(user);
 
     expect(screen.getAllByText("Failed")).not.toHaveLength(0);
     expect(
@@ -217,9 +237,49 @@ describe("RoomShell", () => {
       method: "GET",
       signal: expect.any(AbortSignal),
     });
-    expect(await screen.findByLabelText("Word pack")).toHaveValue(
-      "550e8400-e29b-41d4-a716-446655440001",
+    expect(await screen.findByText("Pick the theme for this room")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Fantasy Pack/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
+  });
+
+  it("does not let non-host players select the word pack", async () => {
+    useRoomStore.getState().setSnapshot({
+      canStartGame: false,
+      drawerName: null,
+      gameId: null,
+      modeLabel: "Free draw",
+      phase: "lobby",
+      players: [
+        {
+          displayName: "Player One",
+          id: principal.id,
+          isDrawer: false,
+          isHost: false,
+          principalType: "guest",
+          score: 0,
+        },
+        {
+          displayName: "Player Two",
+          id: "550e8400-e29b-41d4-a716-446655440002",
+          isDrawer: false,
+          isHost: true,
+          principalType: "guest",
+          score: 0,
+        },
+      ],
+      roundLabel: "Lobby",
+    });
+
+    renderRoomShell();
+
+    expect(
+      await screen.findByText("The host is choosing a word pack"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Lock word pack" }),
+    ).not.toBeInTheDocument();
   });
 
   it("starts the game with the selected word pack", async () => {
@@ -231,7 +291,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByLabelText("Word pack");
+    await lockDefaultWordPack(user);
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(fetchMock).toHaveBeenLastCalledWith("/api/rooms/ROOM01/start", {
@@ -261,11 +321,9 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByLabelText("Word pack");
-    await user.selectOptions(
-      screen.getByLabelText("Word pack"),
-      "550e8400-e29b-41d4-a716-446655440002",
-    );
+    await screen.findByText("Pick the theme for this room");
+    await user.click(screen.getByRole("button", { name: /Animals Pack/ }));
+    await user.click(screen.getByRole("button", { name: "Lock word pack" }));
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(fetchMock).toHaveBeenLastCalledWith("/api/rooms/ROOM01/start", {
@@ -298,7 +356,7 @@ describe("RoomShell", () => {
       undefined,
     );
 
-    await screen.findByLabelText("Word pack");
+    await lockDefaultWordPack(user);
     await user.click(screen.getByRole("button", { name: "Start game" }));
     await screen.findByText("Game start request accepted.");
 
@@ -333,7 +391,7 @@ describe("RoomShell", () => {
       undefined,
     );
 
-    await screen.findByLabelText("Word pack");
+    await lockDefaultWordPack(user);
     await user.click(screen.getByRole("button", { name: "Start game" }));
     await screen.findByText("Game start request accepted.");
 
@@ -357,7 +415,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByLabelText("Word pack");
+    await lockDefaultWordPack(user);
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(
@@ -379,7 +437,7 @@ describe("RoomShell", () => {
       },
     });
 
-    await screen.findByLabelText("Word pack");
+    await lockDefaultWordPack(user);
     await user.click(screen.getByRole("button", { name: "Start game" }));
 
     expect(
@@ -388,6 +446,11 @@ describe("RoomShell", () => {
     expect(screen.getByRole("button", { name: "Start game" })).toBeEnabled();
   });
 });
+
+async function lockDefaultWordPack(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByText("Pick the theme for this room");
+  await user.click(screen.getByRole("button", { name: "Lock word pack" }));
+}
 
 function mockWordPacksResponse() {
   fetchMock.mockResolvedValueOnce({

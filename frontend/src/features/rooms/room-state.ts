@@ -36,7 +36,7 @@ export function createPlaceholderRoomSnapshot(
         displayName: principal.display_name,
         id: principal.id,
         isDrawer: false,
-        isHost: false,
+        isHost: true,
         principalType: principal.type,
         score: 0,
       },

@@ -87,6 +87,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
   const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
+  const [selectedWordPackId, setSelectedWordPackId] = useState("");
   const [wordPackStatus, setWordPackStatus] = useState<
     "idle" | "preparing" | "ready" | "failed"
   >("idle");
@@ -103,14 +104,16 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     () => createPlaceholderRoomSnapshot(principal),
     [principal],
   );
-  const roomSnapshot =
-    useRoomStore((state) => state.snapshot) ?? placeholderRoomSnapshot;
+  const storedRoomSnapshot = useRoomStore((state) => state.snapshot);
+  const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const socketStatusLabel = formatSocketStatus(socket.status);
 
   useEffect(() => {
-    setRoomSnapshot(placeholderRoomSnapshot);
-  }, [placeholderRoomSnapshot, setRoomSnapshot]);
+    if (storedRoomSnapshot === null) {
+      setRoomSnapshot(placeholderRoomSnapshot);
+    }
+  }, [placeholderRoomSnapshot, setRoomSnapshot, storedRoomSnapshot]);
 
   useEffect(() => {
     if (socket.gameEndedAt == null || roomSnapshot.gameId == null) {
@@ -183,7 +186,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       );
 
       setWordPacks(activeWordPacks);
-      setWordPack(activeWordPacks[0] ?? null);
+      setSelectedWordPackId(activeWordPacks[0]?.id ?? "");
       setWordPackStatus("ready");
     }
 
@@ -200,6 +203,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     if (socket.sendChatMessage(chatMessage)) {
       setChatMessage("");
     }
+  }
+
+  function handleConfirmWordPack() {
+    const selectedWordPack =
+      wordPacks.find((pack) => pack.id === selectedWordPackId) ?? null;
+
+    setWordPack(selectedWordPack);
   }
 
   async function handleStartGame() {
@@ -264,10 +274,28 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     startGameStatus === "idle";
   const isCurrentPlayerDrawer =
     roomSnapshot.drawerName === principal.display_name;
+  const isCurrentPlayerHost = roomSnapshot.players.some(
+    (player) => player.id === principal.id && player.isHost,
+  );
   const shouldSendDrawStrokes =
     isCurrentPlayerDrawer &&
     startGameStatus === "started" &&
     socket.status === "connected";
+
+  if (wordPack === null) {
+    return (
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
+        <WordPackSelectionPanel
+          selectedWordPackId={selectedWordPackId}
+          status={wordPackStatus}
+          wordPacks={wordPacks}
+          isHost={isCurrentPlayerHost}
+          onConfirm={handleConfirmWordPack}
+          onSelect={setSelectedWordPackId}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
@@ -353,17 +381,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </Button>
 
             <WordPackStatus wordPack={wordPack} status={wordPackStatus} />
-
-            <WordPackSelector
-              selectedWordPackId={wordPack?.id ?? ""}
-              status={wordPackStatus}
-              wordPacks={wordPacks}
-              onChange={(wordPackId) => {
-                setWordPack(
-                  wordPacks.find((pack) => pack.id === wordPackId) ?? null,
-                );
-              }}
-            />
 
             <StartGameStatus
               errorMessage={startGameError}
@@ -590,7 +607,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
       <div className="rounded-lg border bg-primary/5 p-3 text-xs">
-        <p className="font-medium text-primary">Word pack selected</p>
+        <p className="font-medium text-primary">Word pack locked</p>
         <p className="mt-1 text-muted-foreground">{wordPack.name}</p>
       </div>
     );
@@ -607,51 +624,126 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
 
   return (
     <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-      Loading word packs…
+      Choose a word pack to unlock game start.
     </div>
   );
 }
 
-type WordPackSelectorProps = {
-  onChange: (wordPackId: string) => void;
+type WordPackSelectionPanelProps = {
+  isHost: boolean;
+  onConfirm: () => void;
+  onSelect: (wordPackId: string) => void;
   selectedWordPackId: string;
   status: "idle" | "preparing" | "ready" | "failed";
   wordPacks: WordPack[];
 };
 
-function WordPackSelector({
-  onChange,
+function WordPackSelectionPanel({
+  isHost,
+  onConfirm,
+  onSelect,
   selectedWordPackId,
   status,
   wordPacks,
-}: WordPackSelectorProps) {
-  if (status !== "ready") {
-    return null;
+}: WordPackSelectionPanelProps) {
+  if (status === "preparing" || status === "idle") {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            Loading word packs…
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+            Preparing the lobby
+          </h2>
+        </div>
+      </section>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
+        Word packs could not be loaded. Re-enter the room to retry.
+      </section>
+    );
   }
 
   if (wordPacks.length === 0) {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
         No active word packs are available.
-      </div>
+      </section>
+    );
+  }
+
+  if (!isHost) {
+    return (
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+        <div className="max-w-md">
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">
+            Waiting for host
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            The host is choosing a word pack
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You will enter the room once the host locks the pack for this game.
+          </p>
+        </div>
+      </section>
     );
   }
 
   return (
-    <label className="block space-y-2 text-xs">
-      <span className="font-medium text-muted-foreground">Word pack</span>
-      <select
-        className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-        onChange={(event) => onChange(event.target.value)}
-        value={selectedWordPackId}
-      >
-        {wordPacks.map((pack) => (
-          <option key={pack.id} value={pack.id}>
-            {pack.name}
-          </option>
-        ))}
-      </select>
-    </label>
+    <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-4 shadow-sm sm:p-6">
+      <div className="flex max-h-full w-full max-w-2xl flex-col">
+        <div className="text-center">
+          <p className="text-sm font-medium uppercase tracking-wide text-primary">
+            Choose the word pack
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            Pick the theme for this room
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Once selected, this pack is locked for the game.
+          </p>
+        </div>
+
+        <div className="mt-6 grid min-h-0 gap-3 overflow-y-auto pr-1">
+          {wordPacks.map((pack) => (
+            <button
+              className="rounded-2xl border bg-background/70 p-4 text-left transition hover:border-primary/50 hover:bg-primary/5 aria-pressed:border-primary aria-pressed:bg-primary/10"
+              key={pack.id}
+              onClick={() => onSelect(pack.id)}
+              type="button"
+              aria-pressed={selectedWordPackId === pack.id}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="font-semibold">{pack.name}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {pack.description || pack.slug}
+                  </p>
+                </div>
+                <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
+                  {pack.slug}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        <Button
+          className="mt-6 w-full"
+          disabled={selectedWordPackId === ""}
+          onClick={onConfirm}
+          type="button"
+        >
+          Lock word pack
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -685,10 +777,7 @@ type FinalScoresStatusProps = {
   status: "idle" | "loading" | "ready" | "failed";
 };
 
-function FinalScoresOverlay({
-  finalScores,
-  status,
-}: FinalScoresStatusProps) {
+function FinalScoresOverlay({ finalScores, status }: FinalScoresStatusProps) {
   if (status === "idle") {
     return null;
   }
