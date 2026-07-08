@@ -32,17 +32,17 @@ export function SiteHeader() {
   });
 
   return (
-    <header className="relative z-50 border-b border-white/10 bg-[#202123]/95 text-white backdrop-blur">
+    <header className="relative z-50 border-b border-[#9a783f] bg-[#302116]/95 text-[#f2dfb4] shadow-md shadow-[#3e2a1e]/25 backdrop-blur">
       <nav
         className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6"
         aria-label="Main navigation"
       >
         <Link
-          className="flex items-center gap-2 font-semibold tracking-[0.18em] text-white uppercase"
+          className="font-heading flex items-center gap-2 font-semibold tracking-[0.18em] text-[#f2dfb4] uppercase"
           href="/"
         >
-          <span className="flex size-9 items-center justify-center rounded-lg border border-red-500/30 bg-red-600/15 shadow-sm shadow-red-950/20">
-            <Sparkles className="size-4 text-red-400" aria-hidden="true" />
+          <span className="flex size-9 items-center justify-center rounded-lg border border-[#b8965a]/60 bg-[#b8965a]/15 shadow-inner">
+            <Sparkles className="size-4 text-[#d4b66f]" aria-hidden="true" />
           </span>
           Mithril Tiles
         </Link>
@@ -55,7 +55,7 @@ export function SiteHeader() {
             />
           ) : sessionQuery.isError ? (
             <Button
-              className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+              className="border-[#b8965a]/60 bg-transparent text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white"
               variant="outline"
               onClick={() => sessionQuery.refetch()}
               type="button"
@@ -67,7 +67,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
-                  "h-10 px-3 text-slate-200 hover:bg-white/10 hover:text-white",
+                  "h-10 px-3 text-[#dcc99f] hover:bg-[#b8965a]/15 hover:text-white",
                 )}
                 href="/play"
               >
@@ -76,7 +76,7 @@ export function SiteHeader() {
                 </span>
               </Link>
               <Button
-                className="h-10 border-white/25 bg-transparent px-3 text-white hover:bg-white/10 hover:text-white"
+                className="h-10 border-[#b8965a]/60 bg-transparent px-3 text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white"
                 variant="outline"
                 disabled={logoutMutation.isPending}
                 onClick={() => logoutMutation.mutate()}
@@ -93,7 +93,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
-                  "h-10 px-3 text-slate-200 hover:bg-white/10 hover:text-white",
+                  "h-10 px-3 text-[#dcc99f] hover:bg-[#b8965a]/15 hover:text-white",
                 )}
                 href="/login"
               >
@@ -103,7 +103,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "outline" }),
-                  "h-10 border-white/25 bg-transparent px-3 text-white hover:bg-white/10 hover:text-white",
+                  "h-10 border-[#b8965a]/60 bg-transparent px-3 text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white",
                 )}
                 href="/register"
               >
