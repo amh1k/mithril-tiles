@@ -15,6 +15,7 @@ export type RoomPlayer = {
 export type RoomSnapshot = {
   canStartGame: boolean;
   drawerName: string | null;
+  gameId?: string | null;
   modeLabel: string;
   phase: RoomPhase;
   players: RoomPlayer[];
@@ -27,6 +28,7 @@ export function createPlaceholderRoomSnapshot(
   return {
     canStartGame: false,
     drawerName: null,
+    gameId: null,
     modeLabel: "Free draw",
     phase: "lobby",
     players: [
@@ -53,6 +55,7 @@ export function startGameResponseToRoomSnapshot(
   return {
     canStartGame: false,
     drawerName: drawer?.display_name_snapshot ?? null,
+    gameId: response.game.id,
     modeLabel: "Drawing",
     phase: "active_round",
     players: response.game_participants.map((participant) => ({

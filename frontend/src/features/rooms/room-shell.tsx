@@ -26,6 +26,10 @@ import { Input } from "@/components/ui/input";
 import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
+import {
+  fetchFinalScores,
+  type GameFinalScore,
+} from "@/features/rooms/final-scores";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
 import {
@@ -88,6 +92,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [startGameStatus, setStartGameStatus] = useState<
     "idle" | "starting" | "started"
   >("idle");
+  const [finalScores, setFinalScores] = useState<GameFinalScore[]>([]);
+  const [finalScoresStatus, setFinalScoresStatus] = useState<
+    "idle" | "loading" | "ready" | "failed"
+  >("idle");
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -101,6 +109,42 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   useEffect(() => {
     setRoomSnapshot(placeholderRoomSnapshot);
   }, [placeholderRoomSnapshot, setRoomSnapshot]);
+
+  useEffect(() => {
+    if (socket.gameEndedAt == null || roomSnapshot.gameId == null) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    async function loadFinalScores() {
+      setFinalScoresStatus("loading");
+
+      try {
+        const response = await fetchFinalScores(
+          roomSnapshot.gameId!,
+          abortController.signal,
+        );
+
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setFinalScores(response.game_final_scores);
+        setFinalScoresStatus("ready");
+      } catch {
+        if (!abortController.signal.aborted) {
+          setFinalScoresStatus("failed");
+        }
+      }
+    }
+
+    void loadFinalScores();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [roomSnapshot.gameId, socket.gameEndedAt]);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -315,6 +359,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             <StartGameStatus
               errorMessage={startGameError}
               status={startGameStatus}
+            />
+
+            <FinalScoresStatus
+              finalScores={finalScores}
+              status={finalScoresStatus}
             />
 
             <div className="rounded-lg border border-dashed p-3 text-xs leading-relaxed text-muted-foreground">
@@ -577,4 +626,54 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
   }
 
   return null;
+}
+
+type FinalScoresStatusProps = {
+  finalScores: GameFinalScore[];
+  status: "idle" | "loading" | "ready" | "failed";
+};
+
+function FinalScoresStatus({
+  finalScores,
+  status,
+}: FinalScoresStatusProps) {
+  if (status === "idle") {
+    return null;
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+        Loading final scores…
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        Final scores could not be loaded yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs">
+      <p className="font-medium text-primary">Final scores</p>
+      <div className="mt-2 space-y-1.5">
+        {finalScores.map((score) => (
+          <div
+            className="flex items-center justify-between gap-3"
+            key={score.id}
+          >
+            <span className="text-muted-foreground">
+              Rank {score.final_rank}
+              {score.is_winner ? " · Winner" : ""}
+            </span>
+            <span className="font-semibold">{score.final_score}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }

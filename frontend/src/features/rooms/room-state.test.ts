@@ -17,6 +17,7 @@ describe("createPlaceholderRoomSnapshot", () => {
     expect(createPlaceholderRoomSnapshot(principal)).toEqual({
       canStartGame: false,
       drawerName: null,
+      gameId: null,
       modeLabel: "Free draw",
       phase: "lobby",
       players: [
@@ -86,6 +87,7 @@ describe("startGameResponseToRoomSnapshot", () => {
     ).toEqual({
       canStartGame: false,
       drawerName: "Player Two",
+      gameId: "550e8400-e29b-41d4-a716-446655440010",
       modeLabel: "Drawing",
       phase: "active_round",
       players: [
