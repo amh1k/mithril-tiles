@@ -24,6 +24,41 @@ const (
 
 type RoundState string
 
+type RoomSnapshot struct {
+	Version    int                `json:"version"`
+	RoomCode   string             `json:"room_code"`
+	GameState  GameState          `json:"game_state"`
+	RoundState RoundState         `json:"round_state"`
+	HostID     uuid.UUID          `json:"host_id"`
+	Players    []RoomPlayer       `json:"players"`
+	Game       *RoomGameSnapshot  `json:"game"`
+	Canvas     RoomCanvasSnapshot `json:"canvas"`
+	ServerTime time.Time          `json:"server_time"`
+}
+
+type RoomPlayer struct {
+	ID          uuid.UUID `json:"id"`
+	Type        string    `json:"type"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+	Score       int       `json:"score"`
+	IsConnected bool      `json:"is_connected"`
+}
+
+type RoomGameSnapshot struct {
+	ID             uuid.UUID `json:"id"`
+	WordPackID     uuid.UUID `json:"word_pack_id"`
+	RoundNumber    int       `json:"round_number"`
+	TotalRounds    int       `json:"total_rounds"`
+	DrawerID       uuid.UUID `json:"drawer_id"`
+	RoundStartedAt time.Time `json:"round_started_at"`
+	RoundEndsAt    time.Time `json:"round_ends_at"`
+}
+
+type RoomCanvasSnapshot struct {
+	Revision int `json:"revision"`
+}
+
 const (
 	RoundStateIdle    RoundState = "idle"
 	RoundStateStarted RoundState = "started"
@@ -32,6 +67,10 @@ const (
 type joinRequest struct {
 	player *Player
 	result chan error
+}
+
+type snapshotRequest struct {
+	player *Player
 }
 
 const (
@@ -64,6 +103,7 @@ type Room struct {
 	startGame      chan gameStartCommand
 	gameStartDone  chan gameStartCompletion
 	directMessage  chan DirectMessage
+	snapshot       chan snapshotRequest
 	correctGuesses int
 	HostPlayer     *Player
 	currentWord    string
@@ -71,6 +111,7 @@ type Room struct {
 	currentDrawer  *Player
 	currentRoundNo int
 	gameID         uuid.UUID
+	wordPackID     uuid.UUID
 	gameState      GameState
 	RoundState     RoundState
 	roundInfo      chan string
@@ -146,6 +187,7 @@ func newRoom(
 		startGame:      make(chan gameStartCommand),
 		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
+		snapshot:       make(chan snapshotRequest),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
@@ -182,6 +224,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		startGame:      make(chan gameStartCommand),
 		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
+		snapshot:       make(chan snapshotRequest),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
@@ -220,6 +263,9 @@ func (r *Room) Run() {
 
 		case dm := <-r.directMessage:
 			r.handleDirectMessage(dm)
+
+		case request := <-r.snapshot:
+			r.handleSnapshotRequest(request)
 
 		case stroke := <-r.drawStroke:
 			r.handleDrawStroke(stroke)

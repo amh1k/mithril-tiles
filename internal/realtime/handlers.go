@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/google/uuid"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
@@ -138,6 +139,80 @@ func (r *Room) handleDirectMessage(dm DirectMessage) {
 	}
 }
 
+func (r *Room) handleSnapshotRequest(request snapshotRequest) {
+	r.mu.Lock()
+	recipients := make([]*Player, 0, len(r.players))
+	if request.player != nil {
+		recipients = append(recipients, request.player)
+	} else {
+		for player := range r.players {
+			recipients = append(recipients, player)
+		}
+	}
+	snapshot := RoomSnapshot{
+		Version:    1,
+		RoomCode:   r.roomCode,
+		GameState:  r.gameState,
+		RoundState: r.RoundState,
+		Players:    make([]RoomPlayer, 0, len(r.players)),
+		Canvas:     RoomCanvasSnapshot{},
+		ServerTime: time.Now().UTC(),
+	}
+	if r.HostPlayer != nil {
+		snapshot.HostID = r.HostPlayer.Principal.ID()
+	}
+	for player := range r.players {
+		snapshot.Players = append(snapshot.Players, RoomPlayer{
+			ID:          player.Principal.ID(),
+			Type:        string(player.Principal.Type),
+			DisplayName: player.Principal.DisplayName(),
+			IsConnected: true,
+		})
+	}
+	if r.gameID != uuid.Nil {
+		snapshot.Game = &RoomGameSnapshot{
+			ID:             r.gameID,
+			WordPackID:     r.wordPackID,
+			RoundNumber:    r.currentRoundNo,
+			TotalRounds:    totalRounds,
+			RoundStartedAt: r.startTime,
+			RoundEndsAt:    r.startTime.Add(roundDuration),
+		}
+		if r.currentDrawer != nil {
+			snapshot.Game.DrawerID = r.currentDrawer.Principal.ID()
+		}
+	}
+	r.mu.Unlock()
+
+	r.scoresMu.Lock()
+	scores := make(map[uuid.UUID]int, len(r.scores))
+	for player, score := range r.scores {
+		scores[player.Principal.ID()] = score
+	}
+	r.scoresMu.Unlock()
+	for i := range snapshot.Players {
+		snapshot.Players[i].Score = scores[snapshot.Players[i].ID]
+	}
+
+	payload := struct {
+		Type string       `json:"type"`
+		Data RoomSnapshot `json:"data"`
+	}{
+		Type: "room_snapshot",
+		Data: snapshot,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	for _, player := range recipients {
+		r.handleDirectMessage(DirectMessage{
+			toClient: player,
+			message:  string(data),
+		})
+	}
+}
+
 func (r *Room) findPlayerByUsername(username string) (*Player, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -253,9 +328,11 @@ func (r *Room) endRound() {
 	}
 	r.mu.Lock()
 	r.currentWord = ""
+	r.RoundState = RoundStateIdle
 	r.mu.Unlock()
 	// close(r.done)
 	r.broadcast <- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
+	r.handleSnapshotRequest(snapshotRequest{})
 	timer := time.NewTimer(2 * time.Second)
 	if r.currentRoundNo == totalRounds {
 		select {
@@ -267,7 +344,6 @@ func (r *Room) endRound() {
 		}
 
 	}
-	r.RoundState = RoundStateIdle // cooldown after a round ends
 	select {
 	case <-timer.C:
 		r.startRound()
@@ -324,6 +400,7 @@ func (r *Room) startRound() {
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
+	r.handleSnapshotRequest(snapshotRequest{})
 
 	time.AfterFunc(roundDuration, func() {
 		select {
@@ -363,6 +440,7 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	host := r.HostPlayer
 	drawer := players[rand.Intn(len(players))]
 	r.mu.Unlock()
+	r.handleSnapshotRequest(snapshotRequest{})
 
 	participants := make([]data.Principal, 0, len(players))
 	for _, player := range players {
@@ -418,6 +496,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.mu.Lock()
 	r.gameState = GameStateStarted
 	r.gameID = result.Game.ID
+	r.wordPackID = result.Game.WordPackID
 	r.currentRoundNo = result.Round.RoundNumber
 	r.currentDrawer = completion.drawer
 	r.currentWord = result.Word
@@ -426,6 +505,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.mu.Unlock()
 
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
+	r.handleSnapshotRequest(snapshotRequest{})
 
 	time.AfterFunc(roundDuration, func() {
 		select {
@@ -489,6 +569,7 @@ func (r *Room) handleEndGame() {
 			return
 		}
 		r.setGameState(GameStateEndFailed)
+		r.handleSnapshotRequest(snapshotRequest{})
 		slog.Error(
 			"game completion failed",
 			"room_code", r.roomCode,
@@ -503,6 +584,7 @@ func (r *Room) handleEndGame() {
 	}
 
 	r.setGameState(GameStateCompleted)
+	r.handleSnapshotRequest(snapshotRequest{})
 	select {
 	case r.broadcast <- "Game has ended":
 	case <-r.done:

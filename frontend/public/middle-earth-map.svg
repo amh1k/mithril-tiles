@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-label="Aged fantasy map background">
+  <defs>
+    <radialGradient id="vellum" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#f3dfab"/>
+      <stop offset="58%" stop-color="#d4b171"/>
+      <stop offset="100%" stop-color="#8b5d32"/>
+    </radialGradient>
+    <filter id="inkBleed" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" seed="9"/>
+      <feDisplacementMap in="SourceGraphic" scale="2"/>
+    </filter>
+    <pattern id="grain" width="120" height="120" patternUnits="userSpaceOnUse">
+      <rect width="120" height="120" fill="transparent"/>
+      <path d="M0 14h120M0 43h120M0 79h120M0 109h120" stroke="#4c331f" stroke-opacity="0.05" stroke-width="1"/>
+      <path d="M17 0v120M51 0v120M94 0v120" stroke="#fff4cf" stroke-opacity="0.06" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#vellum)"/>
+  <rect width="1600" height="900" fill="url(#grain)" opacity="0.9"/>
+
+  <g fill="none" stroke="#3e2a1e" stroke-linecap="round" stroke-linejoin="round" filter="url(#inkBleed)">
+    <path d="M111 135c81-51 174-64 252-38 73 24 119 14 184-21 75-40 156-25 218 27 62 53 117 48 194 18 93-36 182-22 247 44 46 47 91 64 158 50 47-10 91 9 121 47" stroke-opacity="0.34" stroke-width="4"/>
+    <path d="M118 725c68 36 138 44 210 23 86-25 140 10 199 52 64 45 148 41 215-7 67-49 129-44 195-3 84 52 178 54 257 5 72-45 135-38 215 16" stroke-opacity="0.3" stroke-width="4"/>
+
+    <path d="M223 272c82 52 136 120 160 205 18 65 60 96 126 101 70 5 115 38 133 98" stroke-opacity="0.32" stroke-width="6"/>
+    <path d="M1018 196c-54 75-61 151-20 230 27 52 20 102-21 151-42 50-51 101-25 153" stroke-opacity="0.28" stroke-width="6"/>
+    <path d="M1178 304c76 10 132 51 169 122 35 67 83 91 153 74" stroke-opacity="0.25" stroke-width="5"/>
+
+    <path d="M502 196c72-18 133-7 184 33 45 36 97 44 155 23 55-20 109-13 161 22" stroke-opacity="0.26" stroke-width="3"/>
+    <path d="M464 704c55-34 110-42 166-23 52 17 100 9 146-24 43-31 91-36 144-15" stroke-opacity="0.24" stroke-width="3"/>
+  </g>
+
+  <g fill="#3e2a1e" fill-opacity="0.42" stroke="#3e2a1e" stroke-opacity="0.48" stroke-linejoin="round">
+    <path d="M340 563l28-62 31 62zM389 563l35-78 39 78zM448 563l28-58 32 58z"/>
+    <path d="M686 271l34-72 36 72zM743 271l45-96 49 96zM818 271l34-72 41 72z"/>
+    <path d="M1084 657l25-55 31 55zM1135 657l38-83 43 83zM1203 657l29-61 34 61z"/>
+    <path d="M1232 374l20-43 25 43zM1272 374l31-68 35 68zM1328 374l24-49 29 49z"/>
+  </g>
+
+  <g fill="none" stroke="#2d4a2b" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.35" filter="url(#inkBleed)">
+    <path d="M626 106c-24 82-13 149 33 201 34 38 44 79 31 124-16 55 3 101 57 137" stroke-width="7"/>
+    <path d="M1311 158c-77 54-112 116-104 185 6 52-15 92-62 119" stroke-width="6"/>
+    <path d="M212 474c69-30 131-21 187 28" stroke-width="5"/>
+  </g>
+
+  <g fill="#3e2a1e" fill-opacity="0.42">
+    <circle cx="274" cy="206" r="8"/>
+    <circle cx="563" cy="604" r="7"/>
+    <circle cx="885" cy="366" r="8"/>
+    <circle cx="1167" cy="229" r="7"/>
+    <circle cx="1359" cy="601" r="8"/>
+  </g>
+
+  <g transform="translate(132 642)" fill="none" stroke="#3e2a1e" stroke-opacity="0.45" stroke-width="4">
+    <circle cx="0" cy="0" r="48"/>
+    <path d="M0-80v160M-80 0h160M-27-27l54 54M27-27l-54 54"/>
+    <path d="M0-48l12 36 36 12-36 12-12 36-12-36-36-12 36-12z" fill="#3e2a1e" fill-opacity="0.18"/>
+  </g>
+
+  <g fill="#3e2a1e" fill-opacity="0.22">
+    <path d="M74 79h228v2H74zM74 109h174v2H74zM74 139h201v2H74z"/>
+    <path d="M1278 745h230v2h-230zM1330 775h178v2h-178zM1299 805h209v2h-209z"/>
+  </g>
+
+  <rect width="1600" height="900" fill="none" stroke="#3e2a1e" stroke-opacity="0.28" stroke-width="22"/>
+  <rect x="32" y="32" width="1536" height="836" fill="none" stroke="#8a6538" stroke-opacity="0.4" stroke-width="3"/>
+  <rect width="1600" height="900" fill="#2a1c13" opacity="0.18"/>
+</svg>

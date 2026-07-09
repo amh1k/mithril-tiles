@@ -76,6 +76,13 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	case <-room.done:
 		return
 	}
+	select {
+	case room.snapshot <- snapshotRequest{player: player}:
+	case <-connectionCtx.Done():
+		return
+	case <-room.done:
+		return
+	}
 	defer func() {
 		player.unregister(room)
 	}()

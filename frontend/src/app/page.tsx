@@ -40,7 +40,17 @@ export default function Home() {
       />
 
       <main className="relative z-10 flex-1">
-        <section className="mx-auto grid min-h-[calc(100vh-8rem)] w-full max-w-7xl gap-14 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-24">
+        <section className="relative isolate min-h-[calc(100vh-8rem)] overflow-hidden">
+          <div
+            className="absolute inset-0 -z-20 bg-[url('/middle-earth-map.svg')] bg-cover bg-center opacity-45 saturate-[0.85]"
+            aria-hidden="true"
+          />
+          <div
+            className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_74%_34%,rgba(255,240,196,0.34),transparent_30%),linear-gradient(90deg,rgba(232,213,170,0.96)_0%,rgba(232,213,170,0.82)_42%,rgba(232,213,170,0.54)_100%),radial-gradient(circle_at_center,transparent_40%,rgba(62,42,30,0.42)_125%)]"
+            aria-hidden="true"
+          />
+
+          <div className="mx-auto grid w-full max-w-7xl gap-14 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.95fr_1.05fr] lg:items-center lg:py-24">
           <div className="max-w-2xl text-center lg:text-left">
             <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-[#9a783f]/60 bg-[#f3e4bd]/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#5c472f] shadow-sm backdrop-blur">
               <span className="relative flex size-2.5">
@@ -168,6 +178,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </section>
 
