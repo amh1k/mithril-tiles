@@ -28,6 +28,13 @@ type GameParticipant struct {
 	LeftAt              *time.Time `json:"left_at"`
 }
 
+type ParticipantPrincipal struct {
+	Type        PrincipalType `json:"type"`
+	ID          uuid.UUID     `json:"id"`
+	DisplayName string        `json:"display_name"`
+	AvatarURL   *string       `json:"avatar_url,omitempty"`
+}
+
 func (m *GameParticipantModel) InsertPrincipalWithTx(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -139,4 +146,39 @@ func (m *GameParticipantModel) GetIDForPrincipal(
 	}
 
 	return participantID, nil
+}
+
+func (m *GameParticipantModel) GetPrincipal(
+	ctx context.Context,
+	gameID uuid.UUID,
+	participantID uuid.UUID,
+) (*ParticipantPrincipal, error) {
+	query := `
+	SELECT
+		gp.participant_type,
+		COALESCE(gp.user_id, gp.guest_session_id),
+		gp.display_name_snapshot,
+		u.avatar_url
+	FROM game_participants AS gp
+	LEFT JOIN users AS u
+		ON u.id = gp.user_id
+	WHERE gp.game_id = $1
+		AND gp.id = $2
+		AND gp.participant_type IN ('user', 'guest')`
+
+	var principal ParticipantPrincipal
+	err := m.DB.QueryRow(ctx, query, gameID, participantID).Scan(
+		&principal.Type,
+		&principal.ID,
+		&principal.DisplayName,
+		&principal.AvatarURL,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &principal, nil
 }

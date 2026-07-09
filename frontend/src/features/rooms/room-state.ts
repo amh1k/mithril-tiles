@@ -20,7 +20,10 @@ export type RoomSnapshot = {
   modeLabel: string;
   phase: RoomPhase;
   players: RoomPlayer[];
+  roundEndsAt: string | null;
   roundLabel: string;
+  roundStartedAt: string | null;
+  serverTime: string | null;
 };
 
 export function createPlaceholderRoomSnapshot(
@@ -42,7 +45,10 @@ export function createPlaceholderRoomSnapshot(
         score: 0,
       },
     ],
+    roundEndsAt: null,
     roundLabel: "Lobby",
+    roundStartedAt: null,
+    serverTime: null,
   };
 }
 
@@ -68,7 +74,13 @@ export function startGameResponseToRoomSnapshot(
         participant.participant_type === "user" ? "user" : "guest",
       score: 0,
     })),
+    roundEndsAt: addSecondsToIsoDate(
+      response.round.started_at,
+      response.round.duration_seconds,
+    ),
     roundLabel: `Round ${response.round.round_number}`,
+    roundStartedAt: response.round.started_at,
+    serverTime: null,
   };
 }
 
@@ -104,11 +116,18 @@ export function realtimeSnapshotToRoomSnapshot(
       principalType: player.type,
       score: player.score,
     })),
+    roundEndsAt: snapshot.game?.round_ends_at ?? null,
     roundLabel:
       snapshot.game === null
         ? "Lobby"
         : `Round ${snapshot.game.round_number} of ${snapshot.game.total_rounds}`,
+    roundStartedAt: snapshot.game?.round_started_at ?? null,
+    serverTime: snapshot.server_time,
   };
+}
+
+function addSecondsToIsoDate(date: string, seconds: number): string {
+  return new Date(Date.parse(date) + seconds * 1000).toISOString();
 }
 
 function roomPhaseFromRealtimeSnapshot(

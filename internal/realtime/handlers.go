@@ -338,7 +338,24 @@ func (r *Room) CanStart() bool {
 }
 
 func (r *Room) endRound() {
+	r.mu.Lock()
+	drawer := r.currentDrawer
+	r.mu.Unlock()
+
 	r.scoresMu.Lock()
+	if drawer != nil {
+		if _, eligible := r.scores[drawer]; eligible {
+			drawerBonus := r.correctGuesses * 2
+			r.scores[drawer] += drawerBonus
+
+			key := newPrincipalScoreKey(drawer.Principal)
+			finalScore := r.globalScores[key]
+			finalScore.Principal = drawer.Principal
+			finalScore.Points += drawerBonus
+			r.globalScores[key] = finalScore
+		}
+	}
+
 	scores := make([]PlayerRoundScore, 0, len(r.scores))
 	for player, points := range r.scores {
 		scores = append(scores, PlayerRoundScore{
@@ -576,12 +593,40 @@ func (r *Room) handleCorrectGuess(player *Player) {
 	case  player.Outgoing <- "Correct Guess! Congrats":
 	default:
 	}
-	
-	r.scores[player]++
+	diff := time.Since(r.startTime)
 	key := newPrincipalScoreKey(player.Principal)
 	finalScore := r.globalScores[key]
 	finalScore.Principal = player.Principal
-	finalScore.Points++
+	if diff < 10 * time.Second  {
+		r.scores[player] += 5
+		finalScore.Points += 5
+		
+		
+
+
+	} else if diff < 30 * time.Second {
+		r.scores[player] += 3
+		finalScore.Points += 3
+		
+		
+
+	} else if diff  <  50* time.Second {
+		r.scores[player] += 2
+		finalScore.Points += 2
+		
+		
+		
+
+	}else  {
+		r.scores[player] += 1
+		finalScore.Points += 1
+		
+		
+	}
+	
+	
+	
+	
 	r.globalScores[key] = finalScore
 	r.correctGuesses++
 }

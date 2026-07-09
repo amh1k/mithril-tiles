@@ -15,6 +15,7 @@ import {
   Play,
   Send,
   ShieldCheck,
+  Sparkles,
   Trophy,
   Users,
   Wifi,
@@ -23,7 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -39,7 +40,8 @@ import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
 import {
   fetchFinalScores,
-  type GameFinalScore,
+  fetchParticipantPrincipal,
+  type ResolvedGameFinalScore,
 } from "@/features/rooms/final-scores";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
@@ -48,6 +50,7 @@ import {
   realtimeSnapshotToRoomSnapshot,
   startGameResponseToRoomSnapshot,
   type RoomPlayer,
+  type RoomSnapshot,
 } from "@/features/rooms/room-state";
 import {
   wordPacksResponseSchema,
@@ -107,11 +110,18 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [startGameStatus, setStartGameStatus] = useState<
     "idle" | "starting" | "started"
   >("idle");
-  const [finalScores, setFinalScores] = useState<GameFinalScore[]>([]);
+  const [finalScores, setFinalScores] = useState<ResolvedGameFinalScore[]>([]);
   const [finalScoresDismissed, setFinalScoresDismissed] = useState(false);
   const [finalScoresStatus, setFinalScoresStatus] = useState<
     "idle" | "loading" | "ready" | "failed"
   >("idle");
+  const [roundTransition, setRoundTransition] = useState<{
+    key: string;
+    title: string;
+    description: string;
+    tone: "start" | "break";
+  } | null>(null);
+  const previousRoundTransitionKeyRef = useRef<string | null>(null);
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -121,6 +131,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const socketStatusLabel = formatSocketStatus(socket.status);
+  const roundTimerLabel = useRoundTimerLabel(roomSnapshot);
+  const canvasResetKey =
+    roomSnapshot.phase === "active_round"
+      ? `${roomSnapshot.gameId ?? "game"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`
+      : "lobby";
   const rankedPlayers = useMemo(
     () =>
       [...roomSnapshot.players].sort(
@@ -144,6 +159,64 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       realtimeSnapshotToRoomSnapshot(socket.roomSnapshot, principal.id),
     );
   }, [principal.id, setRoomSnapshot, socket.roomSnapshot]);
+
+  useEffect(() => {
+    const transitionKey = `${roomSnapshot.phase}:${roomSnapshot.gameId ?? "none"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`;
+
+    if (previousRoundTransitionKeyRef.current === null) {
+      previousRoundTransitionKeyRef.current = transitionKey;
+      return;
+    }
+
+    if (previousRoundTransitionKeyRef.current === transitionKey) {
+      return;
+    }
+
+    previousRoundTransitionKeyRef.current = transitionKey;
+
+    if (roomSnapshot.phase === "active_round") {
+      setRoundTransition({
+        key: transitionKey,
+        title: roomSnapshot.roundLabel,
+        description:
+          roomSnapshot.drawerName === null
+            ? "A new round has begun."
+            : `${roomSnapshot.drawerName} takes the quill.`,
+        tone: "start",
+      });
+    } else if (roomSnapshot.phase === "round_cooldown") {
+      setRoundTransition({
+        key: transitionKey,
+        title: "Round complete",
+        description: "Gather your guesses. The next parchment is being prepared.",
+        tone: "break",
+      });
+    } else {
+      setRoundTransition(null);
+    }
+  }, [
+    roomSnapshot.drawerName,
+    roomSnapshot.gameId,
+    roomSnapshot.phase,
+    roomSnapshot.roundLabel,
+    roomSnapshot.roundStartedAt,
+  ]);
+
+  useEffect(() => {
+    if (roundTransition === null || roundTransition.tone !== "start") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRoundTransition((currentTransition) =>
+        currentTransition?.key === roundTransition.key ? null : currentTransition,
+      );
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [roundTransition]);
 
   useEffect(() => {
     const activeWordPackId = socket.roomSnapshot?.game?.word_pack_id;
@@ -182,7 +255,32 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           return;
         }
 
-        setFinalScores(response.game_final_scores);
+        const resolvedScores = await Promise.all(
+          response.game_final_scores.map(async (score) => {
+            try {
+              const scorePrincipal = await fetchParticipantPrincipal(
+                score.game_id,
+                score.participant_id,
+                abortController.signal,
+              );
+              return {
+                ...score,
+                principal: scorePrincipal,
+              };
+            } catch {
+              return {
+                ...score,
+                principal: null,
+              };
+            }
+          }),
+        );
+
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setFinalScores(resolvedScores);
         setFinalScoresStatus("ready");
       } catch {
         if (!abortController.signal.aborted) {
@@ -426,6 +524,24 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         status={socket.status}
       />
 
+      {roundTimerLabel !== null && (
+        <section
+          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-6 py-4 text-center shadow-xl shadow-[#2b1e12]/20"
+          aria-label="Round timer"
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#bba88d]">
+              Time remaining
+            </p>
+            <p className="mt-1 font-serif text-4xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
+              {roundTimerLabel}
+            </p>
+          </div>
+        </section>
+      )}
+
+      <RoundTransitionOverlay transition={roundTransition} />
+
       <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
@@ -438,7 +554,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     : "Everyone currently in this room."}
                 </CardDescription>
               </div>
-              <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <span className="rounded-full border border-[#bba88d]/55 bg-[#6e6c34]/70 px-2 py-1 text-xs font-semibold text-[#f4ead7] shadow-sm">
                 {socketStatusLabel}
               </span>
             </div>
@@ -584,6 +700,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 shouldSendDrawStrokes ? socket.sendDrawStroke : undefined
               }
               remoteStrokes={socket.drawStrokes}
+              resetKey={canvasResetKey}
             />
           </CardContent>
         </Card>
@@ -660,6 +777,124 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   );
 }
 
+function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const serverClockOffsetMs = useMemo(() => {
+    if (roomSnapshot.serverTime === null) {
+      return 0;
+    }
+
+    const serverTimeMs = Date.parse(roomSnapshot.serverTime);
+
+    if (Number.isNaN(serverTimeMs)) {
+      return 0;
+    }
+
+    return serverTimeMs - Date.now();
+  }, [roomSnapshot.serverTime]);
+
+  useEffect(() => {
+    if (
+      roomSnapshot.phase !== "active_round" ||
+      roomSnapshot.roundEndsAt === null
+    ) {
+      return;
+    }
+
+    setNowMs(Date.now());
+
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [roomSnapshot.phase, roomSnapshot.roundEndsAt]);
+
+  if (
+    roomSnapshot.phase !== "active_round" ||
+    roomSnapshot.roundEndsAt === null
+  ) {
+    return null;
+  }
+
+  const roundEndsAtMs = Date.parse(roomSnapshot.roundEndsAt);
+
+  if (Number.isNaN(roundEndsAtMs)) {
+    return null;
+  }
+
+  const remainingSeconds = Math.max(
+    0,
+    Math.ceil((roundEndsAtMs - (nowMs + serverClockOffsetMs)) / 1000),
+  );
+
+  return formatRemainingTime(remainingSeconds);
+}
+
+function formatRemainingTime(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+type RoundTransitionOverlayProps = {
+  transition: {
+    description: string;
+    title: string;
+    tone: "start" | "break";
+  } | null;
+};
+
+function RoundTransitionOverlay({ transition }: RoundTransitionOverlayProps) {
+  if (transition === null) {
+    return null;
+  }
+
+  const isRoundStart = transition.tone === "start";
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[#2b1e12]/35 px-4 backdrop-blur-[2px] animate-in fade-in duration-300"
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={`relative w-full max-w-lg overflow-hidden rounded-3xl border px-8 py-7 text-center shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 ${
+          isRoundStart
+            ? "border-[#bba88d]/70 bg-[#2b1e12]/95 text-[#f4ead7]"
+            : "border-[#946440]/75 bg-[#bba88d]/95 text-[#2b1e12]"
+        }`}
+      >
+        <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-50" />
+        <div className="absolute -left-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
+        <div className="absolute -right-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
+
+        <div
+          className={`relative mx-auto flex size-14 items-center justify-center rounded-full border ${
+            isRoundStart
+              ? "border-[#bba88d]/70 bg-[#5d542b]/60 text-[#f4ead7]"
+              : "border-[#946440]/70 bg-[#2b1e12]/10 text-[#5d542b]"
+          }`}
+        >
+          <Sparkles className="size-7 animate-pulse" aria-hidden="true" />
+        </div>
+        <p className="relative mt-5 text-xs font-bold uppercase tracking-[0.34em] opacity-80">
+          {isRoundStart ? "New parchment" : "Interlude"}
+        </p>
+        <h2 className="relative mt-2 font-serif text-3xl font-bold sm:text-4xl">
+          {transition.title}
+        </h2>
+        <p className="relative mt-3 text-sm font-medium opacity-85">
+          {transition.description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function formatSocketStatus(status: string): string {
   switch (status) {
     case "requesting_ticket":
@@ -693,7 +928,7 @@ function ConnectionNotice({
   if (status === "connected") {
     return (
       <div
-        className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+        className="flex items-center gap-2 rounded-xl border border-[#bba88d]/55 bg-[#5d542b]/85 px-4 py-2 text-sm font-medium text-[#f4ead7] shadow-sm"
         role="status"
       >
         <Wifi className="size-4" aria-hidden="true" />
@@ -1011,7 +1246,7 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 
   if (status === "started") {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+      <div className="rounded-lg border border-[#bba88d]/55 bg-[#5d542b]/85 p-3 text-xs font-medium text-[#f4ead7] shadow-sm">
         Game start request accepted.
       </div>
     );
@@ -1021,7 +1256,7 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 }
 
 type FinalScoresStatusProps = {
-  finalScores: GameFinalScore[];
+  finalScores: ResolvedGameFinalScore[];
   onClose: () => void;
   status: "idle" | "loading" | "ready" | "failed";
 };
@@ -1180,7 +1415,7 @@ function FinalScoresOverlay({
   );
 }
 
-function ScorePodiumCard({ score }: { score: GameFinalScore }) {
+function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
   return (
     <div
       className={`rounded-2xl border p-4 text-center ${
@@ -1208,7 +1443,7 @@ function ScorePodiumCard({ score }: { score: GameFinalScore }) {
   );
 }
 
-function ScoreRow({ score }: { score: GameFinalScore }) {
+function ScoreRow({ score }: { score: ResolvedGameFinalScore }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-background/70 p-3">
       <span className="w-8 text-center text-sm font-bold text-muted-foreground">
@@ -1219,7 +1454,7 @@ function ScoreRow({ score }: { score: GameFinalScore }) {
           {finalScoreDisplayName(score)}
         </p>
         <p className="text-xs text-muted-foreground">
-          Participant {shortParticipantId(score.participant_id)}
+          {score.principal?.type === "user" ? "Registered player" : "Guest"}
         </p>
       </div>
       <p className="font-bold tabular-nums">{score.final_score} pts</p>
@@ -1227,8 +1462,11 @@ function ScoreRow({ score }: { score: GameFinalScore }) {
   );
 }
 
-function finalScoreDisplayName(score: GameFinalScore): string {
-  return `Player ${score.final_rank}`;
+function finalScoreDisplayName(score: ResolvedGameFinalScore): string {
+  return (
+    score.principal?.display_name ??
+    `Participant ${shortParticipantId(score.participant_id)}`
+  );
 }
 
 function shortParticipantId(participantId: string): string {

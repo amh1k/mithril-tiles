@@ -32,22 +32,22 @@ export function SiteHeader() {
   });
 
   return (
-    <header className="relative z-50 border-b border-[#9a783f] bg-[#302116]/95 text-[#f2dfb4] shadow-md shadow-[#3e2a1e]/25 backdrop-blur">
+    <header className="relative z-50 border-b border-[#946440]/55 bg-[#2b1e12]/98 text-[#bba88d] shadow-[0_8px_30px_rgba(43,30,18,0.32)] backdrop-blur-xl">
       <nav
-        className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6"
+        className="mx-auto flex h-[4.5rem] w-full max-w-7xl items-center justify-between px-4 sm:px-6"
         aria-label="Main navigation"
       >
         <Link
-          className="font-heading flex items-center gap-2 font-semibold tracking-[0.18em] text-[#f2dfb4] uppercase"
+          className="font-heading group flex items-center gap-3 font-semibold tracking-[0.16em] text-[#bba88d] uppercase transition-colors hover:text-white"
           href="/"
         >
-          <span className="flex size-9 items-center justify-center rounded-lg border border-[#b8965a]/60 bg-[#b8965a]/15 shadow-inner">
-            <Sparkles className="size-4 text-[#d4b66f]" aria-hidden="true" />
+          <span className="relative flex size-10 items-center justify-center rounded-full border border-[#bba88d]/60 bg-[#946440]/35 shadow-[inset_0_0_0_3px_rgba(43,30,18,0.35),0_3px_12px_rgba(0,0,0,0.24)] transition-transform group-hover:rotate-6 group-hover:scale-105">
+            <Sparkles className="size-4 text-[#bba88d]" aria-hidden="true" />
           </span>
-          Mithril Tiles
+          <span className="hidden sm:inline">Mithril Tiles</span>
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-xl border border-[#bba88d]/15 bg-[#2b1e12]/30 p-1 shadow-inner">
           {sessionQuery.isPending ? (
             <span
               className="h-9 w-28 animate-pulse rounded-lg bg-white/10"
@@ -55,7 +55,7 @@ export function SiteHeader() {
             />
           ) : sessionQuery.isError ? (
             <Button
-              className="border-[#b8965a]/60 bg-transparent text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white"
+              className="border-[#946440] bg-[#2b1e12]/45 text-[#bba88d] hover:bg-[#946440] hover:text-[#2b1e12]"
               variant="outline"
               onClick={() => sessionQuery.refetch()}
               type="button"
@@ -67,7 +67,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
-                  "h-10 px-3 text-[#dcc99f] hover:bg-[#b8965a]/15 hover:text-white",
+                  "h-10 px-3 text-[#bba88d] hover:bg-[#946440]/35 hover:text-white",
                 )}
                 href="/play"
               >
@@ -76,7 +76,7 @@ export function SiteHeader() {
                 </span>
               </Link>
               <Button
-                className="h-10 border-[#b8965a]/60 bg-transparent px-3 text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white"
+                className="h-10 border-[#946440] bg-[#2b1e12]/35 px-3 text-[#bba88d] hover:bg-[#946440] hover:text-[#2b1e12]"
                 variant="outline"
                 disabled={logoutMutation.isPending}
                 onClick={() => logoutMutation.mutate()}
@@ -93,7 +93,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "ghost" }),
-                  "h-10 px-3 text-[#dcc99f] hover:bg-[#b8965a]/15 hover:text-white",
+                  "h-10 px-3 text-[#bba88d] hover:bg-[#946440]/35 hover:text-white",
                 )}
                 href="/login"
               >
@@ -103,7 +103,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   buttonVariants({ variant: "outline" }),
-                  "h-10 border-[#b8965a]/60 bg-transparent px-3 text-[#f2dfb4] hover:bg-[#b8965a]/15 hover:text-white",
+                  "h-10 border-[#bba88d]/70 bg-[#bba88d] px-4 font-semibold text-[#2b1e12] shadow-md hover:bg-[#946440] hover:text-[#2b1e12]",
                 )}
                 href="/register"
               >

@@ -321,6 +321,10 @@ func handleCommand(player *Player, room *Room, command string) {
 		}
 		targetWord := room.currentWord
 		room.mu.Unlock()
+		if room.currentDrawer == player {
+			player.Outgoing <- "You are the drawer! You cant guess!"
+			return
+		}
 		guessedWord := parts[1]
 		if targetWord != guessedWord {
 			select {
