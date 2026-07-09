@@ -438,7 +438,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     : "Everyone currently in this room."}
                 </CardDescription>
               </div>
-              <span className="rounded-full border bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <span className="rounded-full border border-[#bba88d]/55 bg-[#6e6c34]/70 px-2 py-1 text-xs font-semibold text-[#f4ead7] shadow-sm">
                 {socketStatusLabel}
               </span>
             </div>
@@ -693,7 +693,7 @@ function ConnectionNotice({
   if (status === "connected") {
     return (
       <div
-        className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-300"
+        className="flex items-center gap-2 rounded-xl border border-[#bba88d]/55 bg-[#5d542b]/85 px-4 py-2 text-sm font-medium text-[#f4ead7] shadow-sm"
         role="status"
       >
         <Wifi className="size-4" aria-hidden="true" />
@@ -1011,7 +1011,7 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 
   if (status === "started") {
     return (
-      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+      <div className="rounded-lg border border-[#bba88d]/55 bg-[#5d542b]/85 p-3 text-xs font-medium text-[#f4ead7] shadow-sm">
         Game start request accepted.
       </div>
     );

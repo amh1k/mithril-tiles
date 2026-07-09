@@ -5,6 +5,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,31 @@ export default function Home() {
         aria-hidden="true"
       />
       <div
+        className="pointer-events-none absolute inset-0 z-[1] overflow-hidden"
+        aria-hidden="true"
+      >
+        {[
+          ["12%", "5px", "18s", "-4s"],
+          ["28%", "4px", "15s", "-9s"],
+          ["46%", "7px", "22s", "-13s"],
+          ["67%", "4px", "17s", "-6s"],
+          ["84%", "6px", "20s", "-15s"],
+          ["94%", "4px", "14s", "-2s"],
+        ].map(([left, size, duration, delay]) => (
+          <span
+            key={left}
+            className="dust-mote absolute bottom-[-10%] rounded-full bg-[#bba88d]/70 blur-[0.5px]"
+            style={{
+              left,
+              width: size,
+              height: size,
+              "--dust-duration": duration,
+              "--dust-delay": delay,
+            } as CSSProperties}
+          />
+        ))}
+      </div>
+      <div
         className="pointer-events-none absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-[#946440]/20 blur-3xl motion-safe:animate-[hero-pulse_7s_ease-in-out_infinite]"
         aria-hidden="true"
       />
@@ -52,26 +78,38 @@ export default function Home() {
         <section className="relative isolate min-h-[calc(100vh-8rem)] overflow-hidden">
           <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-5xl items-center justify-center px-4 py-16 sm:px-6 sm:py-20">
           <div className="max-w-3xl px-6 py-10 text-center sm:px-10 sm:py-12">
-            <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-[#bba88d]/60 bg-[#2b1e12]/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#bba88d] shadow-lg backdrop-blur-md">
+            <div
+              className="hero-reveal mb-8 inline-flex items-center gap-3 rounded-full border border-[#bba88d]/60 bg-[#2b1e12]/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#bba88d] shadow-lg backdrop-blur-md"
+              style={{ "--reveal-delay": "80ms" } as CSSProperties}
+            >
               <span className="relative flex size-2.5">
                 <span className="absolute inline-flex size-full rounded-full bg-[#946440] opacity-60 motion-safe:animate-ping" />
                 <span className="relative inline-flex size-2.5 rounded-full bg-[#946440]" />
               </span>
               Multiplayer sketch rooms
             </div>
-            <h1 className="font-heading text-4xl font-semibold leading-[1.18] tracking-tight text-balance text-[#f4ead7] drop-shadow-[0_3px_8px_rgba(0,0,0,0.95)] sm:text-5xl lg:text-6xl">
+            <h1
+              className="hero-reveal hero-title-breathe font-heading text-4xl font-semibold leading-[1.18] tracking-tight text-balance text-[#f4ead7] sm:text-5xl lg:text-6xl"
+              style={{ "--reveal-delay": "180ms" } as CSSProperties}
+            >
               Draw the word. Outsmart the room.
             </h1>
-            <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-[#e4d4bc] drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]">
+            <p
+              className="hero-reveal mx-auto mt-7 max-w-2xl text-lg leading-8 text-[#e4d4bc] drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]"
+              style={{ "--reveal-delay": "280ms" } as CSSProperties}
+            >
               Mithril Tiles is a real-time drawing and guessing game built for
               quick rooms, lively rounds, and friendly competition.
             </p>
 
-            <div className="mt-9 flex flex-col justify-center gap-4 sm:flex-row">
+            <div
+              className="hero-reveal mt-9 flex flex-col justify-center gap-4 sm:flex-row"
+              style={{ "--reveal-delay": "380ms" } as CSSProperties}
+            >
               <Link
                 className={cn(
                   buttonVariants({ size: "lg" }),
-                  "h-12 min-w-44 rounded-lg border border-[#5d542b] bg-[#5d542b] px-7 text-base font-semibold text-[#bba88d] shadow-lg shadow-[#2b1e12]/25 transition-transform hover:-translate-y-0.5 hover:bg-[#6e6c34]",
+                  "cta-shimmer h-12 min-w-44 rounded-lg border border-[#5d542b] bg-[#5d542b] px-7 text-base font-semibold text-[#bba88d] shadow-lg shadow-[#2b1e12]/25 transition-transform hover:-translate-y-0.5 hover:bg-[#6e6c34]",
                 )}
                 href="/guest"
               >
@@ -113,12 +151,21 @@ export default function Home() {
               </h2>
             </div>
             <div className="grid gap-4 md:grid-cols-3">
-              {steps.map(({ icon: Icon, title, description }) => (
+              {steps.map(({ icon: Icon, title, description }, index) => (
                 <article
                   key={title}
-                  className="rounded-2xl border border-[#bba88d]/30 bg-[#2b1e12]/72 p-5 text-[#bba88d] shadow-[0_18px_50px_rgba(43,30,18,0.42)] backdrop-blur-[3px]"
+                  className="feature-card-reveal feature-card-ambient group rounded-2xl border border-[#bba88d]/30 bg-[#2b1e12]/72 p-5 text-[#bba88d] shadow-[0_18px_50px_rgba(43,30,18,0.42)] backdrop-blur-[3px] transition duration-300 hover:-translate-y-2 hover:border-[#946440] hover:shadow-[0_24px_60px_rgba(43,30,18,0.58)]"
+                  style={{
+                    "--reveal-delay": `${120 + index * 120}ms`,
+                    "--ambient-delay": `${index * 420}ms`,
+                  } as CSSProperties}
                 >
-                  <span className="flex size-10 items-center justify-center rounded-lg border border-[#bba88d]/20 bg-[#946440]/25 text-[#bba88d]">
+                  <span
+                    className="feature-icon-float flex size-10 items-center justify-center rounded-lg border border-[#bba88d]/20 bg-[#946440]/25 text-[#bba88d] transition-transform duration-300 group-hover:scale-110"
+                    style={{
+                      "--ambient-delay": `${index * 420}ms`,
+                    } as CSSProperties}
+                  >
                     <Icon className="size-5" aria-hidden="true" />
                   </span>
                   <h3 className="mt-5 font-semibold text-[#f4ead7]">{title}</h3>
