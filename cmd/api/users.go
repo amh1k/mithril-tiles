@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/julienschmidt/httprouter"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
@@ -249,6 +251,48 @@ func (app *application) uploadAvatarHandler(w http.ResponseWriter, r *http.Reque
 	err = app.writeJSON(w, http.StatusOK, envelope{
 		"avatar_url": avatarURL,
 	}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) getPrincipalByGameAndParticipant(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	params := httprouter.ParamsFromContext(r.Context())
+	gameID, err := uuid.Parse(params.ByName("gameID"))
+	if err != nil {
+		app.badRequestResponse(w, r, errors.New("invalid game ID"))
+		return
+	}
+	participantID, err := uuid.Parse(params.ByName("participantID"))
+	if err != nil {
+		app.badRequestResponse(w, r, errors.New("invalid participant ID"))
+		return
+	}
+
+	principal, err := app.models.GameParticipants.GetPrincipal(
+		r.Context(),
+		gameID,
+		participantID,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(
+		w,
+		http.StatusOK,
+		envelope{"principal": principal},
+		nil,
+	)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
