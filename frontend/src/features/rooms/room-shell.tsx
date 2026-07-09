@@ -531,6 +531,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       : "Watch the drawing and submit your guess in chat."
                     : "Test the canvas while everyone gets ready."}
                 </CardDescription>
+                {socket.drawerWord !== null && (
+                  <p className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
+                    Your word: {socket.drawerWord.word}
+                  </p>
+                )}
               </div>
 
               {(roomSnapshot.phase !== "active_round" ||

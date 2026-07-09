@@ -38,6 +38,7 @@ const principal: Principal = {
 
 function renderRoomShell({
   drawStrokes = [],
+  drawerWord = null,
   errorMessage,
   finalScoresResponse,
   gameEndedAt = null,
@@ -59,6 +60,10 @@ function renderRoomShell({
       to_y: number;
     };
   }>;
+  drawerWord?: {
+    word: string;
+    round_number: number;
+  } | null;
   errorMessage?: string;
   finalScoresResponse?: unknown;
   gameEndedAt?: number | null;
@@ -79,6 +84,7 @@ function renderRoomShell({
 
   useRoomSocketMock.mockReturnValue({
     drawStrokes,
+    drawerWord,
     errorMessage,
     gameEndedAt,
     messages,
@@ -537,6 +543,10 @@ describe("RoomShell", () => {
     const user = userEvent.setup();
     const sendDrawStroke = vi.fn();
     renderRoomShell({
+      drawerWord: {
+        word: "Gandalf",
+        round_number: 1,
+      },
       sendDrawStroke,
       startGameResponse: {
         json: async () =>
@@ -567,6 +577,7 @@ describe("RoomShell", () => {
       undefined,
     );
     expect(screen.getByText("Your turn to draw")).toBeInTheDocument();
+    expect(screen.getByText("Your word: Gandalf")).toBeInTheDocument();
     expect(
       screen.getByRole("radiogroup", { name: "Drawing tool" }),
     ).toBeInTheDocument();

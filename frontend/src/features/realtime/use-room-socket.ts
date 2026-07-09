@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseRoomSocketMessage,
   type DrawStroke,
+  type DrawerWord,
   type RealtimeRoomSnapshot,
 } from "@/features/realtime/protocol";
 import type { RoomCode } from "@/features/rooms/room-code";
@@ -22,6 +23,7 @@ export type RoomSocketStatus =
 
 type RoomSocketState = {
   drawStrokes: RoomDrawStroke[];
+  drawerWord: DrawerWord | null;
   errorMessage?: string;
   gameEndedAt: number | null;
   messages: RoomChatMessage[];
@@ -97,6 +99,7 @@ export function useRoomSocket({
   }, []);
   const [state, setState] = useState<RoomSocketState>({
     drawStrokes: [],
+    drawerWord: null,
     gameEndedAt: null,
     messages: [],
     retryAttempt: 0,
@@ -225,7 +228,21 @@ export function useRoomSocket({
         if (parsedMessage.type === "room_snapshot") {
           setState((currentState) => ({
             ...currentState,
+            drawerWord:
+              parsedMessage.snapshot.round_state === "started" &&
+              currentState.drawerWord?.round_number ===
+                parsedMessage.snapshot.game?.round_number
+                ? currentState.drawerWord
+                : null,
             roomSnapshot: parsedMessage.snapshot,
+          }));
+          return;
+        }
+
+        if (parsedMessage.type === "drawer_word") {
+          setState((currentState) => ({
+            ...currentState,
+            drawerWord: parsedMessage.drawerWord,
           }));
         }
       });

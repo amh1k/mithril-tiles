@@ -198,6 +198,35 @@ describe("useRoomSocket drawing support", () => {
     });
   });
 
+  it("stores the private drawer word", async () => {
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("message", {
+        data: JSON.stringify({
+          type: "drawer_word",
+          data: {
+            word: "Gandalf",
+            round_number: 1,
+          },
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.drawerWord).toEqual({
+        word: "Gandalf",
+        round_number: 1,
+      });
+    });
+  });
+
   it("marks the game ended while preserving the announcement message", async () => {
     const { result } = renderHook(() =>
       useRoomSocket({ roomCode: "ROOM01" as RoomCode }),

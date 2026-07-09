@@ -79,7 +79,17 @@ func (r *Room) handleLeave(player *Player) {
 		r.mu.Unlock()
 		return
 	}
+	
 	delete(r.players, player)
+	if len(r.players) == 0 {
+		r.HostPlayer = nil
+	}else if r.HostPlayer == player {
+    players := make([]*Player, 0, len(r.players))
+    for remainingPlayer := range r.players {
+        players = append(players, remainingPlayer)
+    }
+    r.HostPlayer = players[rand.Intn(len(players))]
+	}
 	playerCount := len(r.players)
 	r.mu.Unlock()
 
@@ -91,6 +101,7 @@ func (r *Room) handleLeave(player *Player) {
 	player.cancelConnection()
 	announcement := fmt.Sprintf("*** %s left the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
+	r.handleSnapshotRequest()
 }
 
 func (r *Room) sendHistory(player *Player, count int) {
