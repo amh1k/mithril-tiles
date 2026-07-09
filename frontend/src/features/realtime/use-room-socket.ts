@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseRoomSocketMessage,
   type DrawStroke,
+  type DrawerWord,
+  type RealtimeRoomSnapshot,
 } from "@/features/realtime/protocol";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { websocketTicketResponseSchema } from "@/features/rooms/tickets";
@@ -21,10 +23,12 @@ export type RoomSocketStatus =
 
 type RoomSocketState = {
   drawStrokes: RoomDrawStroke[];
+  drawerWord: DrawerWord | null;
   errorMessage?: string;
   gameEndedAt: number | null;
   messages: RoomChatMessage[];
   retryAttempt: number;
+  roomSnapshot: RealtimeRoomSnapshot | null;
   status: RoomSocketStatus;
 };
 
@@ -95,18 +99,34 @@ export function useRoomSocket({
   }, []);
   const [state, setState] = useState<RoomSocketState>({
     drawStrokes: [],
+    drawerWord: null,
     gameEndedAt: null,
     messages: [],
     retryAttempt: 0,
+    roomSnapshot: null,
     status: "idle",
   });
 
   useEffect(() => {
     const abortController = new AbortController();
     let closedByEffect = false;
+    let activeConnectionId = 0;
+    let consecutiveFailures = 0;
+    let connectionInProgress = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function connect(retryAttempt: number) {
+      if (
+        closedByEffect ||
+        connectionInProgress ||
+        socketRef.current !== null
+      ) {
+        return;
+      }
+
+      connectionInProgress = true;
+      const connectionId = ++activeConnectionId;
+
       setState((currentState) => ({
         ...currentState,
         retryAttempt,
@@ -121,12 +141,13 @@ export function useRoomSocket({
           abortController.signal,
         );
       } catch (error) {
+        connectionInProgress = false;
+
         if (abortController.signal.aborted) {
           return;
         }
 
         scheduleReconnect(
-          retryAttempt,
           error instanceof Error
             ? error.message
             : "The realtime ticket request failed.",
@@ -135,6 +156,7 @@ export function useRoomSocket({
       }
 
       if (abortController.signal.aborted) {
+        connectionInProgress = false;
         return;
       }
 
@@ -146,21 +168,24 @@ export function useRoomSocket({
 
       const socket = new WebSocket(createRoomSocketUrl(roomCode, ticket));
       socketRef.current = socket;
+      connectionInProgress = false;
 
       socket.addEventListener("open", () => {
-        if (closedByEffect) {
+        if (closedByEffect || connectionId !== activeConnectionId) {
           return;
         }
 
+        consecutiveFailures = 0;
         setState((currentState) => ({
           ...currentState,
-          retryAttempt,
+          errorMessage: undefined,
+          retryAttempt: 0,
           status: "connected",
         }));
       });
 
       socket.addEventListener("message", (event: MessageEvent<unknown>) => {
-        if (closedByEffect) {
+        if (closedByEffect || connectionId !== activeConnectionId) {
           return;
         }
 
@@ -197,22 +222,46 @@ export function useRoomSocket({
               stroke: parsedMessage.stroke,
             }),
           }));
+          return;
+        }
+
+        if (parsedMessage.type === "room_snapshot") {
+          setState((currentState) => ({
+            ...currentState,
+            drawerWord:
+              parsedMessage.snapshot.round_state === "started" &&
+              currentState.drawerWord?.round_number ===
+                parsedMessage.snapshot.game?.round_number
+                ? currentState.drawerWord
+                : null,
+            roomSnapshot: parsedMessage.snapshot,
+          }));
+          return;
+        }
+
+        if (parsedMessage.type === "drawer_word") {
+          setState((currentState) => ({
+            ...currentState,
+            drawerWord: parsedMessage.drawerWord,
+          }));
         }
       });
 
       socket.addEventListener("close", () => {
-        if (closedByEffect) {
+        if (closedByEffect || connectionId !== activeConnectionId) {
           return;
         }
 
-        scheduleReconnect(
-          retryAttempt,
-          "The realtime connection closed unexpectedly.",
-        );
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+        }
+
+        activeConnectionId++;
+        scheduleReconnect("The realtime connection closed unexpectedly.");
       });
 
       socket.addEventListener("error", () => {
-        if (closedByEffect) {
+        if (closedByEffect || connectionId !== activeConnectionId) {
           return;
         }
 
@@ -220,36 +269,81 @@ export function useRoomSocket({
       });
     }
 
-    function scheduleReconnect(retryAttempt: number, errorMessage: string) {
-      if (retryAttempt >= maxRetries) {
+    function scheduleReconnect(errorMessage: string) {
+      if (retryTimer !== undefined || closedByEffect) {
+        return;
+      }
+
+      if (!navigator.onLine) {
+        setState((currentState) => ({
+          ...currentState,
+          errorMessage:
+            "You are offline. Reconnection will resume when online.",
+          status: "reconnecting",
+        }));
+        return;
+      }
+
+      if (consecutiveFailures >= maxRetries) {
         setState((currentState) => ({
           ...currentState,
           errorMessage,
-          retryAttempt,
+          retryAttempt: consecutiveFailures,
           status: "failed",
         }));
         return;
       }
 
-      const nextRetryAttempt = retryAttempt + 1;
+      consecutiveFailures++;
 
       setState((currentState) => ({
         ...currentState,
         errorMessage,
-        retryAttempt: nextRetryAttempt,
+        retryAttempt: consecutiveFailures,
         status: "reconnecting",
       }));
 
       retryTimer = setTimeout(() => {
-        void connect(nextRetryAttempt);
-      }, reconnectDelayMs(nextRetryAttempt));
+        retryTimer = undefined;
+        void connect(consecutiveFailures);
+      }, reconnectDelayMs(consecutiveFailures));
     }
 
+    function handleOffline() {
+      if (retryTimer !== undefined) {
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+
+      setState((currentState) => ({
+        ...currentState,
+        errorMessage: "You are offline. Reconnection will resume when online.",
+        status: "reconnecting",
+      }));
+    }
+
+    function handleOnline() {
+      if (
+        closedByEffect ||
+        retryTimer !== undefined ||
+        connectionInProgress ||
+        socketRef.current !== null
+      ) {
+        return;
+      }
+
+      void connect(consecutiveFailures);
+    }
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
     void connect(0);
 
     return () => {
       closedByEffect = true;
       abortController.abort();
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
 
       if (retryTimer !== undefined) {
         clearTimeout(retryTimer);

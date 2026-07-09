@@ -76,6 +76,13 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 	case <-room.done:
 		return
 	}
+	select {
+	case room.snapshot <- struct{}{}:
+	case <-connectionCtx.Done():
+		return
+	case <-room.done:
+		return
+	}
 	defer func() {
 		player.unregister(room)
 	}()
@@ -321,12 +328,10 @@ func handleCommand(player *Player, room *Room, command string) {
 			default:
 			}
 		} else {
-			select {
-			case player.Outgoing <- "Correct Guess! Congrats":
+			
 				room.handleCorrectGuess(player)
-			default:
 
-			}
+			
 		}
 	default:
 		select {

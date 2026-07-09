@@ -9,6 +9,7 @@ import {
 } from "vitest";
 
 import type { Principal } from "@/features/auth/schemas";
+import type { RealtimeRoomSnapshot } from "@/features/realtime/protocol";
 import type { RoomSocketStatus } from "@/features/realtime/use-room-socket";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { useRoomStore } from "@/stores/room-store";
@@ -37,8 +38,12 @@ const principal: Principal = {
 
 function renderRoomShell({
   drawStrokes = [],
+  drawerWord = null,
   errorMessage,
+  finalScoresResponse,
+  gameEndedAt = null,
   messages = [],
+  roomSnapshot = null,
   sendChatMessage = vi.fn(),
   sendDrawStroke = vi.fn(),
   startGameResponse,
@@ -55,13 +60,23 @@ function renderRoomShell({
       to_y: number;
     };
   }>;
+  drawerWord?: {
+    word: string;
+    round_number: number;
+  } | null;
   errorMessage?: string;
+  finalScoresResponse?: unknown;
+  gameEndedAt?: number | null;
   messages?: Array<{ id: number; text: string }>;
+  roomSnapshot?: RealtimeRoomSnapshot | null;
   sendChatMessage?: ReturnType<typeof vi.fn>;
   sendDrawStroke?: ReturnType<typeof vi.fn>;
   startGameResponse?: unknown;
   status?: RoomSocketStatus;
 } = {}) {
+  if (finalScoresResponse !== undefined) {
+    fetchMock.mockResolvedValueOnce(finalScoresResponse);
+  }
   mockWordPacksResponse();
   if (startGameResponse !== undefined) {
     fetchMock.mockResolvedValueOnce(startGameResponse);
@@ -69,9 +84,12 @@ function renderRoomShell({
 
   useRoomSocketMock.mockReturnValue({
     drawStrokes,
+    drawerWord,
     errorMessage,
+    gameEndedAt,
     messages,
     retryAttempt: 0,
+    roomSnapshot,
     sendChatMessage,
     sendDrawStroke,
     status,
@@ -114,12 +132,76 @@ describe("RoomShell", () => {
 
     await lockDefaultWordPack(user);
 
-    expect(screen.getByText("Room ROOM01")).toBeInTheDocument();
+    expect(screen.getByText("ROOM01")).toBeInTheDocument();
+    expect(screen.getByText("Game lobby")).toBeInTheDocument();
     expect(screen.getAllByText("Connected")).not.toHaveLength(0);
     expect(
       screen.getByText("Welcome, Player One!"),
     ).toBeInTheDocument();
     expect(screen.getByText("[Player Two]: hello")).toBeInTheDocument();
+  });
+
+  it("renders authoritative room state received through the socket", async () => {
+    renderRoomShell({
+      roomSnapshot: {
+        version: 1,
+        room_code: "ROOM01",
+        game_state: "started",
+        round_state: "started",
+        host_id: principal.id,
+        players: [
+          {
+            id: principal.id,
+            type: "guest",
+            display_name: principal.display_name,
+            score: 2,
+            is_connected: true,
+          },
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            type: "guest",
+            display_name: "Player Two",
+            score: 1,
+            is_connected: true,
+          },
+        ],
+        game: {
+          id: "550e8400-e29b-41d4-a716-446655440002",
+          word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+          round_number: 1,
+          total_rounds: 2,
+          drawer_id: principal.id,
+          round_started_at: "2026-07-09T10:00:00Z",
+          round_ends_at: "2026-07-09T10:00:20Z",
+        },
+        canvas: {
+          revision: 0,
+        },
+        server_time: "2026-07-09T10:00:05Z",
+      },
+    });
+
+    expect(await screen.findByText("Game in progress")).toBeInTheDocument();
+    expect(screen.getByText("Round 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Player Two")).toBeInTheDocument();
+  });
+
+  it("copies the room code from the lobby header", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    renderRoomShell();
+
+    await lockDefaultWordPack(user);
+    await user.click(screen.getByRole("button", { name: "Copy code" }));
+
+    expect(writeText).toHaveBeenCalledWith("ROOM01");
+    expect(
+      screen.getByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps chat messages inside a scrollable panel", async () => {
@@ -227,6 +309,86 @@ describe("RoomShell", () => {
     expect(
       screen.getByText("The realtime ticket request was rejected."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("Realtime connection unavailable"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows reconnect progress without enabling chat", async () => {
+    const user = userEvent.setup();
+    renderRoomShell({
+      errorMessage: "The realtime connection closed unexpectedly.",
+      status: "reconnecting",
+    });
+
+    await lockDefaultWordPack(user);
+
+    expect(
+      screen.getByText("Restoring realtime connection"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Chat message")).toBeDisabled();
+  });
+
+  it("shows ranked final scores and lets the player dismiss them", async () => {
+    const user = userEvent.setup();
+    useRoomStore.getState().setSnapshot({
+      canStartGame: false,
+      drawerName: null,
+      gameId: "550e8400-e29b-41d4-a716-446655440010",
+      modeLabel: "Drawing",
+      phase: "ended",
+      players: [
+        {
+          displayName: principal.display_name,
+          id: principal.id,
+          isDrawer: false,
+          isHost: true,
+          principalType: "guest",
+          score: 120,
+        },
+      ],
+      roundLabel: "Complete",
+    });
+    renderRoomShell({
+      finalScoresResponse: {
+        json: async () => ({
+          game_final_scores: [
+            {
+              created_at: "2026-07-07T00:00:00Z",
+              final_rank: 1,
+              final_score: 120,
+              game_id: "550e8400-e29b-41d4-a716-446655440010",
+              id: "550e8400-e29b-41d4-a716-446655440021",
+              is_winner: true,
+              participant_id: "550e8400-e29b-41d4-a716-446655440011",
+            },
+            {
+              created_at: "2026-07-07T00:00:00Z",
+              final_rank: 2,
+              final_score: 80,
+              game_id: "550e8400-e29b-41d4-a716-446655440010",
+              id: "550e8400-e29b-41d4-a716-446655440022",
+              is_winner: false,
+              participant_id: "550e8400-e29b-41d4-a716-446655440012",
+            },
+          ],
+        }),
+        ok: true,
+      },
+      gameEndedAt: Date.now(),
+    });
+
+    await lockDefaultWordPack(user);
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Player 1 takes the crown.")).toBeInTheDocument();
+    expect(screen.getByText("120")).toBeInTheDocument();
+    expect(screen.getByText("Winner")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Close final scores" }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("loads word packs for the room", async () => {
@@ -244,7 +406,7 @@ describe("RoomShell", () => {
     );
   });
 
-  it("does not let non-host players select the word pack", async () => {
+  it("sends non-host players directly to the lobby", async () => {
     useRoomStore.getState().setSnapshot({
       canStartGame: false,
       drawerName: null,
@@ -274,9 +436,7 @@ describe("RoomShell", () => {
 
     renderRoomShell();
 
-    expect(
-      await screen.findByText("The host is choosing a word pack"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Game lobby")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Lock word pack" }),
     ).not.toBeInTheDocument();
@@ -309,7 +469,9 @@ describe("RoomShell", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Round 1")).toBeInTheDocument();
     expect(screen.getAllByText("Player Two")).not.toHaveLength(0);
-    expect(screen.getByText("Active round state.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Current players and round scores."),
+    ).toBeInTheDocument();
   });
 
   it("lets the host select a different word pack before starting", async () => {
@@ -367,12 +529,24 @@ describe("RoomShell", () => {
       }),
       undefined,
     );
+    expect(screen.getByText("Watching Player Two")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Drawing tool" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Chat message")).toHaveAttribute(
+      "placeholder",
+      "Type /guess followed by your answer",
+    );
   });
 
   it("connects canvas strokes to the room socket for the drawer", async () => {
     const user = userEvent.setup();
     const sendDrawStroke = vi.fn();
     renderRoomShell({
+      drawerWord: {
+        word: "Gandalf",
+        round_number: 1,
+      },
       sendDrawStroke,
       startGameResponse: {
         json: async () =>
@@ -402,6 +576,11 @@ describe("RoomShell", () => {
       }),
       undefined,
     );
+    expect(screen.getByText("Your turn to draw")).toBeInTheDocument();
+    expect(screen.getByText("Your word: Gandalf")).toBeInTheDocument();
+    expect(
+      screen.getByRole("radiogroup", { name: "Drawing tool" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the game idle when an accepted start response is invalid", async () => {
