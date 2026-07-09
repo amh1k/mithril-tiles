@@ -9,6 +9,7 @@ import {
 } from "vitest";
 
 import type { Principal } from "@/features/auth/schemas";
+import type { RealtimeRoomSnapshot } from "@/features/realtime/protocol";
 import type { RoomSocketStatus } from "@/features/realtime/use-room-socket";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { useRoomStore } from "@/stores/room-store";
@@ -41,6 +42,7 @@ function renderRoomShell({
   finalScoresResponse,
   gameEndedAt = null,
   messages = [],
+  roomSnapshot = null,
   sendChatMessage = vi.fn(),
   sendDrawStroke = vi.fn(),
   startGameResponse,
@@ -61,6 +63,7 @@ function renderRoomShell({
   finalScoresResponse?: unknown;
   gameEndedAt?: number | null;
   messages?: Array<{ id: number; text: string }>;
+  roomSnapshot?: RealtimeRoomSnapshot | null;
   sendChatMessage?: ReturnType<typeof vi.fn>;
   sendDrawStroke?: ReturnType<typeof vi.fn>;
   startGameResponse?: unknown;
@@ -80,6 +83,7 @@ function renderRoomShell({
     gameEndedAt,
     messages,
     retryAttempt: 0,
+    roomSnapshot,
     sendChatMessage,
     sendDrawStroke,
     status,
@@ -129,6 +133,51 @@ describe("RoomShell", () => {
       screen.getByText("Welcome, Player One!"),
     ).toBeInTheDocument();
     expect(screen.getByText("[Player Two]: hello")).toBeInTheDocument();
+  });
+
+  it("renders authoritative room state received through the socket", async () => {
+    renderRoomShell({
+      roomSnapshot: {
+        version: 1,
+        room_code: "ROOM01",
+        game_state: "started",
+        round_state: "started",
+        host_id: principal.id,
+        players: [
+          {
+            id: principal.id,
+            type: "guest",
+            display_name: principal.display_name,
+            score: 2,
+            is_connected: true,
+          },
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            type: "guest",
+            display_name: "Player Two",
+            score: 1,
+            is_connected: true,
+          },
+        ],
+        game: {
+          id: "550e8400-e29b-41d4-a716-446655440002",
+          word_pack_id: "550e8400-e29b-41d4-a716-446655440001",
+          round_number: 1,
+          total_rounds: 2,
+          drawer_id: principal.id,
+          round_started_at: "2026-07-09T10:00:00Z",
+          round_ends_at: "2026-07-09T10:00:20Z",
+        },
+        canvas: {
+          revision: 0,
+        },
+        server_time: "2026-07-09T10:00:05Z",
+      },
+    });
+
+    expect(await screen.findByText("Game in progress")).toBeInTheDocument();
+    expect(screen.getByText("Round 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText("Player Two")).toBeInTheDocument();
   });
 
   it("copies the room code from the lobby header", async () => {
@@ -351,7 +400,7 @@ describe("RoomShell", () => {
     );
   });
 
-  it("does not let non-host players select the word pack", async () => {
+  it("sends non-host players directly to the lobby", async () => {
     useRoomStore.getState().setSnapshot({
       canStartGame: false,
       drawerName: null,
@@ -381,9 +430,7 @@ describe("RoomShell", () => {
 
     renderRoomShell();
 
-    expect(
-      await screen.findByText("The host is choosing a word pack"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Game lobby")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Lock word pack" }),
     ).not.toBeInTheDocument();

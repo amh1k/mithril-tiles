@@ -54,6 +54,50 @@ describe("parseRoomSocketMessage", () => {
     });
   });
 
+  it("parses authoritative room snapshots", () => {
+    const snapshot = {
+      version: 1,
+      room_code: "ABC123",
+      game_state: "started",
+      round_state: "started",
+      host_id: "550e8400-e29b-41d4-a716-446655440000",
+      players: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          type: "user",
+          display_name: "Aragorn",
+          score: 1,
+          is_connected: true,
+        },
+      ],
+      game: {
+        id: "550e8400-e29b-41d4-a716-446655440001",
+        word_pack_id: "550e8400-e29b-41d4-a716-446655440002",
+        round_number: 1,
+        total_rounds: 2,
+        drawer_id: "550e8400-e29b-41d4-a716-446655440000",
+        round_started_at: "2026-07-09T10:00:00Z",
+        round_ends_at: "2026-07-09T10:00:20Z",
+      },
+      canvas: {
+        revision: 0,
+      },
+      server_time: "2026-07-09T10:00:05Z",
+    };
+
+    expect(
+      parseRoomSocketMessage(
+        JSON.stringify({
+          type: "room_snapshot",
+          data: snapshot,
+        }),
+      ),
+    ).toEqual({
+      snapshot,
+      type: "room_snapshot",
+    });
+  });
+
   it("rejects invalid structured drawing events", () => {
     expect(
       parseRoomSocketMessage(

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Principal } from "@/features/auth/schemas";
 import {
   createPlaceholderRoomSnapshot,
+  realtimeSnapshotToRoomSnapshot,
   startGameResponseToRoomSnapshot,
 } from "@/features/rooms/room-state";
 
@@ -109,6 +110,77 @@ describe("startGameResponseToRoomSnapshot", () => {
         },
       ],
       roundLabel: "Round 1",
+    });
+  });
+});
+
+describe("realtimeSnapshotToRoomSnapshot", () => {
+  it("maps authoritative players, scores, host, and drawer state", () => {
+    expect(
+      realtimeSnapshotToRoomSnapshot(
+        {
+          version: 1,
+          room_code: "ROOM01",
+          game_state: "started",
+          round_state: "started",
+          host_id: "550e8400-e29b-41d4-a716-446655440000",
+          players: [
+            {
+              id: "550e8400-e29b-41d4-a716-446655440000",
+              type: "user",
+              display_name: "Aragorn",
+              score: 3,
+              is_connected: true,
+            },
+            {
+              id: "550e8400-e29b-41d4-a716-446655440001",
+              type: "guest",
+              display_name: "Gimli",
+              score: 1,
+              is_connected: true,
+            },
+          ],
+          game: {
+            id: "550e8400-e29b-41d4-a716-446655440002",
+            word_pack_id: "550e8400-e29b-41d4-a716-446655440003",
+            round_number: 1,
+            total_rounds: 2,
+            drawer_id: "550e8400-e29b-41d4-a716-446655440001",
+            round_started_at: "2026-07-09T10:00:00Z",
+            round_ends_at: "2026-07-09T10:00:20Z",
+          },
+          canvas: {
+            revision: 0,
+          },
+          server_time: "2026-07-09T10:00:05Z",
+        },
+        "550e8400-e29b-41d4-a716-446655440000",
+      ),
+    ).toEqual({
+      canStartGame: false,
+      drawerName: "Gimli",
+      gameId: "550e8400-e29b-41d4-a716-446655440002",
+      modeLabel: "Drawing",
+      phase: "active_round",
+      players: [
+        {
+          displayName: "Aragorn",
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          isDrawer: false,
+          isHost: true,
+          principalType: "user",
+          score: 3,
+        },
+        {
+          displayName: "Gimli",
+          id: "550e8400-e29b-41d4-a716-446655440001",
+          isDrawer: true,
+          isHost: false,
+          principalType: "guest",
+          score: 1,
+        },
+      ],
+      roundLabel: "Round 1 of 2",
     });
   });
 });

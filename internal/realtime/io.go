@@ -77,7 +77,7 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 		return
 	}
 	select {
-	case room.snapshot <- snapshotRequest{player: player}:
+	case room.snapshot <- struct{}{}:
 	case <-connectionCtx.Done():
 		return
 	case <-room.done:

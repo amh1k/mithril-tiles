@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   parseRoomSocketMessage,
   type DrawStroke,
+  type RealtimeRoomSnapshot,
 } from "@/features/realtime/protocol";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { websocketTicketResponseSchema } from "@/features/rooms/tickets";
@@ -25,6 +26,7 @@ type RoomSocketState = {
   gameEndedAt: number | null;
   messages: RoomChatMessage[];
   retryAttempt: number;
+  roomSnapshot: RealtimeRoomSnapshot | null;
   status: RoomSocketStatus;
 };
 
@@ -98,6 +100,7 @@ export function useRoomSocket({
     gameEndedAt: null,
     messages: [],
     retryAttempt: 0,
+    roomSnapshot: null,
     status: "idle",
   });
 
@@ -215,6 +218,14 @@ export function useRoomSocket({
               id: nextStrokeIdRef.current++,
               stroke: parsedMessage.stroke,
             }),
+          }));
+          return;
+        }
+
+        if (parsedMessage.type === "room_snapshot") {
+          setState((currentState) => ({
+            ...currentState,
+            roomSnapshot: parsedMessage.snapshot,
           }));
         }
       });

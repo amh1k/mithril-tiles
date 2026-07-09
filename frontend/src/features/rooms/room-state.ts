@@ -1,4 +1,5 @@
 import type { Principal } from "@/features/auth/schemas";
+import type { RealtimeRoomSnapshot } from "@/features/realtime/protocol";
 import type { StartGameResponse } from "@/features/rooms/start-game";
 
 export type RoomPhase = "lobby" | "active_round" | "round_cooldown" | "ended";
@@ -69,4 +70,65 @@ export function startGameResponseToRoomSnapshot(
     })),
     roundLabel: `Round ${response.round.round_number}`,
   };
+}
+
+export function realtimeSnapshotToRoomSnapshot(
+  snapshot: RealtimeRoomSnapshot,
+  currentPrincipalId: string,
+): RoomSnapshot {
+  const phase = roomPhaseFromRealtimeSnapshot(snapshot);
+  const drawerId = snapshot.game?.drawer_id ?? null;
+  const drawer = snapshot.players.find((player) => player.id === drawerId);
+
+  return {
+    canStartGame:
+      snapshot.game_state === "idle" &&
+      snapshot.host_id === currentPrincipalId &&
+      snapshot.players.length >= 2,
+    drawerName: drawer?.display_name ?? null,
+    gameId: snapshot.game?.id ?? null,
+    modeLabel:
+      phase === "active_round"
+        ? "Drawing"
+        : phase === "round_cooldown"
+          ? "Round break"
+          : phase === "ended"
+            ? "Game over"
+            : "Lobby",
+    phase,
+    players: snapshot.players.map((player) => ({
+      displayName: player.display_name,
+      id: player.id,
+      isDrawer: player.id === drawerId,
+      isHost: player.id === snapshot.host_id,
+      principalType: player.type,
+      score: player.score,
+    })),
+    roundLabel:
+      snapshot.game === null
+        ? "Lobby"
+        : `Round ${snapshot.game.round_number} of ${snapshot.game.total_rounds}`,
+  };
+}
+
+function roomPhaseFromRealtimeSnapshot(
+  snapshot: RealtimeRoomSnapshot,
+): RoomPhase {
+  if (
+    snapshot.game_state === "ending" ||
+    snapshot.game_state === "completed" ||
+    snapshot.game_state === "end_failed"
+  ) {
+    return "ended";
+  }
+  if (
+    snapshot.game_state === "started" &&
+    snapshot.round_state === "started"
+  ) {
+    return "active_round";
+  }
+  if (snapshot.game_state === "started") {
+    return "round_cooldown";
+  }
+  return "lobby";
 }

@@ -139,15 +139,38 @@ func (r *Room) handleDirectMessage(dm DirectMessage) {
 	}
 }
 
-func (r *Room) handleSnapshotRequest(request snapshotRequest) {
+func (r *Room) sendDrawerWord(
+	drawer *Player,
+	word string,
+	roundNumber int,
+) {
+	payload := struct {
+		Type string `json:"type"`
+		Data struct {
+			Word        string `json:"word"`
+			RoundNumber int    `json:"round_number"`
+		} `json:"data"`
+	}{
+		Type: "drawer_word",
+	}
+	payload.Data.Word = word
+	payload.Data.RoundNumber = roundNumber
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	r.handleDirectMessage(DirectMessage{
+		toClient: drawer,
+		message:  string(data),
+	})
+}
+
+func (r *Room) handleSnapshotRequest() {
 	r.mu.Lock()
 	recipients := make([]*Player, 0, len(r.players))
-	if request.player != nil {
-		recipients = append(recipients, request.player)
-	} else {
-		for player := range r.players {
-			recipients = append(recipients, player)
-		}
+	for player := range r.players {
+		recipients = append(recipients, player)
 	}
 	snapshot := RoomSnapshot{
 		Version:    1,
@@ -332,7 +355,7 @@ func (r *Room) endRound() {
 	r.mu.Unlock()
 	// close(r.done)
 	r.broadcast <- fmt.Sprintf("Round%d has ended", r.currentRoundNo)
-	r.handleSnapshotRequest(snapshotRequest{})
+	r.handleSnapshotRequest()
 	timer := time.NewTimer(2 * time.Second)
 	if r.currentRoundNo == totalRounds {
 		select {
@@ -395,12 +418,13 @@ func (r *Room) startRound() {
 	r.mu.Lock()
 	r.currentRoundNo = roundNumber
 	r.currentDrawer = drawer
-	r.currentWord = "apple"// rresult.word have to repalce this
+	r.currentWord = result.Word
 	r.startTime = result.StartedAt
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
+	r.sendDrawerWord(drawer, result.Word, roundNumber)
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
-	r.handleSnapshotRequest(snapshotRequest{})
+	r.handleSnapshotRequest()
 
 	time.AfterFunc(roundDuration, func() {
 		select {
@@ -440,7 +464,7 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	host := r.HostPlayer
 	drawer := players[rand.Intn(len(players))]
 	r.mu.Unlock()
-	r.handleSnapshotRequest(snapshotRequest{})
+	r.handleSnapshotRequest()
 
 	participants := make([]data.Principal, 0, len(players))
 	for _, player := range players {
@@ -504,8 +528,9 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
 
+	r.sendDrawerWord(completion.drawer, result.Word, result.Round.RoundNumber)
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
-	r.handleSnapshotRequest(snapshotRequest{})
+	r.handleSnapshotRequest()
 
 	time.AfterFunc(roundDuration, func() {
 		select {
@@ -569,7 +594,7 @@ func (r *Room) handleEndGame() {
 			return
 		}
 		r.setGameState(GameStateEndFailed)
-		r.handleSnapshotRequest(snapshotRequest{})
+		r.handleSnapshotRequest()
 		slog.Error(
 			"game completion failed",
 			"room_code", r.roomCode,
@@ -584,7 +609,7 @@ func (r *Room) handleEndGame() {
 	}
 
 	r.setGameState(GameStateCompleted)
-	r.handleSnapshotRequest(snapshotRequest{})
+	r.handleSnapshotRequest()
 	select {
 	case r.broadcast <- "Game has ended":
 	case <-r.done:

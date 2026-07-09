@@ -69,10 +69,6 @@ type joinRequest struct {
 	result chan error
 }
 
-type snapshotRequest struct {
-	player *Player
-}
-
 const (
 	GameRounds = 3
 	MaxPlayers = 5
@@ -103,7 +99,7 @@ type Room struct {
 	startGame      chan gameStartCommand
 	gameStartDone  chan gameStartCompletion
 	directMessage  chan DirectMessage
-	snapshot       chan snapshotRequest
+	snapshot       chan struct{}
 	correctGuesses int
 	HostPlayer     *Player
 	currentWord    string
@@ -187,7 +183,7 @@ func newRoom(
 		startGame:      make(chan gameStartCommand),
 		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
-		snapshot:       make(chan snapshotRequest),
+		snapshot:       make(chan struct{}),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
@@ -224,7 +220,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		startGame:      make(chan gameStartCommand),
 		gameStartDone:  make(chan gameStartCompletion, 1),
 		directMessage:  make(chan DirectMessage),
-		snapshot:       make(chan snapshotRequest),
+		snapshot:       make(chan struct{}),
 		drawStroke:     make(chan DrawStroke, 256),
 		scores:         make(map[*Player]int),
 		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
@@ -264,8 +260,8 @@ func (r *Room) Run() {
 		case dm := <-r.directMessage:
 			r.handleDirectMessage(dm)
 
-		case request := <-r.snapshot:
-			r.handleSnapshotRequest(request)
+		case <-r.snapshot:
+			r.handleSnapshotRequest()
 
 		case stroke := <-r.drawStroke:
 			r.handleDrawStroke(stroke)

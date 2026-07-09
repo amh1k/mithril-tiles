@@ -16,12 +16,62 @@ const drawStrokeEnvelopeSchema = z.object({
   data: drawStrokeSchema,
 });
 
+export const roomSnapshotSchema = z.object({
+  version: z.literal(1),
+  room_code: z.string().min(1),
+  game_state: z.enum([
+    "idle",
+    "starting",
+    "started",
+    "ending",
+    "completed",
+    "end_failed",
+  ]),
+  round_state: z.enum(["idle", "started"]),
+  host_id: z.uuid(),
+  players: z.array(
+    z.object({
+      id: z.uuid(),
+      type: z.enum(["user", "guest"]),
+      display_name: z.string().min(1),
+      avatar_url: z.string().optional(),
+      score: z.number().int(),
+      is_connected: z.boolean(),
+    }),
+  ),
+  game: z
+    .object({
+      id: z.uuid(),
+      word_pack_id: z.uuid(),
+      round_number: z.number().int().nonnegative(),
+      total_rounds: z.number().int().positive(),
+      drawer_id: z.uuid(),
+      round_started_at: z.iso.datetime({ offset: true }),
+      round_ends_at: z.iso.datetime({ offset: true }),
+    })
+    .nullable(),
+  canvas: z.object({
+    revision: z.number().int().nonnegative(),
+  }),
+  server_time: z.iso.datetime({ offset: true }),
+});
+
+const roomSnapshotEnvelopeSchema = z.object({
+  type: z.literal("room_snapshot"),
+  data: roomSnapshotSchema,
+});
+
 export type DrawStroke = z.infer<typeof drawStrokeSchema>;
+export type RealtimeRoomSnapshot = z.infer<typeof roomSnapshotSchema>;
 
 export type RoomSocketEvent =
   | {
       stroke: DrawStroke;
       type: "draw_stroke";
+    }
+  | {
+      snapshot: RealtimeRoomSnapshot;
+      type: "room_snapshot";
     }
   | {
       text: string;
@@ -61,6 +111,17 @@ export function parseRoomSocketMessage(data: unknown): RoomSocketEvent {
       return {
         stroke: drawStrokeEnvelope.data.data,
         type: "draw_stroke",
+      };
+    }
+
+    const roomSnapshotEnvelope = roomSnapshotEnvelopeSchema.safeParse(
+      parsedJson.value,
+    );
+
+    if (roomSnapshotEnvelope.success) {
+      return {
+        snapshot: roomSnapshotEnvelope.data.data,
+        type: "room_snapshot",
       };
     }
 

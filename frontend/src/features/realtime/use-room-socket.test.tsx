@@ -154,6 +154,50 @@ describe("useRoomSocket drawing support", () => {
     expect(result.current.messages).toEqual([]);
   });
 
+  it("stores the latest authoritative room snapshot", async () => {
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+    const snapshot = {
+      version: 1,
+      room_code: "ROOM01",
+      game_state: "idle",
+      round_state: "idle",
+      host_id: "550e8400-e29b-41d4-a716-446655440000",
+      players: [
+        {
+          id: "550e8400-e29b-41d4-a716-446655440000",
+          type: "user",
+          display_name: "Aragorn",
+          score: 0,
+          is_connected: true,
+        },
+      ],
+      game: null,
+      canvas: {
+        revision: 0,
+      },
+      server_time: "2026-07-09T10:00:05Z",
+    };
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("message", {
+        data: JSON.stringify({
+          type: "room_snapshot",
+          data: snapshot,
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.roomSnapshot).toEqual(snapshot);
+    });
+  });
+
   it("marks the game ended while preserving the announcement message", async () => {
     const { result } = renderHook(() =>
       useRoomSocket({ roomCode: "ROOM01" as RoomCode }),

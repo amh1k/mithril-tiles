@@ -45,6 +45,7 @@ import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
 import {
   createPlaceholderRoomSnapshot,
+  realtimeSnapshotToRoomSnapshot,
   startGameResponseToRoomSnapshot,
   type RoomPlayer,
 } from "@/features/rooms/room-state";
@@ -133,6 +134,32 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       setRoomSnapshot(placeholderRoomSnapshot);
     }
   }, [placeholderRoomSnapshot, setRoomSnapshot, storedRoomSnapshot]);
+
+  useEffect(() => {
+    if (socket.roomSnapshot === null) {
+      return;
+    }
+
+    setRoomSnapshot(
+      realtimeSnapshotToRoomSnapshot(socket.roomSnapshot, principal.id),
+    );
+  }, [principal.id, setRoomSnapshot, socket.roomSnapshot]);
+
+  useEffect(() => {
+    const activeWordPackId = socket.roomSnapshot?.game?.word_pack_id;
+
+    if (activeWordPackId === undefined || wordPack !== null) {
+      return;
+    }
+
+    const activeWordPack =
+      wordPacks.find((pack) => pack.id === activeWordPackId) ?? null;
+
+    if (activeWordPack !== null) {
+      setSelectedWordPackId(activeWordPack.id);
+      setWordPack(activeWordPack);
+    }
+  }, [socket.roomSnapshot, wordPack, wordPacks]);
 
   useEffect(() => {
     if (socket.gameEndedAt == null || roomSnapshot.gameId == null) {
@@ -298,6 +325,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   }
 
   const canStartGame =
+    (socket.roomSnapshot === null || roomSnapshot.canStartGame) &&
     wordPackStatus === "ready" &&
     wordPack !== null &&
     startGameStatus === "idle" &&
@@ -309,10 +337,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   );
   const shouldSendDrawStrokes =
     isCurrentPlayerDrawer &&
-    startGameStatus === "started" &&
+    (roomSnapshot.phase === "active_round" ||
+      startGameStatus === "started") &&
     socket.status === "connected";
 
-  if (wordPack === null) {
+  if (wordPack === null && isCurrentPlayerHost) {
     return (
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
         <WordPackSelectionPanel
