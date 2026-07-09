@@ -226,16 +226,25 @@ export function useRoomSocket({
         }
 
         if (parsedMessage.type === "room_snapshot") {
-          setState((currentState) => ({
-            ...currentState,
-            drawerWord:
-              parsedMessage.snapshot.round_state === "started" &&
-              currentState.drawerWord?.round_number ===
-                parsedMessage.snapshot.game?.round_number
-                ? currentState.drawerWord
-                : null,
-            roomSnapshot: parsedMessage.snapshot,
-          }));
+          setState((currentState) => {
+            const previousRoundKey = activeRoundKey(currentState.roomSnapshot);
+            const nextRoundKey = activeRoundKey(parsedMessage.snapshot);
+
+            return {
+              ...currentState,
+              drawerWord:
+                parsedMessage.snapshot.round_state === "started" &&
+                currentState.drawerWord?.round_number ===
+                  parsedMessage.snapshot.game?.round_number
+                  ? currentState.drawerWord
+                  : null,
+              drawStrokes:
+                previousRoundKey === nextRoundKey
+                  ? currentState.drawStrokes
+                  : [],
+              roomSnapshot: parsedMessage.snapshot,
+            };
+          });
           return;
         }
 
@@ -407,6 +416,18 @@ function reconnectDelayMs(retryAttempt: number): number {
   const baseDelayMs = Math.min(1_000 * 2 ** (retryAttempt - 1), 8_000);
   const jitterMs = Math.floor(Math.random() * 250);
   return baseDelayMs + jitterMs;
+}
+
+function activeRoundKey(snapshot: RealtimeRoomSnapshot | null): string | null {
+  if (
+    snapshot === null ||
+    snapshot.round_state !== "started" ||
+    snapshot.game === null
+  ) {
+    return null;
+  }
+
+  return `${snapshot.game.id}:${snapshot.game.round_number}:${snapshot.game.round_started_at}`;
 }
 
 function appendBoundedMessage(

@@ -187,7 +187,7 @@ describe("RoomShell", () => {
     });
 
     expect(await screen.findByText("Game in progress")).toBeInTheDocument();
-    expect(screen.getByText("Round 1 of 2")).toBeInTheDocument();
+    expect(screen.getByText(/Round 1 of 2/)).toBeInTheDocument();
     expect(screen.getByText("Player Two")).toBeInTheDocument();
   });
 
@@ -352,7 +352,10 @@ describe("RoomShell", () => {
           score: 120,
         },
       ],
+      roundEndsAt: null,
       roundLabel: "Complete",
+      roundStartedAt: null,
+      serverTime: null,
     });
     renderRoomShell({
       finalScoresResponse: {
@@ -459,7 +462,10 @@ describe("RoomShell", () => {
           score: 0,
         },
       ],
+      roundEndsAt: null,
       roundLabel: "Lobby",
+      roundStartedAt: null,
+      serverTime: null,
     });
 
     renderRoomShell();
@@ -495,7 +501,7 @@ describe("RoomShell", () => {
     expect(
       await screen.findByText("Game start request accepted."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Round 1")).toBeInTheDocument();
+    expect(screen.getByText(/Round 1/)).toBeInTheDocument();
     expect(screen.getAllByText("Player Two")).not.toHaveLength(0);
     expect(
       screen.getByText("Current players and round scores."),

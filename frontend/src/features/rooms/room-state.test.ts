@@ -29,10 +29,13 @@ describe("createPlaceholderRoomSnapshot", () => {
           isHost: true,
           principalType: "guest",
           score: 0,
-        },
-      ],
-      roundLabel: "Lobby",
-    });
+      },
+    ],
+    roundEndsAt: null,
+    roundLabel: "Lobby",
+    roundStartedAt: null,
+    serverTime: null,
+  });
   });
 });
 
@@ -109,7 +112,10 @@ describe("startGameResponseToRoomSnapshot", () => {
           score: 0,
         },
       ],
+      roundEndsAt: "2026-07-07T00:01:00.000Z",
       roundLabel: "Round 1",
+      roundStartedAt: "2026-07-07T00:00:00Z",
+      serverTime: null,
     });
   });
 });
@@ -180,7 +186,10 @@ describe("realtimeSnapshotToRoomSnapshot", () => {
           score: 1,
         },
       ],
+      roundEndsAt: "2026-07-09T10:00:20Z",
       roundLabel: "Round 1 of 2",
+      roundStartedAt: "2026-07-09T10:00:00Z",
+      serverTime: "2026-07-09T10:00:05Z",
     });
   });
 });

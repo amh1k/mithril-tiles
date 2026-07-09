@@ -49,6 +49,7 @@ import {
   realtimeSnapshotToRoomSnapshot,
   startGameResponseToRoomSnapshot,
   type RoomPlayer,
+  type RoomSnapshot,
 } from "@/features/rooms/room-state";
 import {
   wordPacksResponseSchema,
@@ -122,6 +123,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const socketStatusLabel = formatSocketStatus(socket.status);
+  const roundTimerLabel = useRoundTimerLabel(roomSnapshot);
+  const canvasResetKey =
+    roomSnapshot.phase === "active_round"
+      ? `${roomSnapshot.gameId ?? "game"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`
+      : "lobby";
   const rankedPlayers = useMemo(
     () =>
       [...roomSnapshot.players].sort(
@@ -452,6 +458,22 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         status={socket.status}
       />
 
+      {roundTimerLabel !== null && (
+        <section
+          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-6 py-4 text-center shadow-xl shadow-[#2b1e12]/20"
+          aria-label="Round timer"
+        >
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#bba88d]">
+              Time remaining
+            </p>
+            <p className="mt-1 font-serif text-4xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
+              {roundTimerLabel}
+            </p>
+          </div>
+        </section>
+      )}
+
       <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
@@ -610,6 +632,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 shouldSendDrawStrokes ? socket.sendDrawStroke : undefined
               }
               remoteStrokes={socket.drawStrokes}
+              resetKey={canvasResetKey}
             />
           </CardContent>
         </Card>
@@ -684,6 +707,69 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       )}
     </main>
   );
+}
+
+function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const serverClockOffsetMs = useMemo(() => {
+    if (roomSnapshot.serverTime === null) {
+      return 0;
+    }
+
+    const serverTimeMs = Date.parse(roomSnapshot.serverTime);
+
+    if (Number.isNaN(serverTimeMs)) {
+      return 0;
+    }
+
+    return serverTimeMs - Date.now();
+  }, [roomSnapshot.serverTime]);
+
+  useEffect(() => {
+    if (
+      roomSnapshot.phase !== "active_round" ||
+      roomSnapshot.roundEndsAt === null
+    ) {
+      return;
+    }
+
+    setNowMs(Date.now());
+
+    const interval = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [roomSnapshot.phase, roomSnapshot.roundEndsAt]);
+
+  if (
+    roomSnapshot.phase !== "active_round" ||
+    roomSnapshot.roundEndsAt === null
+  ) {
+    return null;
+  }
+
+  const roundEndsAtMs = Date.parse(roomSnapshot.roundEndsAt);
+
+  if (Number.isNaN(roundEndsAtMs)) {
+    return null;
+  }
+
+  const remainingSeconds = Math.max(
+    0,
+    Math.ceil((roundEndsAtMs - (nowMs + serverClockOffsetMs)) / 1000),
+  );
+
+  return formatRemainingTime(remainingSeconds);
+}
+
+function formatRemainingTime(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
 function formatSocketStatus(status: string): string {

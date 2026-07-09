@@ -606,20 +606,20 @@ func (r *Room) handleCorrectGuess(player *Player) {
 
 	} else if diff < 30 * time.Second {
 		r.scores[player] += 3
-		finalScore.Points += 5
+		finalScore.Points += 3
 		
 		
 
 	} else if diff  <  50* time.Second {
 		r.scores[player] += 2
-		finalScore.Points += 5
+		finalScore.Points += 2
 		
 		
 		
 
 	}else  {
 		r.scores[player] += 1
-		finalScore.Points += 5
+		finalScore.Points += 1
 		
 		
 	}

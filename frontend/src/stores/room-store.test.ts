@@ -18,7 +18,10 @@ const snapshot: RoomSnapshot = {
       score: 0,
     },
   ],
+  roundEndsAt: null,
   roundLabel: "Lobby",
+  roundStartedAt: null,
+  serverTime: null,
 };
 
 describe("useRoomStore", () => {

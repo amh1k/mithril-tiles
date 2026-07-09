@@ -28,6 +28,7 @@ type DrawingCanvasProps = {
     id: number;
     stroke: DrawStroke;
   }>;
+  resetKey?: string | null;
 };
 
 export function DrawingCanvas({
@@ -38,12 +39,34 @@ export function DrawingCanvas({
   isErasing = false,
   onStroke,
   remoteStrokes = [],
+  resetKey = null,
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingPointRef = useRef<NormalizedPoint | null>(null);
   const renderedRemoteStrokeIdsRef = useRef(new Set<number>());
   const strokesRef = useRef<LocalStrokeSegment[]>([]);
   const [canvasReady, setCanvasReady] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+
+    drawingPointRef.current = null;
+    renderedRemoteStrokeIdsRef.current.clear();
+    strokesRef.current = [];
+
+    if (canvas === null) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+
+    if (context === null) {
+      return;
+    }
+
+    const bounds = canvas.getBoundingClientRect();
+    context.clearRect(0, 0, bounds.width, bounds.height);
+  }, [resetKey]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
