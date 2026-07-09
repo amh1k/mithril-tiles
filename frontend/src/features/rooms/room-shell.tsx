@@ -15,6 +15,7 @@ import {
   Play,
   Send,
   ShieldCheck,
+  Sparkles,
   Trophy,
   Users,
   Wifi,
@@ -23,7 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -114,6 +115,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [finalScoresStatus, setFinalScoresStatus] = useState<
     "idle" | "loading" | "ready" | "failed"
   >("idle");
+  const [roundTransition, setRoundTransition] = useState<{
+    key: string;
+    title: string;
+    description: string;
+    tone: "start" | "break";
+  } | null>(null);
+  const previousRoundTransitionKeyRef = useRef<string | null>(null);
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -151,6 +159,64 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       realtimeSnapshotToRoomSnapshot(socket.roomSnapshot, principal.id),
     );
   }, [principal.id, setRoomSnapshot, socket.roomSnapshot]);
+
+  useEffect(() => {
+    const transitionKey = `${roomSnapshot.phase}:${roomSnapshot.gameId ?? "none"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`;
+
+    if (previousRoundTransitionKeyRef.current === null) {
+      previousRoundTransitionKeyRef.current = transitionKey;
+      return;
+    }
+
+    if (previousRoundTransitionKeyRef.current === transitionKey) {
+      return;
+    }
+
+    previousRoundTransitionKeyRef.current = transitionKey;
+
+    if (roomSnapshot.phase === "active_round") {
+      setRoundTransition({
+        key: transitionKey,
+        title: roomSnapshot.roundLabel,
+        description:
+          roomSnapshot.drawerName === null
+            ? "A new round has begun."
+            : `${roomSnapshot.drawerName} takes the quill.`,
+        tone: "start",
+      });
+    } else if (roomSnapshot.phase === "round_cooldown") {
+      setRoundTransition({
+        key: transitionKey,
+        title: "Round complete",
+        description: "Gather your guesses. The next parchment is being prepared.",
+        tone: "break",
+      });
+    } else {
+      setRoundTransition(null);
+    }
+  }, [
+    roomSnapshot.drawerName,
+    roomSnapshot.gameId,
+    roomSnapshot.phase,
+    roomSnapshot.roundLabel,
+    roomSnapshot.roundStartedAt,
+  ]);
+
+  useEffect(() => {
+    if (roundTransition === null || roundTransition.tone !== "start") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setRoundTransition((currentTransition) =>
+        currentTransition?.key === roundTransition.key ? null : currentTransition,
+      );
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [roundTransition]);
 
   useEffect(() => {
     const activeWordPackId = socket.roomSnapshot?.game?.word_pack_id;
@@ -474,6 +540,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </section>
       )}
 
+      <RoundTransitionOverlay transition={roundTransition} />
+
       <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
@@ -770,6 +838,61 @@ function formatRemainingTime(totalSeconds: number): string {
   const seconds = totalSeconds % 60;
 
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+type RoundTransitionOverlayProps = {
+  transition: {
+    description: string;
+    title: string;
+    tone: "start" | "break";
+  } | null;
+};
+
+function RoundTransitionOverlay({ transition }: RoundTransitionOverlayProps) {
+  if (transition === null) {
+    return null;
+  }
+
+  const isRoundStart = transition.tone === "start";
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-[#2b1e12]/35 px-4 backdrop-blur-[2px] animate-in fade-in duration-300"
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className={`relative w-full max-w-lg overflow-hidden rounded-3xl border px-8 py-7 text-center shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 ${
+          isRoundStart
+            ? "border-[#bba88d]/70 bg-[#2b1e12]/95 text-[#f4ead7]"
+            : "border-[#946440]/75 bg-[#bba88d]/95 text-[#2b1e12]"
+        }`}
+      >
+        <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-current to-transparent opacity-50" />
+        <div className="absolute -left-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
+        <div className="absolute -right-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
+
+        <div
+          className={`relative mx-auto flex size-14 items-center justify-center rounded-full border ${
+            isRoundStart
+              ? "border-[#bba88d]/70 bg-[#5d542b]/60 text-[#f4ead7]"
+              : "border-[#946440]/70 bg-[#2b1e12]/10 text-[#5d542b]"
+          }`}
+        >
+          <Sparkles className="size-7 animate-pulse" aria-hidden="true" />
+        </div>
+        <p className="relative mt-5 text-xs font-bold uppercase tracking-[0.34em] opacity-80">
+          {isRoundStart ? "New parchment" : "Interlude"}
+        </p>
+        <h2 className="relative mt-2 font-serif text-3xl font-bold sm:text-4xl">
+          {transition.title}
+        </h2>
+        <p className="relative mt-3 text-sm font-medium opacity-85">
+          {transition.description}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function formatSocketStatus(status: string): string {

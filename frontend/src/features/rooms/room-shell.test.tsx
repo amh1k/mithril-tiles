@@ -187,7 +187,7 @@ describe("RoomShell", () => {
     });
 
     expect(await screen.findByText("Game in progress")).toBeInTheDocument();
-    expect(screen.getByText(/Round 1 of 2/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Round 1 of 2/).length).toBeGreaterThan(0);
     expect(screen.getByText("Player Two")).toBeInTheDocument();
   });
 
@@ -501,7 +501,7 @@ describe("RoomShell", () => {
     expect(
       await screen.findByText("Game start request accepted."),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Round 1/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Round 1/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("Player Two")).not.toHaveLength(0);
     expect(
       screen.getByText("Current players and round scores."),
