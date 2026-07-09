@@ -43,6 +43,7 @@ function renderRoomShell({
   finalScoresResponse,
   gameEndedAt = null,
   messages = [],
+  participantPrincipalResponses = [],
   roomSnapshot = null,
   sendChatMessage = vi.fn(),
   sendDrawStroke = vi.fn(),
@@ -68,6 +69,7 @@ function renderRoomShell({
   finalScoresResponse?: unknown;
   gameEndedAt?: number | null;
   messages?: Array<{ id: number; text: string }>;
+  participantPrincipalResponses?: unknown[];
   roomSnapshot?: RealtimeRoomSnapshot | null;
   sendChatMessage?: ReturnType<typeof vi.fn>;
   sendDrawStroke?: ReturnType<typeof vi.fn>;
@@ -78,6 +80,9 @@ function renderRoomShell({
     fetchMock.mockResolvedValueOnce(finalScoresResponse);
   }
   mockWordPacksResponse();
+  for (const principalResponse of participantPrincipalResponses) {
+    fetchMock.mockResolvedValueOnce(principalResponse);
+  }
   if (startGameResponse !== undefined) {
     fetchMock.mockResolvedValueOnce(startGameResponse);
   }
@@ -376,12 +381,35 @@ describe("RoomShell", () => {
         ok: true,
       },
       gameEndedAt: Date.now(),
+      participantPrincipalResponses: [
+        {
+          json: async () => ({
+            principal: {
+              type: "guest",
+              id: "550e8400-e29b-41d4-a716-446655440000",
+              display_name: "Aragorn",
+            },
+          }),
+          ok: true,
+        },
+        {
+          json: async () => ({
+            principal: {
+              type: "user",
+              id: "550e8400-e29b-41d4-a716-446655440001",
+              display_name: "Legolas",
+            },
+          }),
+          ok: true,
+        },
+      ],
     });
 
     await lockDefaultWordPack(user);
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("Player 1 takes the crown.")).toBeInTheDocument();
+    expect(screen.getByText("Aragorn takes the crown.")).toBeInTheDocument();
+    expect(screen.getByText("Legolas")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument();
     expect(screen.getByText("Winner")).toBeInTheDocument();
 

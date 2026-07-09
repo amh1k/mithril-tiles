@@ -39,7 +39,8 @@ import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
 import { useRoomSocket } from "@/features/realtime/use-room-socket";
 import {
   fetchFinalScores,
-  type GameFinalScore,
+  fetchParticipantPrincipal,
+  type ResolvedGameFinalScore,
 } from "@/features/rooms/final-scores";
 import type { RoomCode } from "@/features/rooms/room-code";
 import { startGameResponseSchema } from "@/features/rooms/start-game";
@@ -107,7 +108,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [startGameStatus, setStartGameStatus] = useState<
     "idle" | "starting" | "started"
   >("idle");
-  const [finalScores, setFinalScores] = useState<GameFinalScore[]>([]);
+  const [finalScores, setFinalScores] = useState<ResolvedGameFinalScore[]>([]);
   const [finalScoresDismissed, setFinalScoresDismissed] = useState(false);
   const [finalScoresStatus, setFinalScoresStatus] = useState<
     "idle" | "loading" | "ready" | "failed"
@@ -182,7 +183,32 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           return;
         }
 
-        setFinalScores(response.game_final_scores);
+        const resolvedScores = await Promise.all(
+          response.game_final_scores.map(async (score) => {
+            try {
+              const scorePrincipal = await fetchParticipantPrincipal(
+                score.game_id,
+                score.participant_id,
+                abortController.signal,
+              );
+              return {
+                ...score,
+                principal: scorePrincipal,
+              };
+            } catch {
+              return {
+                ...score,
+                principal: null,
+              };
+            }
+          }),
+        );
+
+        if (abortController.signal.aborted) {
+          return;
+        }
+
+        setFinalScores(resolvedScores);
         setFinalScoresStatus("ready");
       } catch {
         if (!abortController.signal.aborted) {
@@ -1021,7 +1047,7 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 }
 
 type FinalScoresStatusProps = {
-  finalScores: GameFinalScore[];
+  finalScores: ResolvedGameFinalScore[];
   onClose: () => void;
   status: "idle" | "loading" | "ready" | "failed";
 };
@@ -1180,7 +1206,7 @@ function FinalScoresOverlay({
   );
 }
 
-function ScorePodiumCard({ score }: { score: GameFinalScore }) {
+function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
   return (
     <div
       className={`rounded-2xl border p-4 text-center ${
@@ -1208,7 +1234,7 @@ function ScorePodiumCard({ score }: { score: GameFinalScore }) {
   );
 }
 
-function ScoreRow({ score }: { score: GameFinalScore }) {
+function ScoreRow({ score }: { score: ResolvedGameFinalScore }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border bg-background/70 p-3">
       <span className="w-8 text-center text-sm font-bold text-muted-foreground">
@@ -1219,7 +1245,7 @@ function ScoreRow({ score }: { score: GameFinalScore }) {
           {finalScoreDisplayName(score)}
         </p>
         <p className="text-xs text-muted-foreground">
-          Participant {shortParticipantId(score.participant_id)}
+          {score.principal?.type === "user" ? "Registered player" : "Guest"}
         </p>
       </div>
       <p className="font-bold tabular-nums">{score.final_score} pts</p>
@@ -1227,8 +1253,11 @@ function ScoreRow({ score }: { score: GameFinalScore }) {
   );
 }
 
-function finalScoreDisplayName(score: GameFinalScore): string {
-  return `Player ${score.final_rank}`;
+function finalScoreDisplayName(score: ResolvedGameFinalScore): string {
+  return (
+    score.principal?.display_name ??
+    `Participant ${shortParticipantId(score.participant_id)}`
+  );
 }
 
 function shortParticipantId(participantId: string): string {
