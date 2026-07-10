@@ -73,6 +73,7 @@ export const userSchema = z.object({
   created_at: z.iso.datetime({ offset: true }),
   updated_at: z.iso.datetime({ offset: true }),
   display_name: z.string(),
+  role: z.enum(["normal", "admin"]).optional(),
   account_status: z.string(),
   handle: z.string(),
   email: z.email(),
@@ -100,6 +101,7 @@ export const userPrincipalSchema = z.object({
   type: z.literal("user"),
   id: z.uuid(),
   display_name: z.string(),
+  role: z.enum(["normal", "admin"]).optional(),
   handle: z.string(),
   avatar_url: z.string().optional(),
 });

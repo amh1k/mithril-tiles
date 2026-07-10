@@ -227,6 +227,35 @@ describe("useRoomSocket drawing support", () => {
     });
   });
 
+  it("stores the masked word broadcast to guessers", async () => {
+    const { result } = renderHook(() =>
+      useRoomSocket({ roomCode: "ROOM01" as RoomCode }),
+    );
+
+    await waitFor(() => {
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    act(() => {
+      MockWebSocket.instances[0].emit("message", {
+        data: JSON.stringify({
+          type: "guesser_word",
+          data: {
+            word: "_ A _ _ A _ _",
+            round_number: 1,
+          },
+        }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.guesserWord).toEqual({
+        word: "_ A _ _ A _ _",
+        round_number: 1,
+      });
+    });
+  });
+
   it("marks the game ended while preserving the announcement message", async () => {
     const { result } = renderHook(() =>
       useRoomSocket({ roomCode: "ROOM01" as RoomCode }),

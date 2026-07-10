@@ -71,8 +71,19 @@ const drawerWordEnvelopeSchema = z.object({
   data: drawerWordSchema,
 });
 
+export const guesserWordSchema = z.object({
+  word: z.string().min(1),
+  round_number: z.number().int().positive(),
+});
+
+const guesserWordEnvelopeSchema = z.object({
+  type: z.literal("guesser_word"),
+  data: guesserWordSchema,
+});
+
 export type DrawStroke = z.infer<typeof drawStrokeSchema>;
 export type DrawerWord = z.infer<typeof drawerWordSchema>;
+export type GuesserWord = z.infer<typeof guesserWordSchema>;
 export type RealtimeRoomSnapshot = z.infer<typeof roomSnapshotSchema>;
 
 export type RoomSocketEvent =
@@ -87,6 +98,10 @@ export type RoomSocketEvent =
   | {
       drawerWord: DrawerWord;
       type: "drawer_word";
+    }
+  | {
+      guesserWord: GuesserWord;
+      type: "guesser_word";
     }
   | {
       text: string;
@@ -148,6 +163,17 @@ export function parseRoomSocketMessage(data: unknown): RoomSocketEvent {
       return {
         drawerWord: drawerWordEnvelope.data.data,
         type: "drawer_word",
+      };
+    }
+
+    const guesserWordEnvelope = guesserWordEnvelopeSchema.safeParse(
+      parsedJson.value,
+    );
+
+    if (guesserWordEnvelope.success) {
+      return {
+        guesserWord: guesserWordEnvelope.data.data,
+        type: "guesser_word",
       };
     }
 

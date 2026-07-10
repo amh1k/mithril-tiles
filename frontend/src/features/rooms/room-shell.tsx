@@ -37,7 +37,10 @@ import {
 import { Input } from "@/components/ui/input";
 import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
-import { useRoomSocket } from "@/features/realtime/use-room-socket";
+import {
+  useRoomSocket,
+  type RoomSocketStatus,
+} from "@/features/realtime/use-room-socket";
 import {
   fetchFinalScores,
   fetchParticipantPrincipal,
@@ -94,12 +97,19 @@ const DRAWING_COLORS = [
   },
 ];
 const ERASER_COLOR = "#ffffff";
+const BRUSH_SIZES = [
+  { label: "Fine", value: 0.006 },
+  { label: "Medium", value: 0.012 },
+  { label: "Bold", value: 0.02 },
+  { label: "Broad", value: 0.032 },
+];
 
 export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const socket = useRoomSocket({ roomCode });
   const [chatMessage, setChatMessage] = useState("");
   const [roomCodeCopied, setRoomCodeCopied] = useState(false);
   const [drawingColor, setDrawingColor] = useState(DRAWING_COLORS[0].value);
+  const [brushSize, setBrushSize] = useState(BRUSH_SIZES[1].value);
   const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
   const [selectedWordPackId, setSelectedWordPackId] = useState("");
@@ -111,7 +121,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     "idle" | "starting" | "started"
   >("idle");
   const [finalScores, setFinalScores] = useState<ResolvedGameFinalScore[]>([]);
-  const [finalScoresDismissed, setFinalScoresDismissed] = useState(false);
   const [finalScoresStatus, setFinalScoresStatus] = useState<
     "idle" | "loading" | "ready" | "failed"
   >("idle");
@@ -172,28 +181,33 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       return;
     }
 
-    previousRoundTransitionKeyRef.current = transitionKey;
+    const updateTransition = window.setTimeout(() => {
+      previousRoundTransitionKeyRef.current = transitionKey;
 
-    if (roomSnapshot.phase === "active_round") {
-      setRoundTransition({
-        key: transitionKey,
-        title: roomSnapshot.roundLabel,
-        description:
-          roomSnapshot.drawerName === null
-            ? "A new round has begun."
-            : `${roomSnapshot.drawerName} takes the quill.`,
-        tone: "start",
-      });
-    } else if (roomSnapshot.phase === "round_cooldown") {
-      setRoundTransition({
-        key: transitionKey,
-        title: "Round complete",
-        description: "Gather your guesses. The next parchment is being prepared.",
-        tone: "break",
-      });
-    } else {
-      setRoundTransition(null);
-    }
+      if (roomSnapshot.phase === "active_round") {
+        setRoundTransition({
+          key: transitionKey,
+          title: roomSnapshot.roundLabel,
+          description:
+            roomSnapshot.drawerName === null
+              ? "A new round has begun."
+              : `${roomSnapshot.drawerName} takes the quill.`,
+          tone: "start",
+        });
+      } else if (roomSnapshot.phase === "round_cooldown") {
+        setRoundTransition({
+          key: transitionKey,
+          title: "Round complete",
+          description:
+            "Gather your guesses. The next parchment is being prepared.",
+          tone: "break",
+        });
+      } else {
+        setRoundTransition(null);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(updateTransition);
   }, [
     roomSnapshot.drawerName,
     roomSnapshot.gameId,
@@ -229,8 +243,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       wordPacks.find((pack) => pack.id === activeWordPackId) ?? null;
 
     if (activeWordPack !== null) {
-      setSelectedWordPackId(activeWordPack.id);
-      setWordPack(activeWordPack);
+      const updateWordPack = window.setTimeout(() => {
+        setSelectedWordPackId(activeWordPack.id);
+        setWordPack(activeWordPack);
+      }, 0);
+
+      return () => window.clearTimeout(updateWordPack);
     }
   }, [socket.roomSnapshot, wordPack, wordPacks]);
 
@@ -242,7 +260,6 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     const abortController = new AbortController();
 
     async function loadFinalScores() {
-      setFinalScoresDismissed(false);
       setFinalScoresStatus("loading");
 
       try {
@@ -430,6 +447,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     socket.status === "connected";
   const isCurrentPlayerDrawer =
     roomSnapshot.drawerName === principal.display_name;
+  const guesserWord =
+    roomSnapshot.phase === "active_round" &&
+    socket.guesserWord != null &&
+    socket.guesserWord.round_number === socket.roomSnapshot?.game?.round_number
+      ? socket.guesserWord.word
+      : null;
   const isCurrentPlayerHost = roomSnapshot.players.some(
     (player) => player.id === principal.id && player.isHost,
   );
@@ -438,6 +461,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     (roomSnapshot.phase === "active_round" ||
       startGameStatus === "started") &&
     socket.status === "connected";
+
+  if (socket.hasReceivedSnapshot === false) {
+    return <RoomSynchronizingPanel socketStatus={socket.status} />;
+  }
 
   if (wordPack === null && isCurrentPlayerHost) {
     return (
@@ -455,9 +482,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div>
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 sm:py-6">
+      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
               Room
@@ -494,7 +521,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
+        <div className="grid min-w-0 grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
           <StatusTile
             icon={Users}
             label="Players"
@@ -526,14 +553,14 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       {roundTimerLabel !== null && (
         <section
-          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-6 py-4 text-center shadow-xl shadow-[#2b1e12]/20"
+          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-4 py-3 text-center shadow-xl shadow-[#2b1e12]/20 sm:px-6 sm:py-4"
           aria-label="Round timer"
         >
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#bba88d]">
               Time remaining
             </p>
-            <p className="mt-1 font-serif text-4xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
+            <p className="mt-1 font-serif text-3xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
               {roundTimerLabel}
             </p>
           </div>
@@ -542,7 +569,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       <RoundTransitionOverlay transition={roundTransition} />
 
-      <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+      <section className="grid min-h-0 gap-4 lg:h-[42rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:h-[46rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
@@ -610,7 +637,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
 
         <Card
-          className={`order-1 min-h-0 lg:order-2 ${
+          className={`order-1 min-h-[30rem] lg:order-2 lg:min-h-0 ${
             roomSnapshot.phase === "active_round"
               ? "border-primary/30 shadow-lg shadow-primary/5"
               : ""
@@ -647,50 +674,91 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       : "Watch the drawing and submit your guess in chat."
                     : "Test the canvas while everyone gets ready."}
                 </CardDescription>
-                {socket.drawerWord !== null && (
-                  <p className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
-                    Your word: {socket.drawerWord.word}
-                  </p>
-                )}
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2">
+                  {guesserWord !== null && (
+                    <p className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-2 font-mono text-sm font-semibold tracking-[0.18em] text-[#2b1e12] sm:tracking-[0.24em]">
+                      {guesserWord}
+                    </p>
+                  )}
+                  {socket.drawerWord !== null && (
+                    <p className="inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
+                      Your word: {socket.drawerWord.word}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {(roomSnapshot.phase !== "active_round" ||
                 isCurrentPlayerDrawer) && (
                 <div
-                  className="flex flex-wrap gap-2"
+                  className="flex flex-wrap items-center gap-3"
                   aria-label="Drawing tool"
-                  role="radiogroup"
+                  role="group"
                 >
-                  {DRAWING_COLORS.map((color) => (
-                    <button
-                      key={color.value}
-                      aria-checked={drawingColor === color.value}
-                      aria-label={color.label}
-                      className="size-8 rounded-full border border-foreground/20 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
-                      onClick={() => setDrawingColor(color.value)}
-                      role="radio"
-                      style={{
-                        backgroundColor: color.value,
-                      }}
-                      type="button"
-                    />
-                  ))}
-                  <button
-                    aria-checked={isErasing}
-                    aria-label="Eraser"
-                    className="flex size-8 items-center justify-center rounded-full border border-foreground/20 bg-white text-slate-900 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
-                    onClick={() => setDrawingColor(ERASER_COLOR)}
-                    role="radio"
-                    type="button"
+                  <div
+                    className="flex flex-wrap gap-2"
+                    aria-label="Drawing color"
+                    role="radiogroup"
                   >
-                    <Eraser className="size-4" aria-hidden="true" />
-                  </button>
+                    {DRAWING_COLORS.map((color) => (
+                      <button
+                        key={color.value}
+                        aria-checked={drawingColor === color.value}
+                        aria-label={color.label}
+                        className="size-11 touch-manipulation rounded-full border border-foreground/30 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                        onClick={() => setDrawingColor(color.value)}
+                        role="radio"
+                        style={{
+                          backgroundColor: color.value,
+                        }}
+                        type="button"
+                      />
+                    ))}
+                    <button
+                      aria-checked={isErasing}
+                      aria-label="Eraser"
+                      className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-foreground/30 bg-white text-slate-900 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                      onClick={() => setDrawingColor(ERASER_COLOR)}
+                      role="radio"
+                      type="button"
+                    >
+                      <Eraser className="size-4" aria-hidden="true" />
+                    </button>
+                  </div>
+
+                  <div
+                    className="flex items-center gap-1.5 border-l border-[#946440]/45 pl-3"
+                    aria-label="Brush size"
+                    role="radiogroup"
+                  >
+                    {BRUSH_SIZES.map((size) => (
+                      <button
+                        key={size.label}
+                        aria-checked={brushSize === size.value}
+                        aria-label={`${size.label} brush`}
+                        className="flex size-11 touch-manipulation items-center justify-center rounded-lg border border-[#946440]/55 bg-[#bba88d]/30 text-[#2b1e12] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-[#bba88d]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-0 aria-checked:border-[#5d542b] aria-checked:bg-[#5d542b] aria-checked:text-[#f4ead7]"
+                        onClick={() => setBrushSize(size.value)}
+                        role="radio"
+                        title={`${size.label} brush`}
+                        type="button"
+                      >
+                        <span
+                          className="rounded-full bg-current"
+                          style={{
+                            height: `${Math.max(4, Math.round(size.value * 300))}px`,
+                            width: `${Math.max(4, Math.round(size.value * 300))}px`,
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </CardHeader>
           <CardContent className="flex flex-1">
             <DrawingCanvas
+              brushSize={brushSize}
               color={drawingColor}
               disabled={
                 roomSnapshot.phase === "active_round" && !isCurrentPlayerDrawer
@@ -705,7 +773,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
 
-        <Card className="order-3 min-h-0">
+        <Card className="order-3 min-h-0 max-h-[36rem] lg:max-h-none">
           <CardHeader>
             <CardTitle>Chat & guesses</CardTitle>
             <CardDescription>
@@ -728,7 +796,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 </p>
               ) : (
                 socket.messages.map((message) => (
-                  <p key={message.id} className="whitespace-pre-wrap">
+                  <p
+                    key={message.id}
+                    className="break-words whitespace-pre-wrap"
+                  >
                     {message.text}
                   </p>
                 ))
@@ -766,31 +837,63 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
       </section>
 
-      {!finalScoresDismissed && (
-        <FinalScoresOverlay
-          finalScores={finalScores}
-          onClose={() => setFinalScoresDismissed(true)}
-          status={finalScoresStatus}
-        />
-      )}
+      <FinalScoresOverlay finalScores={finalScores} status={finalScoresStatus} />
+    </main>
+  );
+}
+
+function RoomSynchronizingPanel({
+  socketStatus,
+}: {
+  socketStatus: RoomSocketStatus;
+}) {
+  return (
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-[#946440]/60 bg-[#2b1e12]/85 p-6 text-center text-[#f4ead7] shadow-[0_18px_42px_rgba(43,30,18,0.3)]">
+        <div className="max-w-md">
+          <LoaderCircle
+            className="mx-auto size-9 animate-spin text-[#bba88d]"
+            aria-hidden="true"
+          />
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.25em] text-[#d7bd89]">
+            Entering the room
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold">Reading the room</h1>
+          <p className="mt-3 text-sm leading-6 text-[#f4ead7]/85">
+            Waiting for the fellowship, host, and game state to be confirmed.
+          </p>
+          {socketStatus === "failed" && (
+            <p className="mt-4 text-sm font-medium text-[#f0c39b]">
+              The room state could not be loaded. Re-enter the room to try
+              again.
+            </p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
 
 function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const serverClockOffsetMs = useMemo(() => {
+  const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
+
+  useEffect(() => {
     if (roomSnapshot.serverTime === null) {
-      return 0;
+      return;
     }
 
     const serverTimeMs = Date.parse(roomSnapshot.serverTime);
 
     if (Number.isNaN(serverTimeMs)) {
-      return 0;
+      return;
     }
 
-    return serverTimeMs - Date.now();
+    const updateOffset = window.setTimeout(() => {
+      setServerClockOffsetMs(serverTimeMs - Date.now());
+    }, 0);
+
+    return () => window.clearTimeout(updateOffset);
   }, [roomSnapshot.serverTime]);
 
   useEffect(() => {
@@ -801,13 +904,16 @@ function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
       return;
     }
 
-    setNowMs(Date.now());
+    const initialTick = window.setTimeout(() => {
+      setNowMs(Date.now());
+    }, 0);
 
     const interval = window.setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
 
     return () => {
+      window.clearTimeout(initialTick);
       window.clearInterval(interval);
     };
   }, [roomSnapshot.phase, roomSnapshot.roundEndsAt]);
@@ -1001,14 +1107,16 @@ type StatusTileProps = {
 
 function StatusTile({ icon: Icon, label, value }: StatusTileProps) {
   return (
-    <div className="rounded-xl border bg-background/60 p-3">
+    <div className="min-w-0 rounded-xl border bg-background/60 p-3">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon className="size-4" aria-hidden="true" />
         <span className="text-xs font-medium uppercase tracking-wide">
           {label}
         </span>
       </div>
-      <p className="mt-2 font-medium">{value}</p>
+      <p className="mt-2 truncate font-medium" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -1257,13 +1365,11 @@ function StartGameStatus({ errorMessage, status }: StartGameStatusProps) {
 
 type FinalScoresStatusProps = {
   finalScores: ResolvedGameFinalScore[];
-  onClose: () => void;
   status: "idle" | "loading" | "ready" | "failed";
 };
 
 function FinalScoresOverlay({
   finalScores,
-  onClose,
   status,
 }: FinalScoresStatusProps) {
   if (status === "idle") {
@@ -1318,11 +1424,8 @@ function FinalScoresOverlay({
             Final scores could not be loaded yet. They may still be saving.
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <Button onClick={onClose} type="button" variant="outline">
-              Return to room
-            </Button>
             <Link className={buttonVariants()} href="/play">
-              Leave room
+              Choose another room
             </Link>
           </div>
         </div>
@@ -1345,16 +1448,13 @@ function FinalScoresOverlay({
         className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border bg-card shadow-2xl"
         role="dialog"
       >
-        <Button
-          aria-label="Close final scores"
-          className="absolute right-3 top-3 z-10 rounded-full"
-          onClick={onClose}
-          size="icon"
-          type="button"
-          variant="secondary"
+        <Link
+          aria-label="Leave completed room"
+          className={`${buttonVariants({ variant: "secondary", size: "icon" })} absolute right-3 top-3 z-10 rounded-full`}
+          href="/play"
         >
           <X className="size-4" aria-hidden="true" />
-        </Button>
+        </Link>
         <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
           <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
           <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
@@ -1402,11 +1502,8 @@ function FinalScoresOverlay({
             </>
           )}
           <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
-            <Button onClick={onClose} type="button" variant="outline">
-              Return to room
-            </Button>
             <Link className={buttonVariants()} href="/play">
-              Leave room
+              Choose another room
             </Link>
           </div>
         </div>

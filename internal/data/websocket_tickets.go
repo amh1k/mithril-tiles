@@ -167,12 +167,12 @@ func (m WebSocketTicketModel) Consume(
 		err = tx.QueryRow(
 			ctx,
 			`
-			SELECT id, display_name, account_status
+			SELECT id, display_name, role, account_status
 			FROM users
 			WHERE id = $1
 				AND account_status = 'active'`,
 			*userID,
-		).Scan(&user.ID, &user.DisplayName, &user.AccountStatus)
+		).Scan(&user.ID, &user.DisplayName, &user.Role, &user.AccountStatus)
 		if errors.Is(err, pgx.ErrNoRows) {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
 				return nil, commitErr

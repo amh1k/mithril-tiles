@@ -46,6 +46,10 @@ func (p *Principal) IsGuest() bool {
 	return p != nil && p.Type == PrincipalGuest && p.GuestSession != nil
 }
 
+func (p *Principal) IsAdmin() bool {
+	return p.IsUser() && p.User.Role == UserRoleAdmin
+}
+
 func (p *Principal) ID() uuid.UUID {
 	switch {
 	case p.IsUser():

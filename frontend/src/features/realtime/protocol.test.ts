@@ -98,6 +98,26 @@ describe("parseRoomSocketMessage", () => {
     });
   });
 
+  it("parses masked words for guessers", () => {
+    expect(
+      parseRoomSocketMessage(
+        JSON.stringify({
+          type: "guesser_word",
+          data: {
+            word: "_ A _ _ A _ _",
+            round_number: 2,
+          },
+        }),
+      ),
+    ).toEqual({
+      guesserWord: {
+        word: "_ A _ _ A _ _",
+        round_number: 2,
+      },
+      type: "guesser_word",
+    });
+  });
+
   it("rejects invalid structured drawing events", () => {
     expect(
       parseRoomSocketMessage(

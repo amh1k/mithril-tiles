@@ -83,6 +83,7 @@ export async function POST(request: Request): Promise<Response> {
         type: "user",
         id: user.id,
         display_name: user.display_name,
+        role: user.role,
         handle: user.handle,
         avatar_url: user.avatar_url,
       },

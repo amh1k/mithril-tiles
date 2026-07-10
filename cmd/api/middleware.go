@@ -148,3 +148,13 @@ func (app *application) requireRegisteredUser(next http.HandlerFunc) http.Handle
 		next.ServeHTTP(w, r)
 	})
 }
+func(app *application)requireAdminUser(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r * http.Request) {
+		principal := app.contextGetPrincipal(r)
+		if !principal.IsAdmin() {
+			app.adminRequiredResponse(w, r)
+			return
+		}
+		next.ServeHTTP(w,r)
+	})
+}
