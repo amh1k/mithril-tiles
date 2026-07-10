@@ -1,7 +1,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogIn, LogOut, Sparkles, UserPlus } from "lucide-react";
+import {
+  Info,
+  LogIn,
+  LogOut,
+  ScrollText,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -48,6 +55,26 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex items-center gap-2 rounded-xl border border-[#bba88d]/15 bg-[#2b1e12]/30 p-1 shadow-inner">
+          <Link
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "h-10 px-3 text-[#bba88d] hover:bg-[#946440]/35 hover:text-white",
+            )}
+            href="/rules"
+          >
+            <ScrollText aria-hidden="true" />
+            <span className="hidden sm:inline">Rules</span>
+          </Link>
+          <Link
+            className={cn(
+              buttonVariants({ variant: "ghost" }),
+              "h-10 px-3 text-[#bba88d] hover:bg-[#946440]/35 hover:text-white",
+            )}
+            href="/about"
+          >
+            <Info aria-hidden="true" />
+            <span className="hidden sm:inline">About</span>
+          </Link>
           {sessionQuery.isPending ? (
             <span
               className="h-9 w-28 animate-pulse rounded-lg bg-white/10"

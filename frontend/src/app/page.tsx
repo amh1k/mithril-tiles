@@ -142,36 +142,52 @@ export default function Home() {
 
         <section>
           <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6">
-            <div className="mb-8">
-              <p className="text-sm font-medium text-[#bba88d]">
+            <div className="mb-10 text-center">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#bba88d]">
                 One room, three simple moves
               </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#bba88d]">
+              <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-[#f4ead7]">
                 How a round unfolds
               </h2>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-5 md:grid-cols-3">
               {steps.map(({ icon: Icon, title, description }, index) => (
                 <article
                   key={title}
-                  className="feature-card-reveal feature-card-ambient group rounded-2xl border border-[#bba88d]/30 bg-[#2b1e12]/72 p-5 text-[#bba88d] shadow-[0_18px_50px_rgba(43,30,18,0.42)] backdrop-blur-[3px] transition duration-300 hover:-translate-y-2 hover:border-[#946440] hover:shadow-[0_24px_60px_rgba(43,30,18,0.58)]"
+                  className="feature-card-reveal feature-card-ambient group relative overflow-hidden rounded-[1.75rem] border border-[#946440]/55 bg-[linear-gradient(rgba(187,168,141,0.82),rgba(148,100,64,0.34)),url('/textures/parchment-background.png')] bg-cover p-5 text-[#2b1e12] shadow-[0_22px_60px_rgba(43,30,18,0.46)] transition duration-300 before:pointer-events-none before:absolute before:inset-3 before:rounded-[1.25rem] before:border before:border-[#5d542b]/25 hover:-translate-y-2 hover:border-[#bba88d] hover:shadow-[0_30px_75px_rgba(43,30,18,0.62)]"
                   style={{
                     "--reveal-delay": `${120 + index * 120}ms`,
                     "--ambient-delay": `${index * 420}ms`,
                   } as CSSProperties}
                 >
-                  <span
-                    className="feature-icon-float flex size-10 items-center justify-center rounded-lg border border-[#bba88d]/20 bg-[#946440]/25 text-[#bba88d] transition-transform duration-300 group-hover:scale-110"
-                    style={{
-                      "--ambient-delay": `${index * 420}ms`,
-                    } as CSSProperties}
-                  >
-                    <Icon className="size-5" aria-hidden="true" />
-                  </span>
-                  <h3 className="mt-5 font-semibold text-[#f4ead7]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#d8c7ad]">
-                    {description}
-                  </p>
+                  <div className="relative">
+                    <div className="flex items-start justify-between gap-4">
+                      <span
+                        className="feature-icon-float flex size-12 items-center justify-center rounded-t-full border-2 border-[#5d542b]/50 bg-[#2b1e12]/12 text-[#5d542b] transition-transform duration-300 group-hover:scale-110"
+                        style={{
+                          "--ambient-delay": `${index * 420}ms`,
+                        } as CSSProperties}
+                      >
+                        <Icon className="size-6" aria-hidden="true" />
+                      </span>
+                      <span className="font-serif text-4xl font-bold leading-none text-[#946440]/55">
+                        0{index + 1}
+                      </span>
+                    </div>
+
+                    <div className="my-5 flex items-center gap-3 text-[#946440]">
+                      <span className="h-px flex-1 bg-current/45" />
+                      <span className="size-2 rotate-45 border border-current" />
+                      <span className="h-px flex-1 bg-current/45" />
+                    </div>
+
+                    <h3 className="font-serif text-2xl font-bold text-[#2b1e12]">
+                      {title}
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-[#3b2818]">
+                      {description}
+                    </p>
+                  </div>
                 </article>
               ))}
             </div>

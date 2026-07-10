@@ -24,11 +24,17 @@ var (
 	ErrDuplicateHandle = errors.New("duplicate handle")
 )
 
+const (
+	UserRoleNormal = "normal"
+	UserRoleAdmin  = "admin"
+)
+
 type User struct {
 	ID            uuid.UUID `json:"id"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	DisplayName   string    `json:"display_name"`
+	Role          string    `json:"role"`
 	AccountStatus string    `json:"account_status"`
 	Handle        string    `json:"handle"`
 	Email         string    `json:"email"`
@@ -86,12 +92,13 @@ func (m UserModel) Insert(user *User) error {
 	query := `
 	INSERT INTO users (display_name, handle, email, password, avatar_url)
 	VALUES ($1, $2, $3, $4, $5)
-	RETURNING id, account_status, created_at, updated_at`
+	RETURNING id, role, account_status, created_at, updated_at`
 	args := []any{user.DisplayName, user.Handle, user.Email, user.Password.Hash, user.AvatarURL}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	err := m.DB.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
+		&user.Role,
 		&user.AccountStatus,
 		&user.CreatedAt,
 		&user.UpdatedAt,
@@ -130,7 +137,7 @@ func (m UserModel) Delete(id uuid.UUID) error {
 
 func (m UserModel) GetByEmail(email string) (*User, error) {
 	query := `
-	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
+	SELECT id, created_at, role, account_status, avatar_url,display_name, email, password, handle,updated_at
 	FROM users
 	WHERE email = $1`
 	var user User
@@ -139,6 +146,7 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 	err := m.DB.QueryRow(ctx, query, email).Scan(
 		&user.ID,
 		&user.CreatedAt,
+		&user.Role,
 		&user.AccountStatus,
 		&user.AvatarURL,
 		&user.DisplayName,
@@ -162,7 +170,7 @@ func (m UserModel) GetByEmail(email string) (*User, error) {
 
 func (m UserModel) Get(id uuid.UUID) (*User, error) {
 	query := `
-	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
+	SELECT id, created_at, role, account_status, avatar_url,display_name, email, password, handle,updated_at
 	FROM users
 	WHERE id = $1`
 	var user User
@@ -171,6 +179,7 @@ func (m UserModel) Get(id uuid.UUID) (*User, error) {
 	err := m.DB.QueryRow(ctx, query, id).Scan(
 		&user.ID,
 		&user.CreatedAt,
+		&user.Role,
 		&user.AccountStatus,
 		&user.AvatarURL,
 		&user.DisplayName,
@@ -254,7 +263,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
 
 	query := `
-	SELECT id, created_at, account_status, avatar_url,display_name, email, password, handle,updated_at
+	SELECT id, created_at, role, account_status, avatar_url,display_name, email, password, handle,updated_at
 	FROM users
 	INNER JOIN tokens
 	ON users.id = tokens.user_id
@@ -270,6 +279,7 @@ func (m UserModel) GetForToken(tokenScope, tokenPlaintext string) (*User, error)
 	err := m.DB.QueryRow(ctx, query, args...).Scan(
 		&user.ID,
 		&user.CreatedAt,
+		&user.Role,
 		&user.AccountStatus,
 		&user.AvatarURL,
 		&user.DisplayName,
