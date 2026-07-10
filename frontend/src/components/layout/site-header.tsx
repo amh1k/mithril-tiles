@@ -6,6 +6,7 @@ import {
   LogIn,
   LogOut,
   ScrollText,
+  Shield,
   Sparkles,
   UserPlus,
 } from "lucide-react";
@@ -91,6 +92,19 @@ export function SiteHeader() {
             </Button>
           ) : sessionQuery.data ? (
             <>
+              {sessionQuery.data.type === "user" &&
+                sessionQuery.data.role === "admin" && (
+                  <Link
+                    className={cn(
+                      buttonVariants({ variant: "ghost" }),
+                      "h-10 px-3 text-[#bba88d] hover:bg-[#946440]/35 hover:text-white",
+                    )}
+                    href="/admin"
+                  >
+                    <Shield aria-hidden="true" />
+                    <span className="hidden lg:inline">Admin</span>
+                  </Link>
+                )}
               <Link
                 className={cn(
                   buttonVariants({ variant: "ghost" }),

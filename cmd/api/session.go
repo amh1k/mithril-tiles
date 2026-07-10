@@ -12,6 +12,7 @@ type sessionPrincipal struct {
 	DisplayName string             `json:"display_name"`
 	Handle      string             `json:"handle,omitempty"`
 	AvatarURL   string             `json:"avatar_url,omitempty"`
+	Role        string             `json:"role,omitempty"`
 }
 
 func (app *application) handleGetSession(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +31,7 @@ func (app *application) handleGetSession(w http.ResponseWriter, r *http.Request)
 	if principal.IsUser() {
 		responsePrincipal.Handle = principal.User.Handle
 		responsePrincipal.AvatarURL = principal.User.AvatarURL
+		responsePrincipal.Role = principal.User.Role
 	}
 
 	w.Header().Set("Cache-Control", "no-store")

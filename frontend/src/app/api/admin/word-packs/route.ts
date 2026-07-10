@@ -1,7 +1,5 @@
-import {
-  loginRequestSchema,
-  userAuthResponseSchema,
-} from "@/features/auth/schemas";
+import { wordPackMutationSchema } from "@/features/admin/word-pack-management";
+import { wordPackResponseSchema } from "@/features/rooms/word-pack";
 import { requestBackend } from "@/lib/api/backend";
 import {
   frontendApiErrorResponse,
@@ -13,13 +11,13 @@ import {
   hasJsonContentType,
   hasTrustedMutationOrigin,
 } from "@/lib/api/mutation-request";
-import { setSessionCookie } from "@/lib/auth/session-cookie";
+import { getSessionToken } from "@/lib/auth/session-cookie";
 import { serverEnv } from "@/lib/env/server";
 
 const backendUnavailableError: FrontendApiError = {
   status: 502,
   code: "server_error",
-  message: "The authentication service is temporarily unavailable.",
+  message: "The word pack service is temporarily unavailable.",
 };
 
 export async function POST(request: Request): Promise<Response> {
@@ -37,19 +35,30 @@ export async function POST(request: Request): Promise<Response> {
       message: "Content-Type must be application/json.",
     });
   }
-  const requestBody = await request.json().catch(() => undefined);
-  const parsedRequest = loginRequestSchema.safeParse(requestBody);
+
+  const parsedRequest = wordPackMutationSchema.safeParse(
+    await request.json().catch(() => undefined),
+  );
   if (!parsedRequest.success) {
     return frontendApiErrorResponse(
       normalizeValidationError(parsedRequest.error),
     );
   }
 
-  let backendResponse: Response;
+  const token = await getSessionToken();
+  if (!token) {
+    return frontendApiErrorResponse({
+      status: 401,
+      code: "unauthorized",
+      message: "Authentication is required.",
+    });
+  }
 
+  let backendResponse: Response;
   try {
-    backendResponse = await requestBackend("/v1/users/login", {
+    backendResponse = await requestBackend("/v1/word-packs", {
       method: "POST",
+      bearerToken: token,
       json: parsedRequest.data,
     });
   } catch {
@@ -62,38 +71,15 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const parsedResponse = userAuthResponseSchema.safeParse(
+  const parsedResponse = wordPackResponseSchema.safeParse(
     await backendResponse.json().catch(() => undefined),
   );
-
   if (!parsedResponse.success) {
     return frontendApiErrorResponse(backendUnavailableError);
   }
 
-  const { authentication_token: token, user } = parsedResponse.data;
-
-  try {
-    await setSessionCookie(token.token, token.expiry);
-  } catch {
-    return frontendApiErrorResponse(backendUnavailableError);
-  }
-
-  return Response.json(
-    {
-      principal: {
-        type: "user",
-        id: user.id,
-        display_name: user.display_name,
-        role: user.role,
-        handle: user.handle,
-        avatar_url: user.avatar_url,
-      },
-    },
-    {
-      status: 201,
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    },
-  );
+  return Response.json(parsedResponse.data, {
+    status: 201,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
