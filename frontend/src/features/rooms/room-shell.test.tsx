@@ -92,6 +92,7 @@ function renderRoomShell({
     drawerWord,
     errorMessage,
     gameEndedAt,
+    guesserWord: null,
     messages,
     retryAttempt: 0,
     roomSnapshot,

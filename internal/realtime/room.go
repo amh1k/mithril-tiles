@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const roundDuration = 30 * time.Second
+const roundDuration = 60 * time.Second
 const totalRounds = 2
 
 type GameState string
@@ -111,6 +111,7 @@ type Room struct {
 	gameState      GameState
 	RoundState     RoundState
 	roundInfo      chan string
+	roundCancel    func()
 	done           chan struct{}
 	doneOnce       sync.Once
 	gameLifecycle  GameLifecycle

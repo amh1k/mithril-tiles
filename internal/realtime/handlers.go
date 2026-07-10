@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -147,6 +148,123 @@ func (r *Room) handleDirectMessage(dm DirectMessage) {
 		dm.toClient.Mu.Unlock()
 	default:
 		fmt.Printf("Couldn't deliver DM to %s\n", dm.toClient.Principal.DisplayName())
+	}
+}
+ func maskedWordhelper(word string , arr[]int) string {
+	mp := make(map[int]int)
+	var builder strings.Builder
+	for _, i := range arr {
+		mp[i] = 1 
+	}
+	for i := range len(word) {
+		_,  exists := mp[i]
+		if exists {
+			builder.WriteByte(word[i])
+
+		}else {
+			builder.WriteByte('_')
+		}
+
+	}
+	return builder.String()
+	
+ }
+
+func (r *Room)sendGuesserWord(word string, roundNumber int, ctx context.Context)  {
+	payload := struct {
+		Type string `json:"type"`
+		Data struct {
+			RoundNumber int `json:"round_number"`
+			Word  		string `json:"word"`
+	} `json:"data"`
+	}{
+		Type: "guesser_word",
+
+	}
+	wordLength := len(word)
+	var arr []int
+	for i := range wordLength  {
+		arr = append(arr, i)
+	}
+	rand.Shuffle(len(arr), func(i, j int) {
+		arr[i], arr[j] = arr[j], arr[i]
+	})
+	timer1 := time.NewTimer(10 * time.Second)
+	timer2 := time.NewTimer(30 * time.Second)
+	timer3 := time.NewTimer(50 * time.Second)
+	defer timer1.Stop()
+	defer timer2.Stop()
+	for {
+		select {
+	case <- timer1.C:
+		tempArr := arr[:1]
+		wordToSend := maskedWordhelper(word, tempArr)
+		payload.Data.RoundNumber = roundNumber
+		payload.Data.Word = wordToSend
+		data, err := json.Marshal(payload)
+		if err != nil {
+			continue
+		}
+		r.broadcast <- string(data)
+
+	case <- timer2.C:
+		tempArr := arr[:3]
+		wordToSend := maskedWordhelper(word, tempArr)
+		payload.Data.RoundNumber = roundNumber
+		payload.Data.Word = wordToSend
+		data, err := json.Marshal(payload)
+		if err != nil {
+			continue
+		}
+		r.broadcast <- string(data)
+	case <- timer3.C:
+		tempArr := arr[:4]
+		wordToSend := maskedWordhelper(word, tempArr)
+		payload.Data.RoundNumber = roundNumber
+		payload.Data.Word = wordToSend
+		data, err := json.Marshal(payload)
+		if err != nil {
+			continue
+		}
+		r.broadcast <- string(data)
+
+	case <- ctx.Done():
+		return
+	case <-r.done:
+		return
+	}
+	}
+
+
+
+
+
+
+}
+
+func (r *Room) startGuesserWord(word string, roundNumber int) {
+	roundCtx, roundCancel := context.WithCancel(context.Background())
+
+	r.mu.Lock()
+	previousRoundCancel := r.roundCancel
+	r.roundCancel = roundCancel
+	r.mu.Unlock()
+
+	if previousRoundCancel != nil {
+		previousRoundCancel()
+	}
+
+	go r.sendGuesserWord(word, roundNumber, roundCtx)
+}
+
+func (r *Room) cancelGuesserWord() {
+	r.mu.Lock()
+	roundCancel := r.roundCancel
+	r.roundCancel = nil
+	r.mu.Unlock()
+
+	if roundCancel != nil {
+		roundCancel()
 	}
 }
 
@@ -338,6 +456,8 @@ func (r *Room) CanStart() bool {
 }
 
 func (r *Room) endRound() {
+	r.cancelGuesserWord()
+
 	r.mu.Lock()
 	drawer := r.currentDrawer
 	r.mu.Unlock()
@@ -451,6 +571,8 @@ func (r *Room) startRound() {
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
 	r.sendDrawerWord(drawer, result.Word, roundNumber)
+	r.startGuesserWord(result.Word, roundNumber)
+
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
 	r.handleSnapshotRequest()
 
@@ -557,6 +679,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 	r.mu.Unlock()
 
 	r.sendDrawerWord(completion.drawer, result.Word, result.Round.RoundNumber)
+	r.startGuesserWord(result.Word, result.Round.RoundNumber)
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
 	r.handleSnapshotRequest()
 

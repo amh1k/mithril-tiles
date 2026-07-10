@@ -6,6 +6,7 @@ import {
   parseRoomSocketMessage,
   type DrawStroke,
   type DrawerWord,
+  type GuesserWord,
   type RealtimeRoomSnapshot,
 } from "@/features/realtime/protocol";
 import type { RoomCode } from "@/features/rooms/room-code";
@@ -26,6 +27,8 @@ type RoomSocketState = {
   drawerWord: DrawerWord | null;
   errorMessage?: string;
   gameEndedAt: number | null;
+  guesserWord: GuesserWord | null;
+  hasReceivedSnapshot: boolean;
   messages: RoomChatMessage[];
   retryAttempt: number;
   roomSnapshot: RealtimeRoomSnapshot | null;
@@ -101,6 +104,8 @@ export function useRoomSocket({
     drawStrokes: [],
     drawerWord: null,
     gameEndedAt: null,
+    guesserWord: null,
+    hasReceivedSnapshot: false,
     messages: [],
     retryAttempt: 0,
     roomSnapshot: null,
@@ -108,6 +113,12 @@ export function useRoomSocket({
   });
 
   useEffect(() => {
+    setState((currentState) => ({
+      ...currentState,
+      hasReceivedSnapshot: false,
+      roomSnapshot: null,
+    }));
+
     const abortController = new AbortController();
     let closedByEffect = false;
     let activeConnectionId = 0;
@@ -232,11 +243,18 @@ export function useRoomSocket({
 
             return {
               ...currentState,
+              hasReceivedSnapshot: true,
               drawerWord:
                 parsedMessage.snapshot.round_state === "started" &&
                 currentState.drawerWord?.round_number ===
                   parsedMessage.snapshot.game?.round_number
                   ? currentState.drawerWord
+                  : null,
+              guesserWord:
+                parsedMessage.snapshot.round_state === "started" &&
+                currentState.guesserWord?.round_number ===
+                  parsedMessage.snapshot.game?.round_number
+                  ? currentState.guesserWord
                   : null,
               drawStrokes:
                 previousRoundKey === nextRoundKey
@@ -252,6 +270,14 @@ export function useRoomSocket({
           setState((currentState) => ({
             ...currentState,
             drawerWord: parsedMessage.drawerWord,
+          }));
+          return;
+        }
+
+        if (parsedMessage.type === "guesser_word") {
+          setState((currentState) => ({
+            ...currentState,
+            guesserWord: parsedMessage.guesserWord,
           }));
         }
       });

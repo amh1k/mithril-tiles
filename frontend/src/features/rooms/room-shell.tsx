@@ -37,7 +37,10 @@ import {
 import { Input } from "@/components/ui/input";
 import type { Principal } from "@/features/auth/schemas";
 import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
-import { useRoomSocket } from "@/features/realtime/use-room-socket";
+import {
+  useRoomSocket,
+  type RoomSocketStatus,
+} from "@/features/realtime/use-room-socket";
 import {
   fetchFinalScores,
   fetchParticipantPrincipal,
@@ -430,6 +433,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     socket.status === "connected";
   const isCurrentPlayerDrawer =
     roomSnapshot.drawerName === principal.display_name;
+  const guesserWord =
+    roomSnapshot.phase === "active_round" &&
+    socket.guesserWord != null &&
+    socket.guesserWord.round_number === socket.roomSnapshot?.game?.round_number
+      ? socket.guesserWord.word
+      : null;
   const isCurrentPlayerHost = roomSnapshot.players.some(
     (player) => player.id === principal.id && player.isHost,
   );
@@ -438,6 +447,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     (roomSnapshot.phase === "active_round" ||
       startGameStatus === "started") &&
     socket.status === "connected";
+
+  if (socket.hasReceivedSnapshot === false) {
+    return <RoomSynchronizingPanel socketStatus={socket.status} />;
+  }
 
   if (wordPack === null && isCurrentPlayerHost) {
     return (
@@ -647,11 +660,18 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       : "Watch the drawing and submit your guess in chat."
                     : "Test the canvas while everyone gets ready."}
                 </CardDescription>
-                {socket.drawerWord !== null && (
-                  <p className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
-                    Your word: {socket.drawerWord.word}
-                  </p>
-                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {guesserWord !== null && (
+                    <p className="inline-flex rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-1.5 font-mono text-sm font-semibold tracking-[0.24em] text-[#2b1e12]">
+                      {guesserWord}
+                    </p>
+                  )}
+                  {socket.drawerWord !== null && (
+                    <p className="inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
+                      Your word: {socket.drawerWord.word}
+                    </p>
+                  )}
+                </div>
               </div>
 
               {(roomSnapshot.phase !== "active_round" ||
@@ -773,6 +793,38 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           status={finalScoresStatus}
         />
       )}
+    </main>
+  );
+}
+
+function RoomSynchronizingPanel({
+  socketStatus,
+}: {
+  socketStatus: RoomSocketStatus;
+}) {
+  return (
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
+      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-[#946440]/60 bg-[#2b1e12]/85 p-6 text-center text-[#f4ead7] shadow-[0_18px_42px_rgba(43,30,18,0.3)]">
+        <div className="max-w-md">
+          <LoaderCircle
+            className="mx-auto size-9 animate-spin text-[#bba88d]"
+            aria-hidden="true"
+          />
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.25em] text-[#d7bd89]">
+            Entering the room
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold">Reading the room</h1>
+          <p className="mt-3 text-sm leading-6 text-[#f4ead7]/85">
+            Waiting for the fellowship, host, and game state to be confirmed.
+          </p>
+          {socketStatus === "failed" && (
+            <p className="mt-4 text-sm font-medium text-[#f0c39b]">
+              The room state could not be loaded. Re-enter the room to try
+              again.
+            </p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
