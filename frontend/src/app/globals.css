@@ -118,6 +118,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-width: 20rem;
+    overflow-x: clip;
+    text-rendering: optimizeLegibility;
     background-image:
       linear-gradient(rgb(244 228 190 / 28%), rgb(216 184 126 / 22%)),
       radial-gradient(circle at center, transparent 45%, rgb(62 42 30 / 24%) 130%),
@@ -135,6 +138,18 @@
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  ::selection {
+    background: rgb(110 108 52 / 42%);
+    color: #2b1e12;
+  }
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid #bba88d;
+    outline-offset: 3px;
+  }
+  :where(a, button, input, textarea, select) {
+    -webkit-tap-highlight-color: rgb(148 100 64 / 24%);
   }
   h1,
   h2,
@@ -334,4 +349,26 @@
     background-size: 240% 100%;
   }
 
+}
+
+@media (pointer: coarse) {
+  [data-slot="button"] {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

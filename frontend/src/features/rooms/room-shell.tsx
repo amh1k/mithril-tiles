@@ -175,28 +175,33 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       return;
     }
 
-    previousRoundTransitionKeyRef.current = transitionKey;
+    const updateTransition = window.setTimeout(() => {
+      previousRoundTransitionKeyRef.current = transitionKey;
 
-    if (roomSnapshot.phase === "active_round") {
-      setRoundTransition({
-        key: transitionKey,
-        title: roomSnapshot.roundLabel,
-        description:
-          roomSnapshot.drawerName === null
-            ? "A new round has begun."
-            : `${roomSnapshot.drawerName} takes the quill.`,
-        tone: "start",
-      });
-    } else if (roomSnapshot.phase === "round_cooldown") {
-      setRoundTransition({
-        key: transitionKey,
-        title: "Round complete",
-        description: "Gather your guesses. The next parchment is being prepared.",
-        tone: "break",
-      });
-    } else {
-      setRoundTransition(null);
-    }
+      if (roomSnapshot.phase === "active_round") {
+        setRoundTransition({
+          key: transitionKey,
+          title: roomSnapshot.roundLabel,
+          description:
+            roomSnapshot.drawerName === null
+              ? "A new round has begun."
+              : `${roomSnapshot.drawerName} takes the quill.`,
+          tone: "start",
+        });
+      } else if (roomSnapshot.phase === "round_cooldown") {
+        setRoundTransition({
+          key: transitionKey,
+          title: "Round complete",
+          description:
+            "Gather your guesses. The next parchment is being prepared.",
+          tone: "break",
+        });
+      } else {
+        setRoundTransition(null);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(updateTransition);
   }, [
     roomSnapshot.drawerName,
     roomSnapshot.gameId,
@@ -232,8 +237,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       wordPacks.find((pack) => pack.id === activeWordPackId) ?? null;
 
     if (activeWordPack !== null) {
-      setSelectedWordPackId(activeWordPack.id);
-      setWordPack(activeWordPack);
+      const updateWordPack = window.setTimeout(() => {
+        setSelectedWordPackId(activeWordPack.id);
+        setWordPack(activeWordPack);
+      }, 0);
+
+      return () => window.clearTimeout(updateWordPack);
     }
   }, [socket.roomSnapshot, wordPack, wordPacks]);
 
@@ -468,9 +477,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
-        <div>
+    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 sm:py-6">
+      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
               Room
@@ -507,7 +516,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
+        <div className="grid min-w-0 grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
           <StatusTile
             icon={Users}
             label="Players"
@@ -539,14 +548,14 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       {roundTimerLabel !== null && (
         <section
-          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-6 py-4 text-center shadow-xl shadow-[#2b1e12]/20"
+          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-4 py-3 text-center shadow-xl shadow-[#2b1e12]/20 sm:px-6 sm:py-4"
           aria-label="Round timer"
         >
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#bba88d]">
               Time remaining
             </p>
-            <p className="mt-1 font-serif text-4xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
+            <p className="mt-1 font-serif text-3xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
               {roundTimerLabel}
             </p>
           </div>
@@ -555,7 +564,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       <RoundTransitionOverlay transition={roundTransition} />
 
-      <section className="grid min-h-0 gap-4 lg:h-[calc(100vh-15rem)] lg:min-h-[34rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+      <section className="grid min-h-0 gap-4 lg:h-[42rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:h-[46rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
         <Card className="order-2 min-h-0 lg:order-1">
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
@@ -623,7 +632,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
 
         <Card
-          className={`order-1 min-h-0 lg:order-2 ${
+          className={`order-1 min-h-[30rem] lg:order-2 lg:min-h-0 ${
             roomSnapshot.phase === "active_round"
               ? "border-primary/30 shadow-lg shadow-primary/5"
               : ""
@@ -660,9 +669,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       : "Watch the drawing and submit your guess in chat."
                     : "Test the canvas while everyone gets ready."}
                 </CardDescription>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                   {guesserWord !== null && (
-                    <p className="inline-flex rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-1.5 font-mono text-sm font-semibold tracking-[0.24em] text-[#2b1e12]">
+                    <p className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-2 font-mono text-sm font-semibold tracking-[0.18em] text-[#2b1e12] sm:tracking-[0.24em]">
                       {guesserWord}
                     </p>
                   )}
@@ -686,7 +695,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       key={color.value}
                       aria-checked={drawingColor === color.value}
                       aria-label={color.label}
-                      className="size-8 rounded-full border border-foreground/20 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                      className="size-11 touch-manipulation rounded-full border border-foreground/30 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
                       onClick={() => setDrawingColor(color.value)}
                       role="radio"
                       style={{
@@ -698,7 +707,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                   <button
                     aria-checked={isErasing}
                     aria-label="Eraser"
-                    className="flex size-8 items-center justify-center rounded-full border border-foreground/20 bg-white text-slate-900 ring-offset-background transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                    className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-foreground/30 bg-white text-slate-900 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
                     onClick={() => setDrawingColor(ERASER_COLOR)}
                     role="radio"
                     type="button"
@@ -725,7 +734,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
 
-        <Card className="order-3 min-h-0">
+        <Card className="order-3 min-h-0 max-h-[36rem] lg:max-h-none">
           <CardHeader>
             <CardTitle>Chat & guesses</CardTitle>
             <CardDescription>
@@ -748,7 +757,10 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 </p>
               ) : (
                 socket.messages.map((message) => (
-                  <p key={message.id} className="whitespace-pre-wrap">
+                  <p
+                    key={message.id}
+                    className="break-words whitespace-pre-wrap"
+                  >
                     {message.text}
                   </p>
                 ))
@@ -831,18 +843,24 @@ function RoomSynchronizingPanel({
 
 function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const serverClockOffsetMs = useMemo(() => {
+  const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
+
+  useEffect(() => {
     if (roomSnapshot.serverTime === null) {
-      return 0;
+      return;
     }
 
     const serverTimeMs = Date.parse(roomSnapshot.serverTime);
 
     if (Number.isNaN(serverTimeMs)) {
-      return 0;
+      return;
     }
 
-    return serverTimeMs - Date.now();
+    const updateOffset = window.setTimeout(() => {
+      setServerClockOffsetMs(serverTimeMs - Date.now());
+    }, 0);
+
+    return () => window.clearTimeout(updateOffset);
   }, [roomSnapshot.serverTime]);
 
   useEffect(() => {
@@ -853,13 +871,16 @@ function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
       return;
     }
 
-    setNowMs(Date.now());
+    const initialTick = window.setTimeout(() => {
+      setNowMs(Date.now());
+    }, 0);
 
     const interval = window.setInterval(() => {
       setNowMs(Date.now());
     }, 1000);
 
     return () => {
+      window.clearTimeout(initialTick);
       window.clearInterval(interval);
     };
   }, [roomSnapshot.phase, roomSnapshot.roundEndsAt]);
@@ -1053,14 +1074,16 @@ type StatusTileProps = {
 
 function StatusTile({ icon: Icon, label, value }: StatusTileProps) {
   return (
-    <div className="rounded-xl border bg-background/60 p-3">
+    <div className="min-w-0 rounded-xl border bg-background/60 p-3">
       <div className="flex items-center gap-2 text-muted-foreground">
         <Icon className="size-4" aria-hidden="true" />
         <span className="text-xs font-medium uppercase tracking-wide">
           {label}
         </span>
       </div>
-      <p className="mt-2 font-medium">{value}</p>
+      <p className="mt-2 truncate font-medium" title={value}>
+        {value}
+      </p>
     </div>
   );
 }
