@@ -260,6 +260,27 @@ describe("RoomShell", () => {
     expect(black).toHaveAttribute("aria-checked", "false");
   });
 
+  it("lets players choose a brush size for drawing and erasing", async () => {
+    const user = userEvent.setup();
+    renderRoomShell();
+
+    await lockDefaultWordPack(user);
+
+    const mediumBrush = screen.getByRole("radio", { name: "Medium brush" });
+    const broadBrush = screen.getByRole("radio", { name: "Broad brush" });
+
+    expect(mediumBrush).toHaveAttribute("aria-checked", "true");
+
+    await user.click(broadBrush);
+
+    expect(broadBrush).toHaveAttribute("aria-checked", "true");
+    expect(mediumBrush).toHaveAttribute("aria-checked", "false");
+    expect(drawingCanvasMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ brushSize: 0.032 }),
+      undefined,
+    );
+  });
+
   it("sends chat messages through the room socket", async () => {
     const user = userEvent.setup();
     const sendChatMessage = vi.fn(() => true);
@@ -335,7 +356,7 @@ describe("RoomShell", () => {
     expect(screen.getByLabelText("Chat message")).toBeDisabled();
   });
 
-  it("shows ranked final scores and lets the player dismiss them", async () => {
+  it("shows ranked final scores and provides an exit route", async () => {
     const user = userEvent.setup();
     useRoomStore.getState().setSnapshot({
       canStartGame: false,
@@ -417,10 +438,12 @@ describe("RoomShell", () => {
     expect(screen.getByText("120")).toBeInTheDocument();
     expect(screen.getByText("Winner")).toBeInTheDocument();
 
-    await user.click(
-      screen.getByRole("button", { name: "Close final scores" }),
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Leave completed room" }),
+    ).toHaveAttribute("href", "/play");
+    expect(
+      screen.getByRole("link", { name: "Choose another room" }),
+    ).toHaveAttribute("href", "/play");
   });
 
   it("loads word packs for the room", async () => {
@@ -566,7 +589,7 @@ describe("RoomShell", () => {
     );
     expect(screen.getByText("Watching Player Two")).toBeInTheDocument();
     expect(
-      screen.queryByRole("radiogroup", { name: "Drawing tool" }),
+      screen.queryByRole("group", { name: "Drawing tool" }),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Chat message")).toHaveAttribute(
       "placeholder",
@@ -614,7 +637,7 @@ describe("RoomShell", () => {
     expect(screen.getByText("Your turn to draw")).toBeInTheDocument();
     expect(screen.getByText("Your word: Gandalf")).toBeInTheDocument();
     expect(
-      screen.getByRole("radiogroup", { name: "Drawing tool" }),
+      screen.getByRole("group", { name: "Drawing tool" }),
     ).toBeInTheDocument();
   });
 
