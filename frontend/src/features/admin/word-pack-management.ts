@@ -20,3 +20,26 @@ export const wordPackMutationSchema = z
   .strict();
 
 export type WordPackMutation = z.infer<typeof wordPackMutationSchema>;
+
+export const wordMutationSchema = z
+  .object({
+    text: z
+      .string()
+      .trim()
+      .min(1, "Word is required")
+      .max(100, "Word must not exceed 100 characters"),
+    difficulty: z.enum(["easy", "medium", "hard"]),
+  })
+  .strict();
+
+export const wordResponseSchema = z.object({
+  word: z.object({
+    created_at: z.iso.datetime({ offset: true }),
+    difficulty: z.enum(["easy", "medium", "hard"]),
+    id: z.uuid(),
+    text: z.string(),
+    word_pack_id: z.uuid(),
+  }),
+});
+
+export type WordMutation = z.infer<typeof wordMutationSchema>;

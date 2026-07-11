@@ -23,6 +23,7 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodGet, "/v1/word-packs-getall", app.requireAuthenticatedPrincipal(app.getAllWordPacks))
 	router.HandlerFunc(http.MethodGet, "/v1/word-packs/:id", app.requireRegisteredUser(app.getWordPackById))
 	router.HandlerFunc(http.MethodPatch, "/v1/words/:id", app.requireRegisteredUser(app.updateWordHandler))
+	router.HandlerFunc(http.MethodPost, "/v1/words/:id", app.requireRegisteredUser(app.createWordHandler))
 	router.HandlerFunc(http.MethodDelete, "/v1/words/:id", app.requireRegisteredUser(app.deleteWordHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID", app.requireAuthenticatedPrincipal(app.createGameHandler))
 	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID/start", app.requireAuthenticatedPrincipal(app.handleStartGame))

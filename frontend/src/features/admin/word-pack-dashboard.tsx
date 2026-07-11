@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   wordPackMutationSchema,
+  wordMutationSchema,
   type WordPackMutation,
+  type WordMutation,
 } from "@/features/admin/word-pack-management";
 import type { WordPack } from "@/features/rooms/word-pack";
 import { frontendApiErrorSchema } from "@/lib/api/errors";
@@ -27,6 +29,11 @@ const emptyForm: WordPackMutation = {
   is_active: true,
 };
 
+const emptyWordForm: WordMutation = {
+  text: "",
+  difficulty: "medium",
+};
+
 export function WordPackDashboard({
   initialWordPacks,
 }: WordPackDashboardProps) {
@@ -37,8 +44,13 @@ export function WordPackDashboard({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingPackID, setDeletingPackID] = useState<string | null>(null);
+  const [isWordFormOpen, setIsWordFormOpen] = useState(false);
+  const [selectedWordPackID, setSelectedWordPackID] = useState("");
+  const [wordFormValues, setWordFormValues] = useState<WordMutation>(emptyWordForm);
+  const [isSavingWord, setIsSavingWord] = useState(false);
 
   function openCreateForm() {
+    setIsWordFormOpen(false);
     setFormMode("create");
     setEditingPackID(null);
     setFormValues(emptyForm);
@@ -46,6 +58,7 @@ export function WordPackDashboard({
   }
 
   function openEditForm(wordPack: WordPack) {
+    setIsWordFormOpen(false);
     setFormMode("edit");
     setEditingPackID(wordPack.id);
     setFormValues({
@@ -61,6 +74,22 @@ export function WordPackDashboard({
     if (!isSaving) {
       setFormMode(null);
       setEditingPackID(null);
+      setErrorMessage(null);
+    }
+  }
+
+  function openWordForm() {
+    setFormMode(null);
+    setEditingPackID(null);
+    setSelectedWordPackID(wordPacks[0]?.id ?? "");
+    setWordFormValues(emptyWordForm);
+    setErrorMessage(null);
+    setIsWordFormOpen(true);
+  }
+
+  function closeWordForm() {
+    if (!isSavingWord) {
+      setIsWordFormOpen(false);
       setErrorMessage(null);
     }
   }
@@ -153,9 +182,62 @@ export function WordPackDashboard({
     }
   }
 
+  async function handleWordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedWordPackID) {
+      setErrorMessage("Choose a word pack before adding a word.");
+      return;
+    }
+
+    const parsedValues = wordMutationSchema.safeParse(wordFormValues);
+    if (!parsedValues.success) {
+      setErrorMessage(
+        parsedValues.error.issues[0]?.message ?? "Check the word values.",
+      );
+      return;
+    }
+
+    setIsSavingWord(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch(
+        `/api/admin/word-packs/${selectedWordPackID}/words`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(parsedValues.data),
+        },
+      );
+      if (!response.ok) {
+        setErrorMessage(
+          readErrorMessage(await response.json().catch(() => undefined)),
+        );
+        return;
+      }
+
+      setIsWordFormOpen(false);
+      setWordFormValues(emptyWordForm);
+    } catch {
+      setErrorMessage("The word service is temporarily unavailable.");
+    } finally {
+      setIsSavingWord(false);
+    }
+  }
+
   return (
     <>
-      <div className="mb-5 flex justify-end">
+      <div className="mb-5 flex flex-wrap justify-end gap-3">
+        <Button
+          className="border-[#946440] bg-[#bba88d]/80 px-4 text-[#2b1e12] hover:bg-[#f4e7c8]"
+          disabled={wordPacks.length === 0}
+          onClick={openWordForm}
+          type="button"
+          variant="outline"
+        >
+          <Plus aria-hidden="true" />
+          Add word
+        </Button>
         <Button
           className="h-10 bg-[#2b1e12] px-4 text-[#bba88d] hover:bg-[#5d542b]"
           onClick={openCreateForm}
@@ -257,6 +339,94 @@ export function WordPackDashboard({
                     <LoaderCircle className="animate-spin" aria-hidden="true" />
                   )}
                   {formMode === "create" ? "Create pack" : "Save changes"}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {isWordFormOpen && (
+        <Card className="mb-6 border border-[#946440]/70 bg-[#bba88d]/95 text-[#2b1e12] shadow-[0_12px_32px_rgba(43,30,18,0.2)]">
+          <CardHeader className="flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle>Add word</CardTitle>
+              <p className="mt-1 text-sm text-[#5d542b]">
+                Choose a realm, then add a word for future rounds.
+              </p>
+            </div>
+            <Button
+              className="text-[#5d542b] hover:bg-[#946440]/20"
+              onClick={closeWordForm}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <X aria-hidden="true" />
+              <span className="sr-only">Close add word form</span>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4" onSubmit={handleWordSubmit}>
+              <div className="grid gap-2">
+                <Label htmlFor="word-pack-id">Word pack</Label>
+                <select
+                  className="h-10 rounded-lg border border-[#946440]/70 bg-[#f4e7c8]/65 px-3 text-sm text-[#2b1e12] outline-none focus:border-[#5d542b] focus:ring-2 focus:ring-[#946440]/35"
+                  id="word-pack-id"
+                  onChange={(event) => setSelectedWordPackID(event.target.value)}
+                  value={selectedWordPackID}
+                >
+                  {wordPacks.map((wordPack) => (
+                    <option key={wordPack.id} value={wordPack.id}>
+                      {wordPack.name} (/{wordPack.slug})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Field
+                label="Word"
+                name="text"
+                value={wordFormValues.text}
+                onChange={(text) =>
+                  setWordFormValues((values) => ({ ...values, text }))
+                }
+              />
+              <div className="grid gap-2">
+                <Label htmlFor="word-difficulty">Difficulty</Label>
+                <select
+                  className="h-10 rounded-lg border border-[#946440]/70 bg-[#f4e7c8]/65 px-3 text-sm text-[#2b1e12] outline-none focus:border-[#5d542b] focus:ring-2 focus:ring-[#946440]/35"
+                  id="word-difficulty"
+                  onChange={(event) =>
+                    setWordFormValues((values) => ({
+                      ...values,
+                      difficulty: event.target.value as WordMutation["difficulty"],
+                    }))
+                  }
+                  value={wordFormValues.difficulty}
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button
+                  className="border-[#946440] text-[#5d542b] hover:bg-[#946440]/20"
+                  onClick={closeWordForm}
+                  type="button"
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-[#2b1e12] text-[#bba88d] hover:bg-[#5d542b]"
+                  disabled={isSavingWord}
+                  type="submit"
+                >
+                  {isSavingWord && (
+                    <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  )}
+                  Add word
                 </Button>
               </div>
             </form>
