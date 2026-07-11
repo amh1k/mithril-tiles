@@ -56,10 +56,10 @@ func main() {
 	var cfg config
 	var corsTrustedOrigins string
 	var trustedProxies string
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Fatalf("load .env: %v", err)
 	}
+	var err error
 	flag.IntVar(&cfg.port, "port", 4000, "API server port")
 	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
 	flag.StringVar(&cfg.db.dsn,

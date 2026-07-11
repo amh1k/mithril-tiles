@@ -4,8 +4,8 @@ Mithril Tiles should be deployed as three separate managed services:
 
 ```text
 https://app.yourdomain.com  → Vercel → Next.js frontend and BFF routes
-https://api.yourdomain.com  → Render → Go HTTP and WebSocket API
-Managed PostgreSQL          → Neon, Render Postgres, Supabase, or AWS RDS
+https://api.yourdomain.com  → Railway → Go HTTP and WebSocket API
+Managed PostgreSQL          → Railway Postgres, Neon, Supabase, or AWS RDS
 ```
 
 The browser uses HTTPS for the frontend and connects directly to the Go API at
@@ -22,18 +22,18 @@ API server-to-server, keeping long-lived bearer tokens in HttpOnly cookies.
 | Concern | Recommended service | Reason |
 | --- | --- | --- |
 | Next.js frontend | Vercel | First-class Next.js deployment, CDN, custom domains, and BFF support |
-| Go API and WebSockets | Render Web Service | Supports public WebSockets, managed TLS, health checks, and Git-based deploys |
-| PostgreSQL | Neon or Render Postgres | Managed backups, credentials, TLS, and operational tooling |
+| Go API and WebSockets | Railway service | Supports public networking, custom domains, TLS, health checks, and Git-based deploys |
+| PostgreSQL | Railway Postgres or Neon | Managed credentials, private networking, TLS, and operational tooling |
 | Avatar storage | Cloudinary | Already supported by the backend |
-| DNS | Cloudflare or domain registrar | Maps `app` and `api` subdomains to Vercel and Render |
+| DNS | Cloudflare or domain registrar | Maps `app` and `api` subdomains to Vercel and Railway |
 
 Vercel deploys Next.js with minimal configuration, and environment-variable
 changes apply only to new deployments. [Vercel Next.js deployment](https://vercel.com/docs/frameworks/full-stack/nextjs)
 [Vercel environment variables](https://vercel.com/docs/environment-variables)
 
-Render Web Services support TLS, public WebSockets, custom domains, health
-checks, and Git-based deployments. [Render Web Services](https://render.com/docs/web-services)
-[Render WebSockets](https://render.com/docs/websocket)
+Railway services support public networking, custom domains with TLS, health
+checks, and Git-based deployments. [Railway public networking](https://docs.railway.com/public-networking)
+[Railway health checks](https://docs.railway.com/deployments/healthchecks)
 
 ## 1. Prepare the domains
 
@@ -45,7 +45,7 @@ api.yourdomain.com
 ```
 
 Use the Vercel-provided DNS record for `app.yourdomain.com` and the
-Render-provided DNS record for `api.yourdomain.com`.
+Railway-provided DNS record for `api.yourdomain.com`.
 
 The exact production frontend origin is important because the Go API checks it
 for CORS and WebSocket origins:
@@ -59,7 +59,7 @@ Do not include a trailing slash in `CORS_TRUSTED_ORIGINS`.
 ## 2. Provision PostgreSQL
 
 Create one production PostgreSQL project in the same or nearest region to the
-Render API service. Enable automated backups before inviting real users.
+Railway API service. Enable backups before inviting real users.
 
 Use the provider's connection string as `DATABASE_URL`. For Neon with Go `pgx`,
 use TLS:
@@ -94,21 +94,26 @@ Before public deployment, resolve these items in the backend:
    a backend replacement disconnects players and cannot preserve in-memory
    rooms.
 
-## 4. Deploy the Go API to Render
+## 4. Deploy the Go API to Railway
 
-Create a Render **Web Service** from the Git repository.
+Create a Railway project, then add:
+
+1. A **PostgreSQL** service.
+2. A service deployed from this Git repository for the Go API.
+
+Railway's PostgreSQL service exposes a `DATABASE_URL` variable that another
+service in the same project can reference. [Railway PostgreSQL](https://docs.railway.com/databases/postgresql)
 
 Use these settings:
 
 ```text
-Runtime: Go
 Root directory: .
 Branch: main
 Build command:
 go build -tags netgo -ldflags='-s -w' -o bin/mithril-api ./cmd/api
 
 Start command:
-./bin/mithril-api -port $PORT -env production -db-max-open-conns 10 -db-min-idle-conns 1
+./bin/mithril-api -port 4000 -env production -db-max-open-conns 10 -db-min-idle-conns 1
 
 Health check path:
 /v1/healthcheck
@@ -117,14 +122,24 @@ Instances:
 1
 ```
 
-Render supplies `PORT`; passing `-port $PORT` ensures the Go server binds to
-the platform port. Render's Go guidance uses the same build/start-command
-model. [Deploy a Go server on Render](https://render.com/docs/deploy-go-nethttp)
-
-Configure these Render environment variables:
+Set this Railway service variable as well:
 
 ```dotenv
-DATABASE_URL=postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=verify-full
+PORT=4000
+```
+
+Your Go program does not read `PORT` automatically, so the explicit `-port
+4000` start flag and Railway `PORT=4000` variable must agree. Railway routes
+public requests to the service port defined by `PORT`. [Railway public networking](https://docs.railway.com/public-networking)
+
+Railway detects build/start commands through Railpack, but explicit overrides
+keep this Go service predictable. [Railway build and start commands](https://docs.railway.com/builds/build-and-start-commands)
+
+Configure these Railway service variables:
+
+```dotenv
+# Replace Postgres with the exact Railway PostgreSQL service name.
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 
 CORS_TRUSTED_ORIGINS=https://app.yourdomain.com
 
@@ -133,7 +148,7 @@ CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
 
-# Leave blank until the exact reverse-proxy CIDRs are known.
+# Leave blank until Railway proxy CIDRs are verified.
 RATE_LIMIT_TRUSTED_PROXIES=
 ```
 
@@ -141,17 +156,18 @@ Do not set `RATE_LIMIT_TRUSTED_PROXIES=0.0.0.0/0`. That would make forwarded
 client IP headers spoofable. Obtain the provider's documented proxy CIDRs and
 trust only those networks.
 
-Render supports application-level HTTP health checks. Configure
-`/v1/healthcheck`, which already returns a successful health response from the
-API. [Render health checks](https://render.com/docs/health-checks)
+Railway uses the configured endpoint to verify a deployment before activating
+it. Configure `/v1/healthcheck`, which already returns HTTP 200 from the API.
+[Railway health checks](https://docs.railway.com/deployments/healthchecks)
 
-Use Render's secret manager for credentials. Do not commit `.env` or database
-credentials. Render supports environment variables and secret files, but the
-recommended long-term fix is making dotenv loading optional in production.
-[Render secrets](https://render.com/docs/configure-environment-variables)
+Use Railway variables for credentials. Do not commit `.env` or database
+credentials. The recommended long-term fix is still making dotenv loading
+optional in production.
 
 After the first successful deployment, add `api.yourdomain.com` as a custom
-domain in Render and create its DNS record.
+domain in Railway. Railway supplies both a CNAME and a TXT ownership-verification
+record; create both exactly as shown before expecting traffic to work.
+[Railway custom domains](https://docs.railway.com/networking/domains/working-with-domains)
 
 ## 5. Deploy the Next.js frontend to Vercel
 
@@ -219,7 +235,7 @@ DNS record.
 - [ ] Two independent browser sessions can complete a full game.
 - [ ] Final scores persist and the overlay returns players to `/play`.
 - [ ] Database backups are enabled and restoration steps are documented.
-- [ ] Render service remains pinned to one instance.
+- [ ] Railway API service remains pinned to one instance.
 - [ ] Deployment logs contain no tokens, tickets, or database credentials.
 
 ## 8. Preview and staging deployments
@@ -246,7 +262,7 @@ staging PostgreSQL database
 - Use managed database backups and budget alerts.
 - Monitor API errors, WebSocket disconnects, database connectivity, and the
   health endpoint.
-- Store all production secrets in Vercel/Render secret managers.
+- Store all production secrets in Vercel/Railway variables.
 - Run frontend and backend checks before every deployment.
 
 ## 10. Work required before calling the system fully production-ready
