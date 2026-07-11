@@ -10,12 +10,15 @@ import {
 } from "@/components/ui/card";
 import { GuestArtCarousel } from "@/features/auth/guest-art-carousel";
 import { GuestForm } from "@/features/auth/guest-form";
+import { redirectAuthenticatedPrincipal } from "@/features/auth/server/session";
 
 export const metadata: Metadata = {
   title: "Play as a guest | Mithril Tiles",
 };
 
-export default function GuestPage() {
+export default async function GuestPage() {
+  await redirectAuthenticatedPrincipal();
+
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-10">
       <section className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-[#946440]/45 bg-[#2b1e12]/65 shadow-[0_28px_90px_rgba(43,30,18,0.4)] backdrop-blur-[2px] md:grid-cols-2">

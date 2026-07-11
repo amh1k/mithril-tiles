@@ -4,6 +4,7 @@ import {
   MessageCircle,
   Users,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 
@@ -34,7 +35,7 @@ export default function Home() {
       className="relative flex flex-1 flex-col overflow-hidden bg-[#2b1e12] text-[#bba88d]"
     >
       <div
-        className="pointer-events-none absolute -inset-[4%] bg-cover bg-center bg-no-repeat will-change-transform motion-safe:animate-[background-drift_24s_linear_infinite]"
+        className="pointer-events-none absolute -inset-[4%] bg-[length:100%_auto] bg-top bg-repeat-y will-change-transform motion-safe:animate-[background-drift_24s_linear_infinite] sm:bg-cover sm:bg-center sm:bg-no-repeat"
         aria-hidden="true"
         style={{
           backgroundImage: "url('/images/7%20-%2087UWVJq.jpg')",
@@ -195,8 +196,15 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="relative z-10 border-t border-[#946440]/50 bg-[#2b1e12] px-4 py-6 text-center text-sm text-[#bba88d]">
-        Mithril Tiles · Draw boldly, guess quickly.
+      <footer className="relative z-10 flex flex-col items-center gap-1 border-t border-[#946440]/50 bg-[#2b1e12] px-4 py-4 text-center text-sm text-[#bba88d]">
+        <Image
+          alt="Mithril Tiles"
+          className="h-16 w-32 object-contain"
+          height={950}
+          src="/images/logo-gold.png"
+          width={1639}
+        />
+        <span>Draw boldly, guess quickly.</span>
       </footer>
     </div>
   );

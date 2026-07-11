@@ -8,10 +8,10 @@ import {
   Menu,
   ScrollText,
   Shield,
-  Sparkles,
   UserPlus,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -69,13 +69,17 @@ export function SiteHeader() {
         aria-label="Main navigation"
       >
         <Link
-          className="font-heading group flex items-center gap-3 font-semibold tracking-[0.16em] text-[#bba88d] uppercase transition-colors hover:text-white"
+          className="group flex items-center transition-transform hover:scale-[1.02]"
           href="/"
         >
-          <span className="relative flex size-10 items-center justify-center rounded-full border border-[#bba88d]/60 bg-[#946440]/35 shadow-[inset_0_0_0_3px_rgba(43,30,18,0.35),0_3px_12px_rgba(0,0,0,0.24)] transition-transform group-hover:rotate-6 group-hover:scale-105">
-            <Sparkles className="size-4 text-[#bba88d]" aria-hidden="true" />
-          </span>
-          <span className="hidden sm:inline">Mithril Tiles</span>
+          <Image
+            alt="Mithril Tiles"
+            className="h-14 w-28 object-contain transition-transform group-hover:scale-105"
+            height={950}
+            priority
+            src="/images/logo-gold.png"
+            width={1639}
+          />
         </Link>
 
         <Button
