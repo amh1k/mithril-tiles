@@ -30,6 +30,9 @@ func (app *application) routes() http.Handler {
 	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID/ws-ticket", app.requireAuthenticatedPrincipal(app.createWebSocketTicketHandler))
 	router.HandlerFunc(http.MethodGet, "/v1.rooms/gameFinalScore/:id", app.requireAuthenticatedPrincipal(app.getGameFinalScoresByGameId))
 	router.HandlerFunc(http.MethodGet, "/v1/games/:gameID/participants/:participantID/principal", app.requireAuthenticatedPrincipal(app.getPrincipalByGameAndParticipant))
+
+	router.HandlerFunc(http.MethodPost, "/v1/rooms/:roomID/bots", app.requireAuthenticatedPrincipal(app.insertBotToRoom))
+	router.HandlerFunc(http.MethodDelete, "/v1/rooms/:roomID/bots", app.requireAuthenticatedPrincipal(app.deleteBotFromRoom))
 	router.HandlerFunc(http.MethodGet, "/v1/rooms/:roomID/ws", app.handleWebSocket)
 	return app.recoverPanic(app.enableCORS(app.authenticate(router)))
 }

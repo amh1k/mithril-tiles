@@ -8,8 +8,14 @@ import (
 	"github.com/coder/websocket"
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
+type playerType string
+const (
+	humanPlayer playerType = "human"
+	botPlayer playerType = "bot"
+)
 
 type Player struct {
+	Type 			playerType			
 	Conn           *websocket.Conn
 	Principal      data.Principal //Contains guest or user info
 	Outgoing       chan string    // Buffered channel for writes

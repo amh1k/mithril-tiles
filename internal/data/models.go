@@ -26,6 +26,7 @@ type Models struct {
 	RoundScores      RoundScoreModel
 	GameFinalScores  GameFinalScoreModel
 	WebSocketTickets WebSocketTicketModel
+	BotProfile		BotProfileModel
 }
 
 func NewModels(db *pgxpool.Pool) Models {
@@ -42,6 +43,7 @@ func NewModels(db *pgxpool.Pool) Models {
 		RoundScores:      RoundScoreModel{DB: db},
 		GameFinalScores:  GameFinalScoreModel{DB: db},
 		WebSocketTickets: WebSocketTicketModel{DB: db},
+		BotProfile:      BotProfileModel{DB: db},
 	}
 }
 

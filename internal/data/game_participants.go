@@ -50,6 +50,11 @@ func (m *GameParticipantModel) InsertPrincipalWithTx(
 		principalID := principal.ID()
 		participant.GuestSessionID = &principalID
 		participant.ParticipantType = string(PrincipalGuest)
+	case principal.IsBot():
+		principalID := principal.ID()
+		participant.BotProfileID = &principalID
+		participant.ParticipantType = string(PrincipalBot)
+
 	default:
 		return nil, fmt.Errorf("unsupported principal type %q", principal.Type)
 	}
@@ -132,6 +137,9 @@ func (m *GameParticipantModel) GetIDForPrincipal(
 			SELECT id
 			FROM game_participants
 			WHERE game_id = $1 AND guest_session_id = $2`
+	case principal.IsBot():
+
+		query = `SELECT id FROM game_participants WHERE game_id = $1 and bot_profile_id = $2`
 	default:
 		return uuid.Nil, fmt.Errorf("unsupported principal type %q", principal.Type)
 	}
@@ -156,15 +164,24 @@ func (m *GameParticipantModel) GetPrincipal(
 	query := `
 	SELECT
 		gp.participant_type,
-		COALESCE(gp.user_id, gp.guest_session_id),
-		gp.display_name_snapshot,
-		u.avatar_url
+		COALESCE(gp.user_id, gp.guest_session_id, gp.bot_profile_id),
+		CASE
+			WHEN gp.participant_type = 'bot' THEN bp.name
+			ELSE gp.display_name_snapshot
+		END,
+		CASE
+			WHEN gp.participant_type = 'bot' THEN bp.avatar_url
+			WHEN gp.participant_type = 'user' THEN u.avatar_url
+			ELSE NULL
+		END
 	FROM game_participants AS gp
 	LEFT JOIN users AS u
 		ON u.id = gp.user_id
+	LEFT JOIN bot_profiles AS bp
+		ON bp.id = gp.bot_profile_id
 	WHERE gp.game_id = $1
 		AND gp.id = $2
-		AND gp.participant_type IN ('user', 'guest')`
+		AND gp.participant_type IN ('user', 'guest', 'bot')`
 
 	var principal ParticipantPrincipal
 	err := m.DB.QueryRow(ctx, query, gameID, participantID).Scan(

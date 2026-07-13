@@ -1,11 +1,13 @@
 package realtime
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
 const roundDuration = 60 * time.Second
@@ -88,6 +90,49 @@ var defaultEndGameRetryPolicy = endGameRetryPolicy{
 	MaxBackoff:     8 * time.Second,
 }
 
+type AddBotCommand struct {
+	RequestedBy uuid.UUID
+	Profile     data.BotProfile
+	Result      chan error
+}
+type RemoveBotCommand struct {
+	RequestedBy uuid.UUID
+	BotID       uuid.UUID
+	Result      chan error
+}
+type BotRuntime struct {
+	BotID   uuid.UUID
+	Profile data.BotProfile
+
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+type BotActionMetadata struct {
+	GameID  uuid.UUID
+	RoundNo int
+	BotID   uuid.UUID
+}
+
+type botActionKind string
+
+const (
+	botActionDraw  botActionKind = "draw"
+	botActionGuess botActionKind = "guess"
+)
+
+type botActionCompletion struct {
+	Metadata BotActionMetadata
+	Kind     botActionKind
+	Strokes  []DrawStroke
+}
+type SubmitGuessCommand struct {
+	ParticipantID uuid.UUID
+	Text          string
+	GameID        uuid.UUID
+	RoundNo       int
+}
+
 type Room struct {
 
 	// Communication channels
@@ -122,6 +167,12 @@ type Room struct {
 	//drawing
 	drawStroke chan DrawStroke
 
+	addBot         chan AddBotCommand
+	removeBot      chan RemoveBotCommand
+	botAction      chan botActionCompletion
+	submitGuess    chan SubmitGuessCommand
+	drawingPlanner DrawingPlanner
+
 	//Scores
 	scoresMu     sync.Mutex
 	scores       map[*Player]int
@@ -150,6 +201,8 @@ type Room struct {
 	// Sessions
 	sessions   map[string]*SessionInfo
 	sessionsMu sync.Mutex
+
+	botRuntimes map[uuid.UUID]*BotRuntime
 }
 
 func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomCode string)) (*Room, error) {
@@ -202,6 +255,12 @@ func newRoom(
 		done:           make(chan struct{}),
 		endGame:        make(chan struct{}),
 		deleteRoom:     deleteRoom,
+		addBot:         make(chan AddBotCommand, 10),
+		removeBot:      make(chan RemoveBotCommand, 10),
+		botAction:      make(chan botActionCompletion, 16),
+		submitGuess:    make(chan SubmitGuessCommand, 32),
+		drawingPlanner: TemplateDrawingPlanner{},
+		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -235,6 +294,12 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		roundInfo:      make(chan string, 20),
 		endGameRetry:   defaultEndGameRetryPolicy,
 		done:           make(chan struct{}),
+		addBot:         make(chan AddBotCommand, 10),
+		removeBot:      make(chan RemoveBotCommand, 10),
+		botAction:      make(chan botActionCompletion, 16),
+		submitGuess:    make(chan SubmitGuessCommand, 32),
+		drawingPlanner: TemplateDrawingPlanner{},
+		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -252,7 +317,7 @@ func (r *Room) Run() {
 		case player := <-r.leave:
 			r.handleLeave(player)
 
-	case message := <-r.broadcast:
+		case message := <-r.broadcast:
 			r.handleBroadcast(message)
 
 		case player := <-r.listPlayers:
@@ -275,6 +340,15 @@ func (r *Room) Run() {
 			go r.endRound()
 		case <-r.endGame:
 			go r.handleEndGame()
+
+		case command := <-r.addBot:
+			r.handleAddBot(command)
+		case command := <-r.removeBot:
+			r.handleRemoveBot(command)
+		case completion := <-r.botAction:
+			r.handleBotActionCompletion(completion)
+		case command := <-r.submitGuess:
+			r.handleGuess(command)
 		case <-r.done:
 			return
 		}
@@ -286,8 +360,92 @@ func (r *Room) GetScores() map[*Player]int {
 
 func (r *Room) close() {
 	r.doneOnce.Do(func() {
+		r.stopBotRuntimes()
 		close(r.done)
 	})
+}
+func (r *Room) handleAddBot(addBotCommand AddBotCommand) {
+	r.mu.Lock()
+	if r.HostPlayer == nil || addBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("only host can add bots")
+		return
+	}
+	if r.gameState != GameStateIdle {
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("bots can only be added while the game is idle")
+		return
+	}
+	if !addBotCommand.Profile.IsActive {
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("bot profile is inactive")
+		return
+	}
+	for existingPlayer := range r.players {
+		if existingPlayer.Type == botPlayer && existingPlayer.Principal.ID() == addBotCommand.Profile.ID {
+			r.mu.Unlock()
+			addBotCommand.Result <- fmt.Errorf("bot profile is already in the room")
+			return
+		}
+		if existingPlayer.Principal.DisplayName() == addBotCommand.Profile.Name {
+			r.mu.Unlock()
+			addBotCommand.Result <- fmt.Errorf("display name is already in use")
+			return
+		}
+	}
+	r.mu.Unlock()
+	principal := data.Principal{
+		Type:       data.PrincipalBot,
+		BotProfile: &addBotCommand.Profile,
+	}
+	player := &Player{
+		Conn:           nil,
+		Principal:      principal,
+		Outgoing:       make(chan string, 10),
+		LastActive:     time.Now(),
+		ReconnectToken: uuid.NewString(),
+		cancel:         func() {},
+		Type:           botPlayer,
+	}
+	joinResult := make(chan error, 1)
+	r.handleJoin(joinRequest{player: player, result: joinResult})
+	if err := <-joinResult; err != nil {
+		addBotCommand.Result <- err
+		return
+	}
+	r.handleSnapshotRequest()
+	addBotCommand.Result <- nil
+}
+func (r *Room) handleRemoveBot(removeBotCommand RemoveBotCommand) {
+	r.mu.Lock()
+	if r.HostPlayer == nil || removeBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
+		r.mu.Unlock()
+		removeBotCommand.Result <- fmt.Errorf("only host can remove bots")
+		return
+	}
+	if r.gameState != GameStateIdle {
+		r.mu.Unlock()
+		removeBotCommand.Result <- fmt.Errorf("bots can only be removed while the game is idle")
+		return
+	}
+
+	var targetBot *Player
+	for player := range r.players {
+		if player.Type == botPlayer && player.Principal.ID() == removeBotCommand.BotID {
+			targetBot = player
+			break
+		}
+	}
+	r.mu.Unlock()
+
+	if targetBot == nil {
+		removeBotCommand.Result <- fmt.Errorf("bot player not found")
+		return
+	}
+
+	r.stopBotRuntime(targetBot.Principal.ID())
+	r.handleLeave(targetBot)
+	removeBotCommand.Result <- nil
 }
 
 // func runServer(code string) {
@@ -308,3 +466,203 @@ func (r *Room) close() {
 //     go room.Run()
 
 // }
+
+func (r *Room) AddToAddBotChannel(ctx context.Context, addBotCommand AddBotCommand) error {
+	select {
+	case r.addBot <- addBotCommand:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
+func (r *Room) AddToRemoveBotChannel(ctx context.Context, removeBotCommand RemoveBotCommand) error {
+	select {
+	case r.removeBot <- removeBotCommand:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
+
+func (r *Room) SubmitGuess(ctx context.Context, command SubmitGuessCommand) error {
+	select {
+	case r.submitGuess <- command:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
+
+func (r *Room) startBotRuntimesForRound() {
+	r.stopBotRuntimes()
+
+	r.mu.Lock()
+	gameID := r.gameID
+	roundNo := r.currentRoundNo
+	word := r.currentWord
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make([]*BotRuntime, 0)
+	for player := range r.players {
+		if player.Type != botPlayer || player.Principal.BotProfile == nil {
+			continue
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		runtime := &BotRuntime{
+			BotID:   player.Principal.ID(),
+			Profile: *player.Principal.BotProfile,
+			cancel:  cancel,
+			done:    make(chan struct{}),
+		}
+		r.botRuntimes[runtime.BotID] = runtime
+		runtimes = append(runtimes, runtime)
+		go r.runBotRuntime(ctx, runtime, BotActionMetadata{
+			GameID:  gameID,
+			RoundNo: roundNo,
+			BotID:   runtime.BotID,
+		}, runtime.BotID == drawerID, word)
+	}
+	r.mu.Unlock()
+}
+
+func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool, word string) {
+	defer close(runtime.done)
+
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-r.done:
+		return
+	case <-timer.C:
+	}
+
+	kind := botActionGuess
+	if isDrawer {
+		kind = botActionDraw
+		planner := r.drawingPlanner
+		if planner == nil {
+			planner = TemplateDrawingPlanner{}
+		}
+		for _, stroke := range planner.Plan(word, runtime.Profile) {
+			completion := botActionCompletion{
+				Metadata: metadata,
+				Kind:     kind,
+				Strokes:  []DrawStroke{stroke},
+			}
+			select {
+			case r.botAction <- completion:
+			case <-ctx.Done():
+				return
+			case <-r.done:
+				return
+			default:
+				return
+			}
+
+			timer := time.NewTimer(150 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-r.done:
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+		return
+	}
+
+	completion := botActionCompletion{Metadata: metadata, Kind: kind}
+	select {
+	case r.botAction <- completion:
+	case <-ctx.Done():
+	case <-r.done:
+	default:
+	}
+}
+
+func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
+	r.mu.Lock()
+	if completion.Metadata.GameID != r.gameID ||
+		completion.Metadata.RoundNo != r.currentRoundNo ||
+		r.RoundState != RoundStateStarted {
+		r.mu.Unlock()
+		return
+	}
+	if _, exists := r.botRuntimes[completion.Metadata.BotID]; !exists {
+		r.mu.Unlock()
+		return
+	}
+
+	isDrawer := r.currentDrawer != nil && r.currentDrawer.Principal.ID() == completion.Metadata.BotID
+	if (completion.Kind == botActionDraw) != isDrawer {
+		r.mu.Unlock()
+		return
+	}
+	if completion.Kind != botActionDraw || len(completion.Strokes) == 0 || len(completion.Strokes) > 64 {
+		r.mu.Unlock()
+		return
+	}
+
+	drawerName := r.currentDrawer.Principal.DisplayName()
+	roomCode := r.roomCode
+	r.mu.Unlock()
+
+	for _, stroke := range completion.Strokes {
+		if !validBotStroke(stroke) {
+			return
+		}
+	}
+	for _, stroke := range completion.Strokes {
+		stroke.ActorID = completion.Metadata.BotID
+		stroke.From = drawerName
+		stroke.RoomCode = roomCode
+		r.handleDrawStroke(stroke)
+	}
+}
+
+func validBotStroke(stroke DrawStroke) bool {
+	if stroke.FromX < 0 || stroke.FromX > 1 ||
+		stroke.FromY < 0 || stroke.FromY > 1 ||
+		stroke.ToX < 0 || stroke.ToX > 1 ||
+		stroke.ToY < 0 || stroke.ToY > 1 {
+		return false
+	}
+	if stroke.Color != "#000000" {
+		return false
+	}
+	return stroke.BrushSize > 0 && stroke.BrushSize <= 20
+}
+
+func (r *Room) stopBotRuntime(botID uuid.UUID) {
+	r.mu.Lock()
+	runtime := r.botRuntimes[botID]
+	delete(r.botRuntimes, botID)
+	r.mu.Unlock()
+	if runtime != nil {
+		runtime.cancel()
+	}
+}
+
+func (r *Room) stopBotRuntimes() {
+	r.mu.Lock()
+	runtimes := r.botRuntimes
+	r.botRuntimes = make(map[uuid.UUID]*BotRuntime)
+	r.mu.Unlock()
+	for _, runtime := range runtimes {
+		runtime.cancel()
+	}
+}

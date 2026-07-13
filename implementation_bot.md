@@ -219,7 +219,6 @@ type AddBotCommand struct {
     Profile     data.BotProfile
     Result      chan error
 }
-
 type RemoveBotCommand struct {
     RequestedBy uuid.UUID
     BotID       uuid.UUID
