@@ -1,11 +1,13 @@
 package realtime
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
 const roundDuration = 60 * time.Second
@@ -44,7 +46,6 @@ type RoomPlayer struct {
 	Score       int       `json:"score"`
 	IsConnected bool      `json:"is_connected"`
 }
-
 
 type RoomGameSnapshot struct {
 	ID             uuid.UUID `json:"id"`
@@ -87,6 +88,17 @@ var defaultEndGameRetryPolicy = endGameRetryPolicy{
 	AttemptTimeout: 3 * time.Second,
 	InitialBackoff: time.Second,
 	MaxBackoff:     8 * time.Second,
+}
+
+type AddBotCommand struct {
+	RequestedBy uuid.UUID
+	Profile     data.BotProfile
+	Result      chan error
+}
+type RemoveBotCommand struct {
+	RequestedBy uuid.UUID
+	BotID       uuid.UUID
+	Result      chan error
 }
 
 type Room struct {
@@ -253,7 +265,7 @@ func (r *Room) Run() {
 		case player := <-r.leave:
 			r.handleLeave(player)
 
-	case message := <-r.broadcast:
+		case message := <-r.broadcast:
 			r.handleBroadcast(message)
 
 		case player := <-r.listPlayers:
@@ -289,6 +301,86 @@ func (r *Room) close() {
 	r.doneOnce.Do(func() {
 		close(r.done)
 	})
+}
+func (r *Room) AddBotPlayer(addBotCommand AddBotCommand) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if addBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
+		addBotCommand.Result <- fmt.Errorf("Only host can add bots!")
+	}
+	if r.gameState != GameStateIdle {
+		addBotCommand.Result <- fmt.Errorf("Game state should be idle for bots to be added!")
+	}
+	principal := data.Principal{
+		Type:       data.PrincipalBot,
+		BotProfile: &addBotCommand.Profile,
+	}
+	player := &Player{
+		Conn:           nil,
+		Principal:      principal,
+		Outgoing:       make(chan string, 10),
+		LastActive:     time.Now(),
+		ReconnectToken: uuid.NewString(),
+		cancel:         cancel,
+		Type:           botPlayer,
+	}
+	joinResult := make(chan error, 1)
+	select {
+	case r.join <- joinRequest{player: player, result: joinResult}:
+	case <-ctx.Done():
+		addBotCommand.Result <- fmt.Errorf("Context timed out")
+	case <-r.done:
+		addBotCommand.Result <- fmt.Errorf("Room was closed")
+	}
+	select {
+	case err := <-joinResult:
+		if err != nil {
+			addBotCommand.Result <- err
+		}
+	case <-ctx.Done():
+		addBotCommand.Result <- fmt.Errorf("Context timed out")
+	case <-r.done:
+		addBotCommand.Result <- fmt.Errorf("Room was closed")
+	}
+
+}
+func (r *Room) LeaveBotPlayer(removeBotCommand RemoveBotCommand) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	r.mu.Lock()
+	if r.HostPlayer == nil || removeBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
+		r.mu.Unlock()
+		removeBotCommand.Result <- fmt.Errorf("only host can remove bots")
+		return
+	}
+	if r.gameState != GameStateIdle {
+		r.mu.Unlock()
+		removeBotCommand.Result <- fmt.Errorf("bots can only be removed while the game is idle")
+		return
+	}
+
+	var targetBot *Player
+	for player := range r.players {
+		if player.Type == botPlayer && player.Principal.ID() == removeBotCommand.BotID {
+			targetBot = player
+			break
+		}
+	}
+	r.mu.Unlock()
+
+	if targetBot == nil {
+		removeBotCommand.Result <- fmt.Errorf("bot player not found")
+		return
+	}
+
+	select {
+	case r.leave <- targetBot:
+		removeBotCommand.Result <- nil
+	case <-ctx.Done():
+		removeBotCommand.Result <- fmt.Errorf("timed out removing bot player")
+	case <-r.done:
+		removeBotCommand.Result <- fmt.Errorf("room was closed")
+	}
 }
 
 // func runServer(code string) {
