@@ -102,14 +102,14 @@ func (r *Room) handleLeave(player *Player) {
 			}
 			players = append(players, remainingPlayer)
 		}
-		if  len(players) == 0 {
+		if len(players) == 0 {
 			r.HostPlayer = nil
 
-		}else {
+		} else {
 			r.HostPlayer = players[rand.Intn(len(players))]
 
 		}
-		
+
 	}
 	playerCount := len(r.players)
 	r.mu.Unlock()
@@ -480,6 +480,7 @@ func (r *Room) CanStart() bool {
 
 func (r *Room) endRound() {
 	r.cancelGuesserWord()
+	r.stopBotRuntimes()
 
 	r.mu.Lock()
 	drawer := r.currentDrawer
@@ -595,8 +596,10 @@ func (r *Room) startRound() {
 	r.mu.Unlock()
 	r.sendDrawerWord(drawer, result.Word, roundNumber)
 	r.startGuesserWord(result.Word, roundNumber)
+	r.startBotRuntimesForRound()
 
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
+
 	r.handleSnapshotRequest()
 
 	time.AfterFunc(roundDuration, func() {
@@ -703,6 +706,7 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 
 	r.sendDrawerWord(completion.drawer, result.Word, result.Round.RoundNumber)
 	r.startGuesserWord(result.Word, result.Round.RoundNumber)
+	r.startBotRuntimesForRound()
 	r.handleBroadcast(fmt.Sprintf("Round%d has started", result.Round.RoundNumber))
 	r.handleSnapshotRequest()
 
@@ -768,6 +772,7 @@ func (r *Room) handleEndGame() {
 	if !r.beginEndGame() {
 		return
 	}
+	r.stopBotRuntimes()
 
 	r.mu.Lock()
 	gameID := r.gameID

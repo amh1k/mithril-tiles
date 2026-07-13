@@ -100,6 +100,31 @@ type RemoveBotCommand struct {
 	BotID       uuid.UUID
 	Result      chan error
 }
+type BotRuntime struct {
+	BotID   uuid.UUID
+	Profile data.BotProfile
+
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
+type BotActionMetadata struct {
+	GameID  uuid.UUID
+	RoundNo int
+	BotID   uuid.UUID
+}
+
+type botActionKind string
+
+const (
+	botActionDraw  botActionKind = "draw"
+	botActionGuess botActionKind = "guess"
+)
+
+type botActionCompletion struct {
+	Metadata BotActionMetadata
+	Kind     botActionKind
+}
 
 type Room struct {
 
@@ -137,6 +162,7 @@ type Room struct {
 
 	addBot    chan AddBotCommand
 	removeBot chan RemoveBotCommand
+	botAction chan botActionCompletion
 
 	//Scores
 	scoresMu     sync.Mutex
@@ -166,6 +192,8 @@ type Room struct {
 	// Sessions
 	sessions   map[string]*SessionInfo
 	sessionsMu sync.Mutex
+
+	botRuntimes map[uuid.UUID]*BotRuntime
 }
 
 func NewRoom(roomCode string, gameLifecycle GameLifecycle, deleteRoom func(roomCode string)) (*Room, error) {
@@ -220,6 +248,8 @@ func newRoom(
 		deleteRoom:     deleteRoom,
 		addBot:         make(chan AddBotCommand, 10),
 		removeBot:      make(chan RemoveBotCommand, 10),
+		botAction:      make(chan botActionCompletion, 16),
+		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -253,6 +283,10 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		roundInfo:      make(chan string, 20),
 		endGameRetry:   defaultEndGameRetryPolicy,
 		done:           make(chan struct{}),
+		addBot:         make(chan AddBotCommand, 10),
+		removeBot:      make(chan RemoveBotCommand, 10),
+		botAction:      make(chan botActionCompletion, 16),
+		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -298,6 +332,8 @@ func (r *Room) Run() {
 			r.handleAddBot(command)
 		case command := <-r.removeBot:
 			r.handleRemoveBot(command)
+		case completion := <-r.botAction:
+			r.handleBotActionCompletion(completion)
 		case <-r.done:
 			return
 		}
@@ -309,6 +345,7 @@ func (r *Room) GetScores() map[*Player]int {
 
 func (r *Room) close() {
 	r.doneOnce.Do(func() {
+		r.stopBotRuntimes()
 		close(r.done)
 	})
 }
@@ -391,6 +428,7 @@ func (r *Room) handleRemoveBot(removeBotCommand RemoveBotCommand) {
 		return
 	}
 
+	r.stopBotRuntime(targetBot.Principal.ID())
 	r.handleLeave(targetBot)
 	removeBotCommand.Result <- nil
 }
@@ -432,5 +470,107 @@ func (r *Room) AddToRemoveBotChannel(ctx context.Context, removeBotCommand Remov
 		return ctx.Err()
 	case <-r.done:
 		return fmt.Errorf("room was closed")
+	}
+}
+
+func (r *Room) startBotRuntimesForRound() {
+	r.stopBotRuntimes()
+
+	r.mu.Lock()
+	gameID := r.gameID
+	roundNo := r.currentRoundNo
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make([]*BotRuntime, 0)
+	for player := range r.players {
+		if player.Type != botPlayer || player.Principal.BotProfile == nil {
+			continue
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		runtime := &BotRuntime{
+			BotID:   player.Principal.ID(),
+			Profile: *player.Principal.BotProfile,
+			cancel:  cancel,
+			done:    make(chan struct{}),
+		}
+		r.botRuntimes[runtime.BotID] = runtime
+		runtimes = append(runtimes, runtime)
+		go r.runBotRuntime(ctx, runtime, BotActionMetadata{
+			GameID:  gameID,
+			RoundNo: roundNo,
+			BotID:   runtime.BotID,
+		}, runtime.BotID == drawerID)
+	}
+	r.mu.Unlock()
+}
+
+func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool) {
+	defer close(runtime.done)
+
+	// Phase 6 only schedules role work. Later phases attach draw strokes or guesses.
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-r.done:
+		return
+	case <-timer.C:
+	}
+
+	kind := botActionGuess
+	if isDrawer {
+		kind = botActionDraw
+	}
+	completion := botActionCompletion{Metadata: metadata, Kind: kind}
+	select {
+	case r.botAction <- completion:
+	case <-ctx.Done():
+	case <-r.done:
+	default:
+	}
+}
+
+func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if completion.Metadata.GameID != r.gameID ||
+		completion.Metadata.RoundNo != r.currentRoundNo ||
+		r.RoundState != RoundStateStarted {
+		return
+	}
+	if _, exists := r.botRuntimes[completion.Metadata.BotID]; !exists {
+		return
+	}
+
+	isDrawer := r.currentDrawer != nil && r.currentDrawer.Principal.ID() == completion.Metadata.BotID
+	if (completion.Kind == botActionDraw) != isDrawer {
+		return
+	}
+	// Draw and guess actions are added in Phases 7 and 8 after this validation gate.
+}
+
+func (r *Room) stopBotRuntime(botID uuid.UUID) {
+	r.mu.Lock()
+	runtime := r.botRuntimes[botID]
+	delete(r.botRuntimes, botID)
+	r.mu.Unlock()
+	if runtime != nil {
+		runtime.cancel()
+	}
+}
+
+func (r *Room) stopBotRuntimes() {
+	r.mu.Lock()
+	runtimes := r.botRuntimes
+	r.botRuntimes = make(map[uuid.UUID]*BotRuntime)
+	r.mu.Unlock()
+	for _, runtime := range runtimes {
+		runtime.cancel()
 	}
 }
