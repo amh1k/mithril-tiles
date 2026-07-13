@@ -311,32 +311,19 @@ func handleCommand(player *Player, room *Room, command string) {
 			return
 		}
 		room.mu.Lock()
-		if room.RoundState == RoundStateIdle {
-			select {
-			case player.Outgoing <- "Round isnt active yet so no need to guess":
-
-			default:
-			}
-			room.mu.Unlock()
-			return
-
-		}
-		targetWord := room.currentWord
+		gameID := room.gameID
+		roundNo := room.currentRoundNo
 		room.mu.Unlock()
-		if room.currentDrawer == player {
-			player.Outgoing <- "You are the drawer! You cant guess!"
-			return
-		}
-		guessedWord := parts[1]
-		if targetWord != guessedWord {
+		if err := room.SubmitGuess(context.Background(), SubmitGuessCommand{
+			ParticipantID: player.Principal.ID(),
+			Text:          strings.Join(parts[1:], " "),
+			GameID:        gameID,
+			RoundNo:       roundNo,
+		}); err != nil {
 			select {
-			case player.Outgoing <- "Wrong Guess":
+			case player.Outgoing <- "Unable to submit guess":
 			default:
 			}
-		} else {
-
-			room.handleCorrectGuess(player)
-
 		}
 	default:
 		select {

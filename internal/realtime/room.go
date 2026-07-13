@@ -125,6 +125,12 @@ type botActionCompletion struct {
 	Metadata BotActionMetadata
 	Kind     botActionKind
 }
+type SubmitGuessCommand struct {
+	ParticipantID uuid.UUID
+	Text          string
+	GameID        uuid.UUID
+	RoundNo       int
+}
 
 type Room struct {
 
@@ -160,9 +166,10 @@ type Room struct {
 	//drawing
 	drawStroke chan DrawStroke
 
-	addBot    chan AddBotCommand
-	removeBot chan RemoveBotCommand
-	botAction chan botActionCompletion
+	addBot      chan AddBotCommand
+	removeBot   chan RemoveBotCommand
+	botAction   chan botActionCompletion
+	submitGuess chan SubmitGuessCommand
 
 	//Scores
 	scoresMu     sync.Mutex
@@ -249,6 +256,7 @@ func newRoom(
 		addBot:         make(chan AddBotCommand, 10),
 		removeBot:      make(chan RemoveBotCommand, 10),
 		botAction:      make(chan botActionCompletion, 16),
+		submitGuess:    make(chan SubmitGuessCommand, 32),
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -286,6 +294,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		addBot:         make(chan AddBotCommand, 10),
 		removeBot:      make(chan RemoveBotCommand, 10),
 		botAction:      make(chan botActionCompletion, 16),
+		submitGuess:    make(chan SubmitGuessCommand, 32),
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -334,6 +343,8 @@ func (r *Room) Run() {
 			r.handleRemoveBot(command)
 		case completion := <-r.botAction:
 			r.handleBotActionCompletion(completion)
+		case command := <-r.submitGuess:
+			r.handleGuess(command)
 		case <-r.done:
 			return
 		}
@@ -465,6 +476,17 @@ func (r *Room) AddToAddBotChannel(ctx context.Context, addBotCommand AddBotComma
 func (r *Room) AddToRemoveBotChannel(ctx context.Context, removeBotCommand RemoveBotCommand) error {
 	select {
 	case r.removeBot <- removeBotCommand:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
+
+func (r *Room) SubmitGuess(ctx context.Context, command SubmitGuessCommand) error {
+	select {
+	case r.submitGuess <- command:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

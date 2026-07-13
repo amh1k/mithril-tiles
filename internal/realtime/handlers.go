@@ -732,7 +732,7 @@ func (r *Room) handleCorrectGuess(player *Player) {
 	if _, eligible := r.scores[player]; !eligible {
 		return
 	}
-	if r.scores[player] == 1 {
+	if r.scores[player] > 0 {
 		select {
 		case player.Outgoing <- "You have already guessed brother":
 		default:
@@ -768,6 +768,54 @@ func (r *Room) handleCorrectGuess(player *Player) {
 	r.globalScores[key] = finalScore
 	r.correctGuesses++
 }
+
+func (r *Room) handleGuess(command SubmitGuessCommand) {
+	guess := strings.ToLower(strings.TrimSpace(command.Text))
+	if guess == "" || len(guess) > 128 {
+		return
+	}
+
+	r.mu.Lock()
+	if r.gameID != command.GameID ||
+		r.currentRoundNo != command.RoundNo ||
+		r.RoundState != RoundStateStarted {
+		r.mu.Unlock()
+		return
+	}
+
+	var player *Player
+	for candidate := range r.players {
+		if candidate.Principal.ID() == command.ParticipantID {
+			player = candidate
+			break
+		}
+	}
+	if player == nil {
+		r.mu.Unlock()
+		return
+	}
+	if r.currentDrawer == player {
+		r.mu.Unlock()
+		select {
+		case player.Outgoing <- "You are the drawer! You cant guess!":
+		default:
+		}
+		return
+	}
+	targetWord := strings.ToLower(strings.TrimSpace(r.currentWord))
+	r.mu.Unlock()
+
+	if guess != targetWord {
+		select {
+		case player.Outgoing <- "Wrong Guess":
+		default:
+		}
+		return
+	}
+
+	r.handleCorrectGuess(player)
+}
+
 func (r *Room) handleEndGame() {
 	if !r.beginEndGame() {
 		return
