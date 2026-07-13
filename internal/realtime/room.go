@@ -124,6 +124,7 @@ const (
 type botActionCompletion struct {
 	Metadata BotActionMetadata
 	Kind     botActionKind
+	Strokes  []DrawStroke
 }
 type SubmitGuessCommand struct {
 	ParticipantID uuid.UUID
@@ -166,10 +167,11 @@ type Room struct {
 	//drawing
 	drawStroke chan DrawStroke
 
-	addBot      chan AddBotCommand
-	removeBot   chan RemoveBotCommand
-	botAction   chan botActionCompletion
-	submitGuess chan SubmitGuessCommand
+	addBot         chan AddBotCommand
+	removeBot      chan RemoveBotCommand
+	botAction      chan botActionCompletion
+	submitGuess    chan SubmitGuessCommand
+	drawingPlanner DrawingPlanner
 
 	//Scores
 	scoresMu     sync.Mutex
@@ -257,6 +259,7 @@ func newRoom(
 		removeBot:      make(chan RemoveBotCommand, 10),
 		botAction:      make(chan botActionCompletion, 16),
 		submitGuess:    make(chan SubmitGuessCommand, 32),
+		drawingPlanner: TemplateDrawingPlanner{},
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -295,6 +298,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		removeBot:      make(chan RemoveBotCommand, 10),
 		botAction:      make(chan botActionCompletion, 16),
 		submitGuess:    make(chan SubmitGuessCommand, 32),
+		drawingPlanner: TemplateDrawingPlanner{},
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -501,6 +505,7 @@ func (r *Room) startBotRuntimesForRound() {
 	r.mu.Lock()
 	gameID := r.gameID
 	roundNo := r.currentRoundNo
+	word := r.currentWord
 	drawerID := uuid.Nil
 	if r.currentDrawer != nil {
 		drawerID = r.currentDrawer.Principal.ID()
@@ -524,15 +529,14 @@ func (r *Room) startBotRuntimesForRound() {
 			GameID:  gameID,
 			RoundNo: roundNo,
 			BotID:   runtime.BotID,
-		}, runtime.BotID == drawerID)
+		}, runtime.BotID == drawerID, word)
 	}
 	r.mu.Unlock()
 }
 
-func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool) {
+func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool, word string) {
 	defer close(runtime.done)
 
-	// Phase 6 only schedules role work. Later phases attach draw strokes or guesses.
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
 
@@ -547,7 +551,40 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 	kind := botActionGuess
 	if isDrawer {
 		kind = botActionDraw
+		planner := r.drawingPlanner
+		if planner == nil {
+			planner = TemplateDrawingPlanner{}
+		}
+		for _, stroke := range planner.Plan(word, runtime.Profile) {
+			completion := botActionCompletion{
+				Metadata: metadata,
+				Kind:     kind,
+				Strokes:  []DrawStroke{stroke},
+			}
+			select {
+			case r.botAction <- completion:
+			case <-ctx.Done():
+				return
+			case <-r.done:
+				return
+			default:
+				return
+			}
+
+			timer := time.NewTimer(150 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-r.done:
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
+		}
+		return
 	}
+
 	completion := botActionCompletion{Metadata: metadata, Kind: kind}
 	select {
 	case r.botAction <- completion:
@@ -559,22 +596,55 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 
 func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if completion.Metadata.GameID != r.gameID ||
 		completion.Metadata.RoundNo != r.currentRoundNo ||
 		r.RoundState != RoundStateStarted {
+		r.mu.Unlock()
 		return
 	}
 	if _, exists := r.botRuntimes[completion.Metadata.BotID]; !exists {
+		r.mu.Unlock()
 		return
 	}
 
 	isDrawer := r.currentDrawer != nil && r.currentDrawer.Principal.ID() == completion.Metadata.BotID
 	if (completion.Kind == botActionDraw) != isDrawer {
+		r.mu.Unlock()
 		return
 	}
-	// Draw and guess actions are added in Phases 7 and 8 after this validation gate.
+	if completion.Kind != botActionDraw || len(completion.Strokes) == 0 || len(completion.Strokes) > 64 {
+		r.mu.Unlock()
+		return
+	}
+
+	drawerName := r.currentDrawer.Principal.DisplayName()
+	roomCode := r.roomCode
+	r.mu.Unlock()
+
+	for _, stroke := range completion.Strokes {
+		if !validBotStroke(stroke) {
+			return
+		}
+	}
+	for _, stroke := range completion.Strokes {
+		stroke.ActorID = completion.Metadata.BotID
+		stroke.From = drawerName
+		stroke.RoomCode = roomCode
+		r.handleDrawStroke(stroke)
+	}
+}
+
+func validBotStroke(stroke DrawStroke) bool {
+	if stroke.FromX < 0 || stroke.FromX > 1 ||
+		stroke.FromY < 0 || stroke.FromY > 1 ||
+		stroke.ToX < 0 || stroke.ToX > 1 ||
+		stroke.ToY < 0 || stroke.ToY > 1 {
+		return false
+	}
+	if stroke.Color != "#000000" {
+		return false
+	}
+	return stroke.BrushSize > 0 && stroke.BrushSize <= 20
 }
 
 func (r *Room) stopBotRuntime(botID uuid.UUID) {

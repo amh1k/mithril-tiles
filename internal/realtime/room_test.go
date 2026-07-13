@@ -156,6 +156,83 @@ func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestBotDrawerCompletionBroadcastsStroke(t *testing.T) {
+	room, err := NewRoomUnitTest("bot-draw")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	botID := uuid.New()
+	bot := &Player{
+		Type: botPlayer,
+		Principal: *data.NewBotPrincipal(&data.BotProfile{
+			ID:   botID,
+			Name: "Sketch Bot",
+		}),
+	}
+	human := &Player{
+		Type: humanPlayer,
+		Principal: data.Principal{Type: data.PrincipalUser, User: &data.User{
+			ID:          uuid.New(),
+			DisplayName: "Viewer",
+		}},
+		Outgoing: make(chan string, 1),
+	}
+	gameID := uuid.New()
+	room.players[bot] = true
+	room.players[human] = true
+	room.currentDrawer = bot
+	room.gameID = gameID
+	room.currentRoundNo = 1
+	room.RoundState = RoundStateStarted
+	room.botRuntimes[botID] = &BotRuntime{BotID: botID}
+
+	room.handleBotActionCompletion(botActionCompletion{
+		Metadata: BotActionMetadata{GameID: gameID, RoundNo: 1, BotID: botID},
+		Kind:     botActionDraw,
+		Strokes:  []DrawStroke{stroke(0.1, 0.2, 0.3, 0.4)},
+	})
+
+	message := <-human.Outgoing
+	if !strings.Contains(message, `"actor_id":"`+botID.String()+`"`) {
+		t.Fatalf("expected bot actor ID in stroke payload: %s", message)
+	}
+}
+
+func TestNonDrawerBotCompletionIsRejected(t *testing.T) {
+	room, err := NewRoomUnitTest("bot-draw")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	drawerID := uuid.New()
+	guesserID := uuid.New()
+	drawer := &Player{Type: botPlayer, Principal: *data.NewBotPrincipal(&data.BotProfile{ID: drawerID, Name: "Drawer"})}
+	guesser := &Player{Type: botPlayer, Principal: *data.NewBotPrincipal(&data.BotProfile{ID: guesserID, Name: "Guesser"})}
+	human := &Player{Outgoing: make(chan string, 1)}
+	gameID := uuid.New()
+	room.players[drawer] = true
+	room.players[guesser] = true
+	room.players[human] = true
+	room.currentDrawer = drawer
+	room.gameID = gameID
+	room.currentRoundNo = 1
+	room.RoundState = RoundStateStarted
+	room.botRuntimes[guesserID] = &BotRuntime{BotID: guesserID}
+
+	room.handleBotActionCompletion(botActionCompletion{
+		Metadata: BotActionMetadata{GameID: gameID, RoundNo: 1, BotID: guesserID},
+		Kind:     botActionDraw,
+		Strokes:  []DrawStroke{stroke(0.1, 0.2, 0.3, 0.4)},
+	})
+
+	select {
+	case message := <-human.Outgoing:
+		t.Fatalf("non-drawer bot broadcast a stroke: %s", message)
+	default:
+	}
+}
+
 func TestNewRoomStartsWithIdleGameState(t *testing.T) {
 	room, err := NewRoomUnitTest("abc")
 	if err != nil {
