@@ -179,7 +179,7 @@ Avoid teaching every room operation that a bot has a fake socket.
 
 Introduce an internal participant/actor abstraction. One possible shape is:
 
-```go
+```gok
 type RoomParticipant interface {
     ID() uuid.UUID
     Principal() data.Principal

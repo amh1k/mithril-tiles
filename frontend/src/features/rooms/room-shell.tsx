@@ -24,7 +24,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -130,7 +137,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     description: string;
     tone: "start" | "break";
   } | null>(null);
+  const [showConnectionSuccess, setShowConnectionSuccess] = useState(false);
   const previousRoundTransitionKeyRef = useRef<string | null>(null);
+  const hasConnectedRef = useRef(false);
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -231,6 +240,34 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       window.clearTimeout(timeout);
     };
   }, [roundTransition]);
+
+  useEffect(() => {
+    if (socket.status !== "connected") {
+      hasConnectedRef.current = false;
+      const clearNotice = window.setTimeout(() => {
+        setShowConnectionSuccess(false);
+      }, 0);
+
+      return () => window.clearTimeout(clearNotice);
+    }
+
+    if (hasConnectedRef.current) {
+      return;
+    }
+
+    hasConnectedRef.current = true;
+    const showNotice = window.setTimeout(() => {
+      setShowConnectionSuccess(true);
+    }, 0);
+    const hideNotice = window.setTimeout(() => {
+      setShowConnectionSuccess(false);
+    }, 3_000);
+
+    return () => {
+      window.clearTimeout(showNotice);
+      window.clearTimeout(hideNotice);
+    };
+  }, [socket.status]);
 
   useEffect(() => {
     const activeWordPackId = socket.roomSnapshot?.game?.word_pack_id;
@@ -548,7 +585,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       <ConnectionNotice
         errorMessage={socket.errorMessage}
         retryAttempt={socket.retryAttempt}
-        status={socket.status}
+        status={
+          socket.status === "connected" && !showConnectionSuccess
+            ? "idle"
+            : socket.status
+        }
       />
 
       {roundTimerLabel !== null && (
@@ -849,7 +890,7 @@ function RoomSynchronizingPanel({
 }) {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
-      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-[#946440]/60 bg-[#2b1e12]/85 p-6 text-center text-[#f4ead7] shadow-[0_18px_42px_rgba(43,30,18,0.3)]">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-[#946440]/60 bg-[#2b1e12]/85 p-6 text-center text-[#f4ead7] shadow-[0_18px_42px_rgba(43,30,18,0.3)]">
         <div className="max-w-md">
           <LoaderCircle
             className="mx-auto size-9 animate-spin text-[#bba88d]"
@@ -1034,7 +1075,7 @@ function ConnectionNotice({
   if (status === "connected") {
     return (
       <div
-        className="flex items-center gap-2 rounded-xl border border-[#bba88d]/55 bg-[#5d542b]/85 px-4 py-2 text-sm font-medium text-[#f4ead7] shadow-sm"
+        className="status-enter flex items-center gap-2 rounded-xl border border-[#bba88d]/55 bg-[#5d542b]/85 px-4 py-2 text-sm font-medium text-[#f4ead7] shadow-sm"
         role="status"
       >
         <Wifi className="size-4" aria-hidden="true" />
@@ -1054,7 +1095,7 @@ function ConnectionNotice({
     return (
       <div
         aria-live="polite"
-        className="flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
+        className="status-enter flex items-start gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200"
         role="status"
       >
         <Icon
@@ -1081,7 +1122,7 @@ function ConnectionNotice({
     return (
       <div
         aria-live="assertive"
-        className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        className="status-enter flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         role="alert"
       >
         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -1128,7 +1169,10 @@ type PlayerCardProps = {
 
 function PlayerCard({ player, rank }: PlayerCardProps) {
   return (
-    <div className="rounded-xl border bg-background/70 p-3">
+    <div
+      className="player-card-enter rounded-xl border bg-background/70 p-3 transition-[border-color,box-shadow] duration-200 hover:border-primary/40"
+      style={{ "--player-index": rank - 1 } as CSSProperties}
+    >
       <div className="flex items-center gap-3">
         <div className="relative">
           <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -1142,7 +1186,8 @@ function PlayerCard({ player, rank }: PlayerCardProps) {
           <div className="flex items-center justify-between gap-2">
             <p className="truncate text-sm font-medium">{player.displayName}</p>
             <span
-              className="text-xs font-semibold text-muted-foreground"
+              key={player.score}
+              className="score-pop inline-block text-xs font-semibold text-muted-foreground"
               aria-label={`${player.score} points`}
             >
               {player.score} pts
@@ -1166,7 +1211,7 @@ type PlayerBadgeProps = {
 
 function PlayerBadge({ icon: Icon, label }: PlayerBadgeProps) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+    <span className="status-enter inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
       <Icon className="size-3" aria-hidden="true" />
       {label}
     </span>
@@ -1181,7 +1226,7 @@ type WordPackStatusProps = {
 function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
-      <div className="rounded-xl border bg-background/70 p-3">
+      <div className="status-enter rounded-xl border bg-background/70 p-3">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Palette className="size-4" aria-hidden="true" />
@@ -1239,8 +1284,9 @@ function WordPackSelectionPanel({
 }: WordPackSelectionPanelProps) {
   if (status === "preparing" || status === "idle") {
     return (
-      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
         <div>
+          <LoaderCircle className="parchment-spinner mx-auto size-8 text-primary" aria-hidden="true" />
           <p className="text-sm font-medium text-muted-foreground">
             Loading word packs…
           </p>
@@ -1254,7 +1300,7 @@ function WordPackSelectionPanel({
 
   if (status === "failed") {
     return (
-      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
         Word packs could not be loaded. Re-enter the room to retry.
       </section>
     );
@@ -1262,7 +1308,7 @@ function WordPackSelectionPanel({
 
   if (wordPacks.length === 0) {
     return (
-      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border border-amber-500/30 bg-amber-500/10 p-6 text-center text-amber-700 shadow-sm dark:text-amber-300">
         No active word packs are available.
       </section>
     );
@@ -1270,7 +1316,7 @@ function WordPackSelectionPanel({
 
   if (!isHost) {
     return (
-      <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
         <div className="max-w-md">
           <p className="text-sm font-medium uppercase tracking-wide text-primary">
             Waiting for host
@@ -1287,7 +1333,7 @@ function WordPackSelectionPanel({
   }
 
   return (
-    <section className="flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-4 shadow-sm sm:p-6">
+    <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-4 shadow-sm sm:p-6">
       <div className="flex max-h-full w-full max-w-2xl flex-col">
         <div className="text-center">
           <p className="text-sm font-medium uppercase tracking-wide text-primary">
@@ -1302,13 +1348,14 @@ function WordPackSelectionPanel({
         </div>
 
         <div className="mt-6 grid min-h-0 gap-3 overflow-y-auto pr-1">
-          {wordPacks.map((pack) => (
+          {wordPacks.map((pack, index) => (
             <button
-              className="rounded-2xl border bg-background/70 p-4 text-left transition hover:border-primary/50 hover:bg-primary/5 aria-pressed:border-primary aria-pressed:bg-primary/10"
+              className="panel-enter rounded-2xl border bg-background/70 p-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md active:translate-y-0 aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:shadow-[0_0_0_2px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
               key={pack.id}
               onClick={() => onSelect(pack.id)}
               type="button"
               aria-pressed={selectedWordPackId === pack.id}
+              style={{ animationDelay: `${80 + index * 55}ms` }}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1318,7 +1365,7 @@ function WordPackSelectionPanel({
                   </p>
                 </div>
                 <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
-                  {pack.slug}
+                  {selectedWordPackId === pack.id ? "Chosen" : pack.slug}
                 </span>
               </div>
             </button>
@@ -1326,7 +1373,7 @@ function WordPackSelectionPanel({
         </div>
 
         <Button
-          className="mt-6 w-full"
+          className="mt-6 w-full transition-transform active:translate-y-px"
           disabled={selectedWordPackId === ""}
           onClick={onConfirm}
           type="button"

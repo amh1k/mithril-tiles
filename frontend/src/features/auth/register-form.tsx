@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
+import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,7 +71,7 @@ export function RegisterForm() {
   });
 
   return (
-    <form className="space-y-5" onSubmit={onSubmit} noValidate>
+    <form className="panel-enter space-y-5" onSubmit={onSubmit} noValidate>
       <FormField
         id="display-name"
         label="Display name"
@@ -120,12 +121,18 @@ export function RegisterForm() {
       />
 
       {errors.root?.server && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="form-error-enter text-sm text-destructive" role="alert">
           {errors.root.server.message}
         </p>
       )}
 
-      <Button className="h-11 w-full" disabled={isSubmitting} type="submit">
+      <Button
+        className="h-11 w-full transition-transform active:translate-y-px"
+        disabled={isSubmitting}
+        aria-busy={isSubmitting}
+        type="submit"
+      >
+        {isSubmitting && <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />}
         {isSubmitting ? "Creating account…" : "Create account"}
       </Button>
     </form>
@@ -167,7 +174,7 @@ function FormField({
         {...inputProps}
       />
       {error && (
-        <p id={errorId} className="text-sm text-destructive" role="alert">
+        <p id={errorId} className="field-error-enter text-sm text-destructive" role="alert">
           {error}
         </p>
       )}
