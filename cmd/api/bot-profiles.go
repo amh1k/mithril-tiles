@@ -14,7 +14,7 @@ import (
 // POST   /v1/rooms/:roomCode/bots
 // DELETE /v1/rooms/:roomCode/bots/:botProfileID
 // ```
-func(app *application)insertBotToRoom(w http.ResponseWriter, r *http.Request) {
+func (app *application) insertBotToRoom(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
 	roomID := params.ByName("roomID")
 	if roomID == "" {
@@ -24,41 +24,101 @@ func(app *application)insertBotToRoom(w http.ResponseWriter, r *http.Request) {
 	room, err := app.roomManager.GetOrCreateRoom(roomID)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
+		return
 	}
 	var input struct {
-	RequestedBy   uuid.UUID	`json:"requested_by"`
-	ID            uuid.UUID `json:"id"`
-	// Name          string    `json:"name"`
-	// Difficulty    string    `json:"difficulty"`
-	// BehaviorStyle string    `json:"behavior_style"`
-	// AvatarURL     *string   `json:"avatar_url,omitempty"`
-	// IsActive      bool      `json:"is_active"`
-	// CreatedAt     time.Time `json:"created_at"`
-	// UpdatedAt     time.Time `json:"updated_at"`
+		ID uuid.UUID `json:"id"`
+		// Name          string    `json:"name"`
+		// Difficulty    string    `json:"difficulty"`
+		// BehaviorStyle string    `json:"behavior_style"`
+		// AvatarURL     *string   `json:"avatar_url,omitempty"`
+		// IsActive      bool      `json:"is_active"`
+		// CreatedAt     time.Time `json:"created_at"`
+		// UpdatedAt     time.Time `json:"updated_at"`
 
 	}
-	err = app.readJSON(w,r,&input)
+	requestedBy := app.contextGetPrincipal(r).ID()
+	err = app.readJSON(w, r, &input)
 	if err != nil {
-		app.badRequestResponse(w,r, err)
+		app.badRequestResponse(w, r, err)
+		return
 	}
-	botProfile, err := app.models.BotProfile.Get(input.ID)
+	botProfile, err := app.models.BotProfile.GetActive(input.ID)
 	if err != nil {
-		app.serverErrorResponse(w,r,err)
+		app.serverErrorResponse(w, r, err)
+		return
 	}
 	errorChan := make(chan error, 10)
 	addBotCommand := realtime.AddBotCommand{
-		RequestedBy: input.RequestedBy,
-		Profile: *botProfile,
-		Result: errorChan,
+		RequestedBy: requestedBy,
+		Profile:     *botProfile,
+		Result:      errorChan,
 	}
-	room.AddBotPlayer(addBotCommand)
+	if err := room.AddToAddBotChannel(r.Context(), addBotCommand); err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 	select {
-	case errMsg := <- addBotCommand.Result:
-		app.serverErrorResponse(w,r, errMsg)
-	default:
-
+	case errMsg := <-addBotCommand.Result:
+		if errMsg != nil {
+			app.serverErrorResponse(w, r, errMsg)
+			return
+		}
+	case <-r.Context().Done():
+		return
 	}
-	app.writeJSON(w,http.StatusOK,envelope{
-		"bot_profile":botProfile,
+	app.writeJSON(w, http.StatusOK, envelope{
+		"bot_profile": botProfile,
 	}, nil)
+}
+
+func (app *application) deleteBotFromRoom(w http.ResponseWriter, r *http.Request) {
+	params := httprouter.ParamsFromContext(r.Context())
+	roomID := params.ByName("roomID")
+	if roomID == "" {
+		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	room, err := app.roomManager.GetOrCreateRoom(roomID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	var input struct {
+		ID uuid.UUID `json:"id"`
+	}
+	requestedBy := app.contextGetPrincipal(r).ID()
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+	botProfile, err := app.models.BotProfile.Get(input.ID)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	errorChan := make(chan error, 10)
+	removeBotCommand := realtime.RemoveBotCommand{
+		RequestedBy: requestedBy,
+		BotID:       botProfile.ID,
+		Result:      errorChan,
+	}
+	if err := room.AddToRemoveBotChannel(r.Context(), removeBotCommand); err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+	select {
+	case errMsg := <-removeBotCommand.Result:
+		if errMsg != nil {
+			app.serverErrorResponse(w, r, errMsg)
+			return
+		}
+	case <-r.Context().Done():
+		return
+	}
+	app.writeJSON(w, http.StatusOK, envelope{
+		"bot_profile": botProfile,
+	}, nil)
+
 }

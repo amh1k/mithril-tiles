@@ -135,6 +135,9 @@ type Room struct {
 	//drawing
 	drawStroke chan DrawStroke
 
+	addBot    chan AddBotCommand
+	removeBot chan RemoveBotCommand
+
 	//Scores
 	scoresMu     sync.Mutex
 	scores       map[*Player]int
@@ -215,6 +218,8 @@ func newRoom(
 		done:           make(chan struct{}),
 		endGame:        make(chan struct{}),
 		deleteRoom:     deleteRoom,
+		addBot:         make(chan AddBotCommand, 10),
+		removeBot:      make(chan RemoveBotCommand, 10),
 	}
 
 	return cr, nil
@@ -288,6 +293,11 @@ func (r *Room) Run() {
 			go r.endRound()
 		case <-r.endGame:
 			go r.handleEndGame()
+
+		case command := <-r.addBot:
+			r.handleAddBot(command)
+		case command := <-r.removeBot:
+			r.handleRemoveBot(command)
 		case <-r.done:
 			return
 		}
@@ -302,15 +312,36 @@ func (r *Room) close() {
 		close(r.done)
 	})
 }
-func (r *Room) AddBotPlayer(addBotCommand AddBotCommand) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if addBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
-		addBotCommand.Result <- fmt.Errorf("Only host can add bots!")
+func (r *Room) handleAddBot(addBotCommand AddBotCommand) {
+	r.mu.Lock()
+	if r.HostPlayer == nil || addBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("only host can add bots")
+		return
 	}
 	if r.gameState != GameStateIdle {
-		addBotCommand.Result <- fmt.Errorf("Game state should be idle for bots to be added!")
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("bots can only be added while the game is idle")
+		return
 	}
+	if !addBotCommand.Profile.IsActive {
+		r.mu.Unlock()
+		addBotCommand.Result <- fmt.Errorf("bot profile is inactive")
+		return
+	}
+	for existingPlayer := range r.players {
+		if existingPlayer.Type == botPlayer && existingPlayer.Principal.ID() == addBotCommand.Profile.ID {
+			r.mu.Unlock()
+			addBotCommand.Result <- fmt.Errorf("bot profile is already in the room")
+			return
+		}
+		if existingPlayer.Principal.DisplayName() == addBotCommand.Profile.Name {
+			r.mu.Unlock()
+			addBotCommand.Result <- fmt.Errorf("display name is already in use")
+			return
+		}
+	}
+	r.mu.Unlock()
 	principal := data.Principal{
 		Type:       data.PrincipalBot,
 		BotProfile: &addBotCommand.Profile,
@@ -321,32 +352,19 @@ func (r *Room) AddBotPlayer(addBotCommand AddBotCommand) {
 		Outgoing:       make(chan string, 10),
 		LastActive:     time.Now(),
 		ReconnectToken: uuid.NewString(),
-		cancel:         cancel,
+		cancel:         func() {},
 		Type:           botPlayer,
 	}
 	joinResult := make(chan error, 1)
-	select {
-	case r.join <- joinRequest{player: player, result: joinResult}:
-	case <-ctx.Done():
-		addBotCommand.Result <- fmt.Errorf("Context timed out")
-	case <-r.done:
-		addBotCommand.Result <- fmt.Errorf("Room was closed")
+	r.handleJoin(joinRequest{player: player, result: joinResult})
+	if err := <-joinResult; err != nil {
+		addBotCommand.Result <- err
+		return
 	}
-	select {
-	case err := <-joinResult:
-		if err != nil {
-			addBotCommand.Result <- err
-		}
-	case <-ctx.Done():
-		addBotCommand.Result <- fmt.Errorf("Context timed out")
-	case <-r.done:
-		addBotCommand.Result <- fmt.Errorf("Room was closed")
-	}
-
+	r.handleSnapshotRequest()
+	addBotCommand.Result <- nil
 }
-func (r *Room) LeaveBotPlayer(removeBotCommand RemoveBotCommand) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (r *Room) handleRemoveBot(removeBotCommand RemoveBotCommand) {
 	r.mu.Lock()
 	if r.HostPlayer == nil || removeBotCommand.RequestedBy != r.HostPlayer.Principal.ID() {
 		r.mu.Unlock()
@@ -373,14 +391,8 @@ func (r *Room) LeaveBotPlayer(removeBotCommand RemoveBotCommand) {
 		return
 	}
 
-	select {
-	case r.leave <- targetBot:
-		removeBotCommand.Result <- nil
-	case <-ctx.Done():
-		removeBotCommand.Result <- fmt.Errorf("timed out removing bot player")
-	case <-r.done:
-		removeBotCommand.Result <- fmt.Errorf("room was closed")
-	}
+	r.handleLeave(targetBot)
+	removeBotCommand.Result <- nil
 }
 
 // func runServer(code string) {
@@ -401,3 +413,24 @@ func (r *Room) LeaveBotPlayer(removeBotCommand RemoveBotCommand) {
 //     go room.Run()
 
 // }
+
+func (r *Room) AddToAddBotChannel(ctx context.Context, addBotCommand AddBotCommand) error {
+	select {
+	case r.addBot <- addBotCommand:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
+func (r *Room) AddToRemoveBotChannel(ctx context.Context, removeBotCommand RemoveBotCommand) error {
+	select {
+	case r.removeBot <- removeBotCommand:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-r.done:
+		return fmt.Errorf("room was closed")
+	}
+}
