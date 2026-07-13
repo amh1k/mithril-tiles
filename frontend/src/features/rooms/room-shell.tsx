@@ -31,6 +31,7 @@ import {
   useState,
   type CSSProperties,
   type FormEvent,
+  type UIEvent,
 } from "react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -138,8 +139,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     tone: "start" | "break";
   } | null>(null);
   const [showConnectionSuccess, setShowConnectionSuccess] = useState(false);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const previousRoundTransitionKeyRef = useRef<string | null>(null);
   const hasConnectedRef = useRef(false);
+  const chatMessageListRef = useRef<HTMLDivElement | null>(null);
+  const previousMessageCountRef = useRef(0);
+  const shouldAutoScrollChatRef = useRef(true);
   const isErasing = drawingColor === ERASER_COLOR;
   const placeholderRoomSnapshot = useMemo(
     () => createPlaceholderRoomSnapshot(principal),
@@ -149,7 +154,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const roomSnapshot = storedRoomSnapshot ?? placeholderRoomSnapshot;
   const setRoomSnapshot = useRoomStore((state) => state.setSnapshot);
   const socketStatusLabel = formatSocketStatus(socket.status);
-  const roundTimerLabel = useRoundTimerLabel(roomSnapshot);
+  const roundTimer = useRoundTimer(roomSnapshot);
   const canvasResetKey =
     roomSnapshot.phase === "active_round"
       ? `${roomSnapshot.gameId ?? "game"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`
@@ -268,6 +273,37 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       window.clearTimeout(hideNotice);
     };
   }, [socket.status]);
+
+  useEffect(() => {
+    const messageCount = socket.messages.length;
+    const previousMessageCount = previousMessageCountRef.current;
+    previousMessageCountRef.current = messageCount;
+
+    if (messageCount === 0 || messageCount === previousMessageCount) {
+      return;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      const messageList = chatMessageListRef.current;
+      if (messageList === null) {
+        return;
+      }
+
+      if (shouldAutoScrollChatRef.current || previousMessageCount === 0) {
+        if (typeof messageList.scrollTo === "function") {
+          messageList.scrollTo({ behavior: "smooth", top: messageList.scrollHeight });
+        } else {
+          messageList.scrollTop = messageList.scrollHeight;
+        }
+        setUnreadMessageCount(0);
+        return;
+      }
+
+      setUnreadMessageCount(messageCount - previousMessageCount);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [socket.messages.length]);
 
   useEffect(() => {
     const activeWordPackId = socket.roomSnapshot?.game?.word_pack_id;
@@ -402,6 +438,33 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     if (socket.sendChatMessage(chatMessage)) {
       setChatMessage("");
     }
+  }
+
+  function handleChatListScroll(event: UIEvent<HTMLDivElement>) {
+    const messageList = event.currentTarget;
+    const distanceFromBottom =
+      messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight;
+
+    shouldAutoScrollChatRef.current = distanceFromBottom < 36;
+
+    if (shouldAutoScrollChatRef.current) {
+      setUnreadMessageCount(0);
+    }
+  }
+
+  function scrollChatToLatestMessage() {
+    const messageList = chatMessageListRef.current;
+    if (messageList === null) {
+      return;
+    }
+
+    shouldAutoScrollChatRef.current = true;
+    if (typeof messageList.scrollTo === "function") {
+      messageList.scrollTo({ behavior: "smooth", top: messageList.scrollHeight });
+    } else {
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+    setUnreadMessageCount(0);
   }
 
   function handleConfirmWordPack() {
@@ -592,17 +655,28 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         }
       />
 
-      {roundTimerLabel !== null && (
+      {roundTimer !== null && (
         <section
-          className="mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border border-[#bba88d]/60 bg-[#2b1e12]/90 px-4 py-3 text-center shadow-xl shadow-[#2b1e12]/20 sm:px-6 sm:py-4"
+          className={`mx-auto flex w-full max-w-xl items-center justify-center rounded-2xl border px-4 py-3 text-center shadow-xl transition-colors duration-500 sm:px-6 sm:py-4 ${
+            roundTimer.remainingSeconds <= 5
+              ? "timer-critical border-[#946440] bg-[#2b1e12] shadow-[#946440]/35"
+              : roundTimer.remainingSeconds <= 15
+                ? "border-[#946440]/85 bg-[#2b1e12]/95 shadow-[#946440]/20"
+                : "border-[#bba88d]/60 bg-[#2b1e12]/90 shadow-[#2b1e12]/20"
+          }`}
           aria-label="Round timer"
+          aria-live={roundTimer.remainingSeconds <= 15 ? "polite" : undefined}
         >
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#bba88d]">
-              Time remaining
+            <p className={`text-xs font-semibold uppercase tracking-[0.28em] ${
+              roundTimer.remainingSeconds <= 5 ? "text-[#f0c39b]" : "text-[#bba88d]"
+            }`}>
+              {roundTimer.remainingSeconds <= 5 ? "Last moments" : "Time remaining"}
             </p>
-            <p className="mt-1 font-serif text-3xl font-bold tabular-nums text-[#f4ead7] sm:text-5xl">
-              {roundTimerLabel}
+            <p className={`mt-1 font-serif text-3xl font-bold tabular-nums sm:text-5xl ${
+              roundTimer.remainingSeconds <= 5 ? "text-[#f0c39b]" : "text-[#f4ead7]"
+            }`}>
+              {roundTimer.label}
             </p>
           </div>
         </section>
@@ -691,7 +765,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                   <CardTitle>Canvas</CardTitle>
                   {roomSnapshot.phase === "active_round" && (
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      className={`status-enter inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
                         isCurrentPlayerDrawer
                           ? "bg-primary/10 text-primary"
                           : "bg-sky-500/10 text-sky-700 dark:text-sky-300"
@@ -716,11 +790,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     : "Test the canvas while everyone gets ready."}
                 </CardDescription>
                 <div className="mt-3 flex min-w-0 flex-wrap gap-2">
-                  {guesserWord !== null && (
-                    <p className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-2 font-mono text-sm font-semibold tracking-[0.18em] text-[#2b1e12] sm:tracking-[0.24em]">
-                      {guesserWord}
-                    </p>
-                  )}
+                  {guesserWord !== null && <MaskedWordDisplay word={guesserWord} />}
                   {socket.drawerWord !== null && (
                     <p className="inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary">
                       Your word: {socket.drawerWord.word}
@@ -732,7 +802,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               {(roomSnapshot.phase !== "active_round" ||
                 isCurrentPlayerDrawer) && (
                 <div
-                  className="flex flex-wrap items-center gap-3"
+                  className="panel-enter flex flex-wrap items-center gap-3"
                   aria-label="Drawing tool"
                   role="group"
                 >
@@ -746,14 +816,21 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                         key={color.value}
                         aria-checked={drawingColor === color.value}
                         aria-label={color.label}
-                        className="size-11 touch-manipulation rounded-full border border-foreground/30 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                        className="relative flex size-11 touch-manipulation items-center justify-center rounded-full border border-foreground/30 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
                         onClick={() => setDrawingColor(color.value)}
                         role="radio"
                         style={{
                           backgroundColor: color.value,
                         }}
                         type="button"
-                      />
+                      >
+                        {drawingColor === color.value && (
+                          <Check
+                            className="size-4 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
                     ))}
                     <button
                       aria-checked={isErasing}
@@ -763,7 +840,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       role="radio"
                       type="button"
                     >
-                      <Eraser className="size-4" aria-hidden="true" />
+                      {isErasing ? (
+                        <Check className="size-4" aria-hidden="true" />
+                      ) : (
+                        <Eraser className="size-4" aria-hidden="true" />
+                      )}
                     </button>
                   </div>
 
@@ -825,9 +906,11 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
             <div
+              ref={chatMessageListRef}
               data-testid="chat-message-list"
               className="flex min-h-[18rem] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border bg-background/60 p-3 text-sm lg:min-h-0"
               aria-live="polite"
+              onScroll={handleChatListScroll}
             >
               {socket.messages.length === 0 ? (
                 <p className="text-muted-foreground">
@@ -839,13 +922,25 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 socket.messages.map((message) => (
                   <p
                     key={message.id}
-                    className="break-words whitespace-pre-wrap"
+                    className="status-enter break-words whitespace-pre-wrap"
                   >
                     {message.text}
                   </p>
                 ))
               )}
             </div>
+
+            {unreadMessageCount > 0 && (
+              <Button
+                className="status-enter self-center"
+                onClick={scrollChatToLatestMessage}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {unreadMessageCount} new {unreadMessageCount === 1 ? "message" : "messages"}
+              </Button>
+            )}
 
             <form className="flex gap-2" onSubmit={handleSendChatMessage}>
               <Input
@@ -915,7 +1010,10 @@ function RoomSynchronizingPanel({
   );
 }
 
-function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
+function useRoundTimer(roomSnapshot: RoomSnapshot): {
+  label: string;
+  remainingSeconds: number;
+} | null {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
 
@@ -977,7 +1075,44 @@ function useRoundTimerLabel(roomSnapshot: RoomSnapshot): string | null {
     Math.ceil((roundEndsAtMs - (nowMs + serverClockOffsetMs)) / 1000),
   );
 
-  return formatRemainingTime(remainingSeconds);
+  return {
+    label: formatRemainingTime(remainingSeconds),
+    remainingSeconds,
+  };
+}
+
+function MaskedWordDisplay({ word }: { word: string }) {
+  const [previousWord, setPreviousWord] = useState(word);
+
+  useEffect(() => {
+    const updatePreviousWord = window.setTimeout(() => {
+      setPreviousWord(word);
+    }, 0);
+
+    return () => window.clearTimeout(updatePreviousWord);
+  }, [word]);
+
+  return (
+    <p
+      className="max-w-full overflow-x-auto whitespace-pre rounded-lg border border-[#946440]/60 bg-[#bba88d]/35 px-3 py-2 font-mono text-sm font-semibold tracking-[0.18em] text-[#2b1e12] sm:tracking-[0.24em]"
+      aria-label={`Masked word: ${word}`}
+    >
+      {Array.from(word).map((character, index) => {
+        const isRevealedLetter = character !== "_" && character !== " ";
+        const isNewlyRevealed =
+          isRevealedLetter && previousWord[index] !== character;
+
+        return (
+          <span
+            className={isNewlyRevealed ? "word-reveal inline-block" : "inline-block"}
+            key={`${index}:${character}`}
+          >
+            {character === "_" ? "—" : character.toUpperCase()}
+          </span>
+        );
+      })}
+    </p>
+  );
 }
 
 function formatRemainingTime(totalSeconds: number): string {
@@ -1009,7 +1144,7 @@ function RoundTransitionOverlay({ transition }: RoundTransitionOverlayProps) {
       aria-live="polite"
     >
       <div
-        className={`relative w-full max-w-lg overflow-hidden rounded-3xl border px-8 py-7 text-center shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 ${
+        className={`panel-enter relative w-full max-w-lg overflow-hidden rounded-3xl border px-8 py-7 text-center shadow-2xl ${
           isRoundStart
             ? "border-[#bba88d]/70 bg-[#2b1e12]/95 text-[#f4ead7]"
             : "border-[#946440]/75 bg-[#bba88d]/95 text-[#2b1e12]"
@@ -1037,6 +1172,9 @@ function RoundTransitionOverlay({ transition }: RoundTransitionOverlayProps) {
         <p className="relative mt-3 text-sm font-medium opacity-85">
           {transition.description}
         </p>
+        <div className="relative mt-6 h-px overflow-hidden bg-current/20">
+          <span className="absolute inset-y-0 left-0 w-1/2 bg-current/80 motion-safe:animate-[hero-scan_2.2s_ease-in-out_infinite]" />
+        </div>
       </div>
     </div>
   );
@@ -1425,11 +1563,11 @@ function FinalScoresOverlay({
 
   if (status === "loading") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm animate-in fade-in duration-300">
         <div
           aria-labelledby="final-scores-loading-title"
           aria-modal="true"
-          className="w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl"
+          className="panel-enter w-full max-w-md rounded-3xl border bg-card p-6 text-center shadow-2xl"
           role="dialog"
         >
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -1451,11 +1589,11 @@ function FinalScoresOverlay({
 
   if (status === "failed") {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 backdrop-blur-sm animate-in fade-in duration-300">
         <div
           aria-labelledby="final-scores-error-title"
           aria-modal="true"
-          className="w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl"
+          className="panel-enter w-full max-w-md rounded-3xl border border-amber-500/30 bg-card p-6 text-center shadow-2xl"
           role="dialog"
         >
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-300">
@@ -1488,11 +1626,11 @@ function FinalScoresOverlay({
   const remainingScores = sortedScores.slice(3);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm animate-in fade-in duration-300">
       <div
         aria-labelledby="final-scores-title"
         aria-modal="true"
-        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border bg-card shadow-2xl"
+        className="panel-enter relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border bg-card shadow-2xl"
         role="dialog"
       >
         <Link
@@ -1505,7 +1643,7 @@ function FinalScoresOverlay({
         <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
           <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
           <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
-            <Trophy className="size-8" aria-hidden="true" />
+            <Trophy className="size-8 animate-pulse" aria-hidden="true" />
           </div>
           <h2
             className="relative mt-4 text-3xl font-semibold tracking-tight"
@@ -1541,8 +1679,8 @@ function FinalScoresOverlay({
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Final standings
                   </p>
-                  {remainingScores.map((score) => (
-                    <ScoreRow key={score.id} score={score} />
+                  {remainingScores.map((score, index) => (
+                    <ScoreRow key={score.id} score={score} index={index} />
                   ))}
                 </div>
               )}
@@ -1560,13 +1698,16 @@ function FinalScoresOverlay({
 }
 
 function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
+  const revealDelay = Math.max(0, 3 - score.final_rank) * 160 + 120;
+
   return (
     <div
-      className={`rounded-2xl border p-4 text-center ${
+      className={`panel-enter rounded-2xl border p-4 text-center ${
         score.is_winner
           ? "border-amber-500/40 bg-amber-500/10"
           : "bg-background/70"
       }`}
+      style={{ animationDelay: `${revealDelay}ms` }}
     >
       <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
         #{score.final_rank}
@@ -1587,9 +1728,18 @@ function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
   );
 }
 
-function ScoreRow({ score }: { score: ResolvedGameFinalScore }) {
+function ScoreRow({
+  index,
+  score,
+}: {
+  index: number;
+  score: ResolvedGameFinalScore;
+}) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-background/70 p-3">
+    <div
+      className="panel-enter flex items-center gap-3 rounded-xl border bg-background/70 p-3"
+      style={{ animationDelay: `${560 + index * 70}ms` }}
+    >
       <span className="w-8 text-center text-sm font-bold text-muted-foreground">
         #{score.final_rank}
       </span>
