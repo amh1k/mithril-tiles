@@ -40,6 +40,7 @@ func HandlePlayer(conn *websocket.Conn, room *Room, principal *data.Principal, c
 		LastActive:     time.Now(),
 		ReconnectToken: uuid.NewString(),
 		cancel:         cancel,
+		Type:           humanPlayer,
 	}
 
 	defer func() {
@@ -165,6 +166,7 @@ func readMessages(player *Player, room *Room, username string, ctx context.Conte
 			}
 			room.mu.Unlock()
 
+			stroke.ActorID = player.Principal.ID()
 			stroke.From = player.Principal.DisplayName()
 			stroke.RoomCode = room.roomCode
 			room.drawStroke <- stroke
@@ -332,10 +334,9 @@ func handleCommand(player *Player, room *Room, command string) {
 			default:
 			}
 		} else {
-			
-				room.handleCorrectGuess(player)
 
-			
+			room.handleCorrectGuess(player)
+
 		}
 	default:
 		select {

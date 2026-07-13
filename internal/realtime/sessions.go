@@ -80,7 +80,7 @@ func (r *Room) cleanupInactiveplayers() {
 			r.mu.Lock()
 			var toRemove []*Player
 			for player := range r.players {
-				if player.isInactive(5 * time.Minute) {
+				if player.isInactive(5 * time.Minute) && player.Type != botPlayer {
 					fmt.Printf("Removing inactive: %s\n", player.Principal.DisplayName())
 					toRemove = append(toRemove, player)
 				}

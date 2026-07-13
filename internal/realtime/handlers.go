@@ -35,6 +35,10 @@ func (r *Room) handleBroadcast(message string) {
 	r.totalMessages++
 	r.mu.Unlock()
 	for _, player := range players {
+		if player.Type == botPlayer {
+			// logic here for sending data to the bot
+			continue
+		}
 		select {
 		case player.Outgoing <- message:
 			player.Mu.Lock()
@@ -48,6 +52,9 @@ func (r *Room) handleBroadcast(message string) {
 
 func (r *Room) handleJoin(request joinRequest) {
 	player := request.player
+	// if player.Conn == nil && player.Type == botPlayer {
+	// 	return
+	// }
 	r.mu.Lock()
 	if len(r.players) >= MaxPlayers {
 		r.mu.Unlock()
@@ -67,7 +74,9 @@ func (r *Room) handleJoin(request joinRequest) {
 	}
 	r.scoresMu.Unlock()
 	player.markActive()
-	r.sendHistory(player, 10)
+	if request.player.Type != botPlayer {
+		r.sendHistory(player, 10)
+	}
 	announcement := fmt.Sprintf("*** %s joined the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
 	request.result <- nil
@@ -75,21 +84,32 @@ func (r *Room) handleJoin(request joinRequest) {
 }
 
 func (r *Room) handleLeave(player *Player) {
+
 	r.mu.Lock()
 	if !r.players[player] {
 		r.mu.Unlock()
 		return
 	}
-	
+
 	delete(r.players, player)
 	if len(r.players) == 0 {
 		r.HostPlayer = nil
-	}else if r.HostPlayer == player {
-    players := make([]*Player, 0, len(r.players))
-    for remainingPlayer := range r.players {
-        players = append(players, remainingPlayer)
-    }
-    r.HostPlayer = players[rand.Intn(len(players))]
+	} else if r.HostPlayer == player {
+		players := make([]*Player, 0, len(r.players))
+		for remainingPlayer := range r.players {
+			if remainingPlayer.Conn == nil && remainingPlayer.Type == botPlayer {
+				continue
+			}
+			players = append(players, remainingPlayer)
+		}
+		if  len(players) == 0 {
+			r.HostPlayer = nil
+
+		}else {
+			r.HostPlayer = players[rand.Intn(len(players))]
+
+		}
+		
 	}
 	playerCount := len(r.players)
 	r.mu.Unlock()
@@ -99,13 +119,18 @@ func (r *Room) handleLeave(player *Player) {
 	r.scoresMu.Unlock()
 
 	fmt.Printf("%s left (total: %d)\n", player.Principal.DisplayName(), playerCount)
-	player.cancelConnection()
+	if player.Type != botPlayer {
+		player.cancelConnection()
+	}
 	announcement := fmt.Sprintf("*** %s left the room ***\n", player.Principal.DisplayName())
 	r.handleBroadcast(announcement)
 	r.handleSnapshotRequest()
 }
 
 func (r *Room) sendHistory(player *Player, count int) {
+	if player.Conn == nil && player.Type == botPlayer {
+		return
+	}
 	r.messageMu.Lock()
 	defer r.messageMu.Unlock()
 	messages := r.messages.Latest(count)
@@ -120,6 +145,9 @@ func (r *Room) sendHistory(player *Player, count int) {
 
 }
 func (r *Room) sendUserList(player *Player) {
+	if player.Conn == nil && player.Type == botPlayer {
+		return
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	list := "Users online:\n"
@@ -141,6 +169,9 @@ func (r *Room) sendUserList(player *Player) {
 }
 
 func (r *Room) handleDirectMessage(dm DirectMessage) {
+	if dm.toClient.Type == botPlayer && dm.toClient.Conn == nil {
+		// have to handle direct message to bot
+	}
 	select {
 	case dm.toClient.Outgoing <- dm.message:
 		dm.toClient.Mu.Lock()
@@ -150,40 +181,39 @@ func (r *Room) handleDirectMessage(dm DirectMessage) {
 		fmt.Printf("Couldn't deliver DM to %s\n", dm.toClient.Principal.DisplayName())
 	}
 }
- func maskedWordhelper(word string , arr[]int) string {
+func maskedWordhelper(word string, arr []int) string {
 	mp := make(map[int]int)
 	var builder strings.Builder
 	for _, i := range arr {
-		mp[i] = 1 
+		mp[i] = 1
 	}
 	for i := range len(word) {
-		_,  exists := mp[i]
+		_, exists := mp[i]
 		if exists {
 			builder.WriteByte(word[i])
 
-		}else {
+		} else {
 			builder.WriteByte('_')
 		}
 
 	}
 	return builder.String()
-	
- }
 
-func (r *Room)sendGuesserWord(word string, roundNumber int, ctx context.Context)  {
+}
+
+func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context) {
 	payload := struct {
 		Type string `json:"type"`
 		Data struct {
-			RoundNumber int `json:"round_number"`
-			Word  		string `json:"word"`
-	} `json:"data"`
+			RoundNumber int    `json:"round_number"`
+			Word        string `json:"word"`
+		} `json:"data"`
 	}{
 		Type: "guesser_word",
-
 	}
 	wordLength := len(word)
 	var arr []int
-	for i := range wordLength  {
+	for i := range wordLength {
 		arr = append(arr, i)
 	}
 	rand.Shuffle(len(arr), func(i, j int) {
@@ -196,49 +226,44 @@ func (r *Room)sendGuesserWord(word string, roundNumber int, ctx context.Context)
 	defer timer2.Stop()
 	for {
 		select {
-	case <- timer1.C:
-		tempArr := arr[:1]
-		wordToSend := maskedWordhelper(word, tempArr)
-		payload.Data.RoundNumber = roundNumber
-		payload.Data.Word = wordToSend
-		data, err := json.Marshal(payload)
-		if err != nil {
-			continue
-		}
-		r.broadcast <- string(data)
+		case <-timer1.C:
+			tempArr := arr[:1]
+			wordToSend := maskedWordhelper(word, tempArr)
+			payload.Data.RoundNumber = roundNumber
+			payload.Data.Word = wordToSend
+			data, err := json.Marshal(payload)
+			if err != nil {
+				continue
+			}
+			r.broadcast <- string(data)
 
-	case <- timer2.C:
-		tempArr := arr[:3]
-		wordToSend := maskedWordhelper(word, tempArr)
-		payload.Data.RoundNumber = roundNumber
-		payload.Data.Word = wordToSend
-		data, err := json.Marshal(payload)
-		if err != nil {
-			continue
-		}
-		r.broadcast <- string(data)
-	case <- timer3.C:
-		tempArr := arr[:4]
-		wordToSend := maskedWordhelper(word, tempArr)
-		payload.Data.RoundNumber = roundNumber
-		payload.Data.Word = wordToSend
-		data, err := json.Marshal(payload)
-		if err != nil {
-			continue
-		}
-		r.broadcast <- string(data)
+		case <-timer2.C:
+			tempArr := arr[:3]
+			wordToSend := maskedWordhelper(word, tempArr)
+			payload.Data.RoundNumber = roundNumber
+			payload.Data.Word = wordToSend
+			data, err := json.Marshal(payload)
+			if err != nil {
+				continue
+			}
+			r.broadcast <- string(data)
+		case <-timer3.C:
+			tempArr := arr[:4]
+			wordToSend := maskedWordhelper(word, tempArr)
+			payload.Data.RoundNumber = roundNumber
+			payload.Data.Word = wordToSend
+			data, err := json.Marshal(payload)
+			if err != nil {
+				continue
+			}
+			r.broadcast <- string(data)
 
-	case <- ctx.Done():
-		return
-	case <-r.done:
-		return
+		case <-ctx.Done():
+			return
+		case <-r.done:
+			return
+		}
 	}
-	}
-
-
-
-
-
 
 }
 
@@ -398,9 +423,7 @@ func (r *Room) handleDrawStroke(stroke DrawStroke) {
 	if currentDrawer == nil {
 		return
 	}
-	if currentDrawer.Principal.DisplayName() != stroke.From {
-		fmt.Println(currentDrawer.Principal.DisplayName())
-		fmt.Println(stroke.From)
+	if currentDrawer.Principal.ID() != stroke.ActorID {
 		return
 	}
 	r.broadcastStroke(stroke)
@@ -707,49 +730,37 @@ func (r *Room) handleCorrectGuess(player *Player) {
 	}
 	if r.scores[player] == 1 {
 		select {
-		case  player.Outgoing <- "You have already guessed brother":
-	default:
-	}
+		case player.Outgoing <- "You have already guessed brother":
+		default:
+		}
 		return
 	}
 	select {
-	case  player.Outgoing <- "Correct Guess! Congrats":
+	case player.Outgoing <- "Correct Guess! Congrats":
 	default:
 	}
 	diff := time.Since(r.startTime)
 	key := newPrincipalScoreKey(player.Principal)
 	finalScore := r.globalScores[key]
 	finalScore.Principal = player.Principal
-	if diff < 10 * time.Second  {
+	if diff < 10*time.Second {
 		r.scores[player] += 5
 		finalScore.Points += 5
-		
-		
 
-
-	} else if diff < 30 * time.Second {
+	} else if diff < 30*time.Second {
 		r.scores[player] += 3
 		finalScore.Points += 3
-		
-		
 
-	} else if diff  <  50* time.Second {
+	} else if diff < 50*time.Second {
 		r.scores[player] += 2
 		finalScore.Points += 2
-		
-		
-		
 
-	}else  {
+	} else {
 		r.scores[player] += 1
 		finalScore.Points += 1
-		
-		
+
 	}
-	
-	
-	
-	
+
 	r.globalScores[key] = finalScore
 	r.correctGuesses++
 }
@@ -796,14 +807,13 @@ func (r *Room) handleEndGame() {
 	}
 	timer := time.NewTimer(60 * time.Second)
 	select {
-	case <- timer.C:
+	case <-timer.C:
 		if r.deleteRoom != nil {
-		r.deleteRoom(r.roomCode)
+			r.deleteRoom(r.roomCode)
 		}
 		r.close()
 	}
 
-	
 }
 
 func (r *Room) persistEndGame(request GameEndRequest) (*GameEndResult, error) {

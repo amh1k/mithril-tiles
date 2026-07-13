@@ -45,6 +45,7 @@ type RoomPlayer struct {
 	IsConnected bool      `json:"is_connected"`
 }
 
+
 type RoomGameSnapshot struct {
 	ID             uuid.UUID `json:"id"`
 	WordPackID     uuid.UUID `json:"word_pack_id"`

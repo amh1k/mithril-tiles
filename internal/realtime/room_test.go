@@ -85,6 +85,7 @@ func TestDrawStroke(t *testing.T) {
 	}
 	go roomTest.Run()
 	drawStrokeTest := DrawStroke{
+		ActorID:   uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		From:      "Test User",
 		RoomCode:  "abc",
 		FromX:     10,
