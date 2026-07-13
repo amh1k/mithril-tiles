@@ -1,5 +1,7 @@
 import "server-only";
 
+import { redirect } from "next/navigation";
+
 import {
   authSessionResponseSchema,
   type Principal,
@@ -9,6 +11,7 @@ import {
   normalizeBackendError,
   type FrontendApiError,
 } from "@/lib/api/errors";
+import { getSessionToken } from "@/lib/auth/session-cookie";
 
 type SessionLookupResult =
   | {
@@ -67,4 +70,16 @@ export async function lookupSession(
     ok: true,
     principal: parsedResponse.data.principal,
   };
+}
+
+export async function redirectAuthenticatedPrincipal(): Promise<void> {
+  const token = await getSessionToken();
+  if (!token) {
+    return;
+  }
+
+  const session = await lookupSession(token);
+  if (session.ok) {
+    redirect("/play");
+  }
 }

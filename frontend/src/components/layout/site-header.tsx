@@ -8,10 +8,10 @@ import {
   Menu,
   ScrollText,
   Shield,
-  Sparkles,
   UserPlus,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isDesktopNavigation, setIsDesktopNavigation] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
   const sessionQuery = useQuery({
@@ -58,24 +59,67 @@ export function SiteHeader() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    const updateNavigationMode = () => {
+      setIsDesktopNavigation(mediaQuery.matches);
+    };
+
+    const animationFrame = window.requestAnimationFrame(updateNavigationMode);
+    mediaQuery.addEventListener("change", updateNavigationMode);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      mediaQuery.removeEventListener("change", updateNavigationMode);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [menuOpen]);
+
   function closeMenu() {
     setMenuOpen(false);
   }
 
   return (
     <header className="relative z-50 border-b border-[#946440]/55 bg-[#2b1e12]/98 text-[#bba88d] shadow-[0_8px_30px_rgba(43,30,18,0.32)] backdrop-blur-xl">
+      {menuOpen && (
+        <button
+          aria-label="Close navigation menu"
+          className="fixed inset-x-0 bottom-0 top-[4.5rem] z-40 bg-[#2b1e12]/55 backdrop-blur-[2px] md:hidden"
+          onClick={closeMenu}
+          type="button"
+        />
+      )}
       <nav
         className="relative mx-auto flex min-h-[4.5rem] w-full max-w-7xl items-center justify-between gap-3 px-4 sm:px-6"
         aria-label="Main navigation"
       >
         <Link
-          className="font-heading group flex items-center gap-3 font-semibold tracking-[0.16em] text-[#bba88d] uppercase transition-colors hover:text-white"
+          className="group flex items-center transition-transform hover:scale-[1.02]"
           href="/"
         >
-          <span className="relative flex size-10 items-center justify-center rounded-full border border-[#bba88d]/60 bg-[#946440]/35 shadow-[inset_0_0_0_3px_rgba(43,30,18,0.35),0_3px_12px_rgba(0,0,0,0.24)] transition-transform group-hover:rotate-6 group-hover:scale-105">
-            <Sparkles className="size-4 text-[#bba88d]" aria-hidden="true" />
-          </span>
-          <span className="hidden sm:inline">Mithril Tiles</span>
+          <Image
+            alt="Mithril Tiles"
+            className="h-14 w-28 object-contain transition-transform group-hover:scale-105"
+            height={950}
+            priority
+            src="/images/logo-gold.png"
+            width={1639}
+          />
         </Link>
 
         <Button
@@ -93,10 +137,14 @@ export function SiteHeader() {
 
         <div
           className={cn(
-            "absolute inset-x-3 top-[calc(100%+0.5rem)] z-50 max-h-[calc(100dvh-5.5rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-[#946440]/70 bg-[#2b1e12] p-2 shadow-[0_18px_45px_rgba(0,0,0,0.42)] md:static md:z-auto md:flex md:max-h-none md:flex-row md:items-center md:gap-2 md:overflow-visible md:border-[#bba88d]/15 md:bg-[#2b1e12]/30 md:p-1 md:shadow-inner",
-            menuOpen ? "flex" : "hidden md:flex",
+            "site-menu-panel absolute inset-x-3 top-[calc(100%+0.5rem)] z-50 flex max-h-[calc(100dvh-5.5rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-[#946440]/70 bg-[#2b1e12] p-2 shadow-[0_18px_45px_rgba(0,0,0,0.42)] md:static md:z-auto md:max-h-none md:flex-row md:items-center md:gap-2 md:overflow-visible md:border-[#bba88d]/15 md:bg-[#2b1e12]/30 md:p-1 md:shadow-inner",
+            menuOpen
+              ? "visible translate-y-0 opacity-100"
+              : "pointer-events-none invisible -translate-y-2 opacity-0 md:pointer-events-auto md:visible md:translate-y-0 md:opacity-100",
           )}
+          data-open={menuOpen}
           id="site-navigation-actions"
+          inert={!menuOpen && !isDesktopNavigation}
         >
           <Link
             className={cn(
@@ -105,6 +153,7 @@ export function SiteHeader() {
             )}
             href="/rules"
             onClick={closeMenu}
+            style={{ "--menu-item-index": 0 } as React.CSSProperties}
           >
             <ScrollText aria-hidden="true" />
             <span>Rules</span>
@@ -116,6 +165,7 @@ export function SiteHeader() {
             )}
             href="/about"
             onClick={closeMenu}
+            style={{ "--menu-item-index": 1 } as React.CSSProperties}
           >
             <Info aria-hidden="true" />
             <span>About</span>
@@ -124,6 +174,7 @@ export function SiteHeader() {
             <span
               className="h-9 w-28 animate-pulse rounded-lg bg-white/10"
               aria-label="Checking session"
+              style={{ "--menu-item-index": 2 } as React.CSSProperties}
             />
           ) : sessionQuery.isError ? (
             <Button
@@ -131,6 +182,7 @@ export function SiteHeader() {
               variant="outline"
               onClick={() => sessionQuery.refetch()}
               type="button"
+              style={{ "--menu-item-index": 2 } as React.CSSProperties}
             >
               Retry session
             </Button>
@@ -145,6 +197,7 @@ export function SiteHeader() {
                     )}
                     href="/admin"
                     onClick={closeMenu}
+                    style={{ "--menu-item-index": 2 } as React.CSSProperties}
                   >
                     <Shield aria-hidden="true" />
                     <span>Admin</span>
@@ -157,6 +210,7 @@ export function SiteHeader() {
                 )}
                 href="/play"
                 onClick={closeMenu}
+                style={{ "--menu-item-index": 3 } as React.CSSProperties}
               >
                 <span className="max-w-28 truncate">
                   {sessionQuery.data.display_name}
@@ -171,6 +225,7 @@ export function SiteHeader() {
                   logoutMutation.mutate();
                 }}
                 type="button"
+                style={{ "--menu-item-index": 4 } as React.CSSProperties}
               >
                 <LogOut aria-hidden="true" />
                 <span>
@@ -187,6 +242,7 @@ export function SiteHeader() {
                 )}
                 href="/login"
                 onClick={closeMenu}
+                style={{ "--menu-item-index": 2 } as React.CSSProperties}
               >
                 <LogIn aria-hidden="true" />
                 <span>Sign in</span>
@@ -198,6 +254,7 @@ export function SiteHeader() {
                 )}
                 href="/register"
                 onClick={closeMenu}
+                style={{ "--menu-item-index": 3 } as React.CSSProperties}
               >
                 <UserPlus aria-hidden="true" />
                 Register

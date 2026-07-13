@@ -9,12 +9,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { RegisterForm } from "@/features/auth/register-form";
+import { redirectAuthenticatedPrincipal } from "@/features/auth/server/session";
 
 export const metadata: Metadata = {
   title: "Register | Mithril Tiles",
 };
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  await redirectAuthenticatedPrincipal();
+
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-10">
       <section className="grid w-full max-w-6xl overflow-hidden rounded-3xl border border-[#946440]/45 bg-[#2b1e12]/65 shadow-[0_28px_90px_rgba(43,30,18,0.4)] backdrop-blur-[2px] md:grid-cols-[1.15fr_0.85fr]">

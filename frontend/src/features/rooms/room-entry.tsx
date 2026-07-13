@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, DoorOpen, Plus } from "lucide-react";
+import { ArrowRight, DoorOpen, LoaderCircle, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ type RoomEntryProps = {
 
 export function RoomEntry({ displayName }: RoomEntryProps) {
   const router = useRouter();
+  const [isNavigating, setIsNavigating] = useState(false);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -41,6 +43,11 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
   });
 
   function enterRoom(roomCode: RoomCode) {
+    if (isNavigating) {
+      return;
+    }
+
+    setIsNavigating(true);
     router.push(`/room/${roomCode}`);
   }
 
@@ -50,7 +57,7 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
-      <div className="mb-8">
+      <div className="mb-8 panel-enter">
         <p className="text-sm font-medium text-muted-foreground">
           Signed in as {displayName}
         </p>
@@ -64,7 +71,7 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
-        <Card>
+        <Card className="panel-enter [animation-delay:80ms]">
           <CardHeader>
             <span className="mb-3 flex size-10 items-center justify-center rounded-lg bg-secondary">
               <Plus className="size-5" aria-hidden="true" />
@@ -77,17 +84,27 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
           </CardHeader>
           <CardContent>
             <Button
-              className="h-11 w-full"
+              className="h-11 w-full transition-transform active:translate-y-px"
+              disabled={isNavigating}
               onClick={() => enterRoom(generateRoomCode())}
               type="button"
             >
-              Create room
-              <ArrowRight aria-hidden="true" />
+              {isNavigating ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                  Entering room…
+                </>
+              ) : (
+                <>
+                  Create room
+                  <ArrowRight aria-hidden="true" />
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="panel-enter [animation-delay:150ms]">
           <CardHeader>
             <span className="mb-3 flex size-10 items-center justify-center rounded-lg bg-secondary">
               <DoorOpen className="size-5" aria-hidden="true" />
@@ -112,13 +129,13 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
                     errors.room_code ? "room-code-error" : undefined
                   }
                   aria-invalid={errors.room_code ? true : undefined}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isNavigating}
                   {...register("room_code")}
                 />
                 {errors.room_code && (
                   <p
                     id="room-code-error"
-                    className="text-sm text-destructive"
+                    className="field-error-enter text-sm text-destructive"
                     role="alert"
                   >
                     {errors.room_code.message}
@@ -127,13 +144,23 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
               </div>
 
               <Button
-                className="h-11 w-full"
-                disabled={isSubmitting}
+                className="h-11 w-full transition-transform active:translate-y-px"
+                disabled={isSubmitting || isNavigating}
+                aria-busy={isNavigating}
                 type="submit"
                 variant="outline"
               >
-                Join room
-                <ArrowRight aria-hidden="true" />
+                {isNavigating ? (
+                  <>
+                    <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+                    Entering room…
+                  </>
+                ) : (
+                  <>
+                    Join room
+                    <ArrowRight aria-hidden="true" />
+                  </>
+                )}
               </Button>
             </form>
           </CardContent>
