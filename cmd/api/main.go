@@ -41,6 +41,7 @@ type config struct {
 	}
 	realtime struct {
 		messageHistoryCapacity int
+		geminiAPIKey           string
 	}
 }
 type application struct {
@@ -92,6 +93,7 @@ func main() {
 		"Trusted CORS origins (comma separated)",
 	)
 	flag.Parse()
+	cfg.realtime.geminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 	cfg.cors.trustedOrigins, err = parseTrustedOrigins(corsTrustedOrigins)
 	if err != nil {
 		log.Fatal(err)
@@ -123,6 +125,12 @@ func main() {
 		gameLifecycle,
 		cfg.realtime.messageHistoryCapacity,
 	)
+	if cfg.realtime.geminiAPIKey != "" {
+		roomManager.SetGuessProvider(realtime.GeminiGuessProvider{
+			APIKey: cfg.realtime.geminiAPIKey,
+		})
+		logger.Info("Gemini bot guess provider enabled")
+	}
 	app := &application{
 		config:         cfg,
 		logger:         logger,

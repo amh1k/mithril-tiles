@@ -10,6 +10,7 @@ type RoomManager struct {
 	rooms                  map[string]*Room
 	gameLifecycle          GameLifecycle
 	messageHistoryCapacity int
+	guessProvider          GuessProvider
 }
 
 func NewRoomManager(gameLifecycle GameLifecycle) *RoomManager {
@@ -27,8 +28,19 @@ func NewRoomManagerWithMessageHistoryCapacity(
 		rooms:                  make(map[string]*Room),
 		gameLifecycle:          gameLifecycle,
 		messageHistoryCapacity: messageHistoryCapacity,
+		guessProvider:          DeterministicGuessProvider{},
 	}
 }
+
+func (rm *RoomManager) SetGuessProvider(provider GuessProvider) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if provider == nil {
+		provider = DeterministicGuessProvider{}
+	}
+	rm.guessProvider = provider
+}
+
 func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
@@ -47,6 +59,7 @@ func (rm *RoomManager) GetOrCreateRoom(roomCode string) (*Room, error) {
 	if err != nil {
 		return nil, err
 	}
+	room.guessProvider = rm.guessProvider
 	rm.rooms[roomCode] = room
 	err = fmt.Errorf("Room capacity filled to the brim")
 	if !room.canJoin() {

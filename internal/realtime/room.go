@@ -3,7 +3,6 @@ package realtime
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -201,6 +200,7 @@ type Room struct {
 	botAction      chan botActionCompletion
 	submitGuess    chan SubmitGuessCommand
 	drawingPlanner DrawingPlanner
+	guessProvider  GuessProvider
 
 	//Scores
 	scoresMu     sync.Mutex
@@ -289,6 +289,7 @@ func newRoom(
 		botAction:      make(chan botActionCompletion, 16),
 		submitGuess:    make(chan SubmitGuessCommand, 32),
 		drawingPlanner: TemplateDrawingPlanner{},
+		guessProvider:  DeterministicGuessProvider{},
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -328,6 +329,7 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 		botAction:      make(chan botActionCompletion, 16),
 		submitGuess:    make(chan SubmitGuessCommand, 32),
 		drawingPlanner: TemplateDrawingPlanner{},
+		guessProvider:  DeterministicGuessProvider{},
 		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
 	}
 
@@ -642,7 +644,27 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 				if attempts >= policy.MaxGuessAttempts || revealedLetterCount(perception.MaskedWord) < policy.MinRevealedLetters {
 					continue
 				}
-				guess := deterministicTemplateGuess(perception.MaskedWord, attempted)
+				provider := r.guessProvider
+				if provider == nil {
+					provider = DeterministicGuessProvider{}
+				}
+				input := GuessInput{
+					RoundNo:         perception.RoundNo,
+					MaskedWord:      perception.MaskedWord,
+					Strokes:         append([]DrawStroke(nil), perception.Strokes...),
+					PreviousGuesses: attemptedGuesses(attempted),
+				}
+				guess, err := provider.Guess(ctx, input)
+				if err == nil {
+					guess = validProviderGuess(perception.MaskedWord, guess, attempted)
+				}
+				if guess == "" {
+					guess, err = DeterministicGuessProvider{}.Guess(ctx, input)
+					if err != nil {
+						continue
+					}
+				}
+				guess = validProviderGuess(perception.MaskedWord, guess, attempted)
 				if guess == "" {
 					continue
 				}
@@ -685,11 +707,7 @@ func deterministicTemplateGuess(maskedWord string, attempted map[string]struct{}
 		return ""
 	}
 
-	candidates := make([]string, 0, len(drawingTemplates))
-	for candidate := range drawingTemplates {
-		candidates = append(candidates, candidate)
-	}
-	sort.Strings(candidates)
+	candidates := templateCandidates()
 	for _, candidate := range candidates {
 		if _, alreadyTried := attempted[candidate]; alreadyTried || len(candidate) != len(maskedWord) {
 			continue
