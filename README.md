@@ -1,86 +1,88 @@
 # Mithril Tiles
 
-Mithril Tiles is a real-time multiplayer drawing and guessing game inspired by party drawing games and presented through a Middle-earth-inspired manuscript aesthetic.
+Mithril Tiles is a real-time multiplayer drawing-and-guessing game with a Middle-earth-inspired manuscript interface. Players join a room, select a word pack, take turns drawing, submit guesses, and receive persisted round and final scores. Rooms can also include configurable bot players managed by administrators.
 
-The project combines a Go HTTP/WebSocket backend, PostgreSQL persistence, and a separately deployable Next.js frontend. It currently supports the core path from authentication and room entry through live drawing, guessing, round progression, and persisted final scores.
+The repository contains a Go API and WebSocket server, a PostgreSQL data layer, and a separately deployable Next.js frontend that acts as a backend-for-frontend (BFF) for browser HTTP requests.
 
 > [!IMPORTANT]
-> Mithril Tiles is under active development and should currently be treated as an **alpha**. The core multiplayer flow works, but the repository is not yet production-ready. See [Current status](#current-status) and [Known limitations](#known-limitations).
+> Mithril Tiles is an active **alpha** project. The complete human multiplayer path and the initial bot flow are implemented, but the project is not yet ready for public production deployment. In particular, AI-generated bot drawings are experimental. See [Bot limitations](#bot-limitations) and [Production readiness](#production-readiness).
 
-## What works today
+## Highlights
 
-- Registered-user login and registration
-- Temporary guest sessions
-- HttpOnly cookie-based frontend sessions through a Next.js backend-for-frontend
-- Session restoration after page refresh
-- Client-generated room codes and room entry
-- Short-lived, single-use WebSocket tickets
-- Authenticated WebSocket room connections
-- Bounded room chat history
-- Live chat and slash-command guesses
-- Mouse, touch, and pen drawing with normalized coordinates
-- Multiple drawing colours and an eraser
-- Host detection and host-only game start
-- Word-pack discovery and selection
-- Persisted games, participants, rounds, round scores, and final scores
-- Authoritative room snapshots for players, scores, host, drawer, and lifecycle state
-- Private round-word delivery to the active drawer
-- Round and game lifecycle transitions
-- Final-score retrieval and game-over presentation
-- Reconnection attempts with fresh WebSocket tickets
-- Responsive, themed landing and authentication pages
-- HTTP authentication rate limiting and bounded in-memory message history
+- Registered-user and guest-session authentication flows.
+- Secure frontend sessions backed by HttpOnly cookies.
+- Short-lived, single-use WebSocket tickets for room connections.
+- Real-time rooms with chat, drawing, guessing, round progression, and final scores.
+- Mouse, touch, and pen drawing with normalized Canvas 2D strokes.
+- Host-selected word packs and authoritative room snapshots.
+- Persisted games, participants, rounds, round scores, and final scores.
+- Admin-managed persistent bot profiles.
+- Host-controlled bot membership before a game begins.
+- Round-scoped bot runtimes for deterministic and AI-assisted drawing and guessing.
+- Optional Gemini, xAI Grok, and Groq provider integrations with safe fallbacks.
+- Responsive Next.js interface with a deliberately themed visual design.
 
-## Current status
+## Demo Flow
+
+1. A registered user or guest creates or joins a room.
+2. The host chooses a word pack and may add active bot profiles.
+3. The host starts the game.
+4. Each round assigns one participant as the drawer and privately sends that participant the target word.
+5. The drawer emits normalized strokes; other participants submit guesses.
+6. Correct guesses update authoritative room scores and are persisted with the game.
+7. The API persists final results and the frontend renders the final-score view.
+
+## Current Status
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Authentication | Implemented | Registered and guest flows work; server-side token revocation/logout is not implemented |
-| Frontend session BFF | Implemented | Bearer tokens remain in secure HttpOnly cookies |
-| Rooms | Implemented, evolving | Join, capacity, host assignment, and snapshots exist |
-| Chat and guesses | Implemented, evolving | Uses legacy text messages and slash-command guesses |
-| Drawing | Implemented, hardening required | Live strokes work; validation and realtime throttling need further work |
-| Game lifecycle | Implemented, evolving | Start, rounds, completion, and persistence exist |
-| Reconnection | Partial | Socket retries and snapshots exist; durable reconnect-token flow is incomplete |
-| Testing | Partial | Backend and frontend unit/integration coverage exists; CI is not configured |
-| Operations | Not production-ready | No Dockerfile, CI/CD pipeline, graceful shutdown, or production runbook |
+| Authentication | Implemented | Registered-user and guest flows are available. Server-side logout/revocation remains incomplete. |
+| Frontend BFF | Implemented | Backend bearer tokens are stored in secure HttpOnly cookies rather than browser JavaScript. |
+| Rooms and WebSockets | Implemented, evolving | Room actors, tickets, snapshots, chat, drawing, and lifecycle handling are in place. |
+| Drawing and guesses | Implemented, hardening required | Human gameplay works; realtime rate limiting and further validation are still needed. |
+| Game persistence | Implemented | Games, participants, rounds, scores, and final scores are stored in PostgreSQL. |
+| Bot profiles | Implemented | Admin CRUD, active-profile discovery, and host-controlled room membership are available. |
+| Bot gameplay | Experimental | Bots can draw and guess through the same room lifecycle, with deterministic fallbacks. |
+| AI providers | Experimental | Gemini, xAI Grok, and Groq adapters exist. External provider reliability, cost controls, and quality need work. |
+| Reconnection | Partial | Socket retries and snapshots exist; durable reconnect identity restoration is incomplete. |
+| Testing | Partial | Backend and frontend automated tests exist; CI and browser E2E coverage are not yet configured. |
+| Operations | Not production-ready | No full deployment runbook, observability stack, or graceful shutdown strategy yet. |
 
 ## Architecture
 
 ```text
 Browser
-  │
-  ├── HTTPS ──> Next.js frontend / BFF
-  │               │
-  │               ├── authentication Route Handlers
-  │               ├── session cookie management
-  │               └── authenticated API forwarding
-  │
-  └── WebSocket ───────────────────────┐
-                                      ▼
-                                Go API server
-                                  │       │
-                                  │       └── in-memory room actors
-                                  │           ├── players
-                                  │           ├── chat history
-                                  │           ├── game/round state
-                                  │           └── drawing broadcasts
-                                  │
-                                  ▼
-                              PostgreSQL
+  |
+  | HTTPS
+  v
+Next.js frontend and BFF
+  |- authentication Route Handlers
+  |- HttpOnly session-cookie management
+  |- authenticated backend API forwarding
+  |
+  | WebSocket ticket request
+  v
+Go API and WebSocket server
+  |- HTTP handlers and authorization middleware
+  |- in-memory room actors
+  |  |- players and bot participants
+  |  |- room snapshots and lifecycle state
+  |  |- chat, guesses, and drawing broadcasts
+  |  `- round-scoped bot runtimes
+  |
+  v
+PostgreSQL
+  |- users and guest sessions
+  |- bot profiles
+  |- word packs and words
+  `- games, participants, rounds, and scores
 ```
 
-The browser never receives the long-lived backend bearer token. Authentication forms submit to Next.js Route Handlers, which store the backend token in an HttpOnly cookie. For realtime access, the frontend requests a 30-second, single-use ticket and then connects directly to the Go WebSocket endpoint.
+The browser does not receive the long-lived backend bearer token. Next.js stores it in an HttpOnly cookie and calls the Go API from server-side Route Handlers. For realtime gameplay, the browser obtains a short-lived single-use ticket and connects directly to the Go WebSocket endpoint.
 
-More detailed diagrams and design notes are available in:
+More detailed diagrams and design notes are available in [ARCHITECTURE.md](ARCHITECTURE.md), [database_design.md](database_design.md), [frontend_spec.md](frontend_spec.md), and [implementation_bot.md](implementation_bot.md).
 
-- [Architecture overview](ARCHITECTURE.md)
-- [Frontend specification](frontend_spec.md)
-- [Database design](database_design.md)
-- [Backend plan](backend_plan.md)
-- [Known backend shortcomings](shortcomings.md)
-
-## Technology stack
+## Technology Stack
 
 ### Backend
 
@@ -89,86 +91,77 @@ More detailed diagrams and design notes are available in:
 - PostgreSQL with `pgx`
 - `coder/websocket`
 - `golang-migrate`
-- Cloudinary integration for avatars
-- In-memory token-bucket HTTP rate limiting
+- `bcrypt` password hashing
+- Cloudinary avatar integration
 - Testcontainers for database-backed tests
 
 ### Frontend
 
 - Next.js 16 App Router
-- React 19 and strict TypeScript
+- React 19 and TypeScript
 - Tailwind CSS and shadcn-style UI primitives
-- TanStack Query for HTTP server state
-- Zustand for room state
-- React Hook Form and Zod
+- Zod validation
+- TanStack Query and Zustand
 - Native Canvas 2D and Pointer Events
 - Vitest and React Testing Library
 
-## Repository layout
+## Repository Layout
 
 ```text
 .
-├── cmd/
-│   ├── api/                  # HTTP API, middleware, BFF-facing handlers
-│   └── player-test/          # Development WebSocket client
-├── internal/
-│   ├── data/                 # PostgreSQL models and persistence
-│   ├── realtime/             # Rooms, players, WebSockets, game lifecycle
-│   └── validator/            # Backend input validation
-├── migrations/               # Versioned PostgreSQL migrations
-├── frontend/
-│   ├── src/app/              # Next.js routes and BFF Route Handlers
-│   ├── src/features/         # Auth, rooms, realtime, and drawing modules
-│   ├── src/components/       # Shared UI and layout components
-│   └── src/stores/           # Zustand stores
-├── docs/                     # Architecture and flow diagrams
-├── ARCHITECTURE.md
-└── shortcomings.md
+|- cmd/api/                 # HTTP API, middleware, startup, and handlers
+|- cmd/player-test/         # Development WebSocket client
+|- internal/data/           # PostgreSQL models and persistence
+|- internal/realtime/       # Rooms, WebSockets, game lifecycle, and bots
+|- internal/validator/      # Backend input validation
+|- migrations/              # Versioned PostgreSQL migrations
+|- frontend/                # Next.js frontend and BFF routes
+|- docs/                    # Architecture and game-flow diagrams
+|- implementation_bot.md    # Bot implementation design and phases
+`- shortcomings.md          # Engineering backlog and known shortcomings
 ```
 
-## Local development
+## Local Development
 
 ### Prerequisites
 
-- Go 1.26 or the version declared in [`go.mod`](go.mod)
-- Node.js 20.9 or later
-- npm
+- Go 1.26.3 or the version declared in [go.mod](go.mod)
+- Node.js 20.9 or later and npm
 - PostgreSQL
-- A database user allowed to create and modify the development schema
+- Docker, if running Testcontainers-backed API tests
 - Optional Cloudinary credentials for avatar uploads
+- Optional AI-provider key for experimental bots
 
-### 1. Clone the repository
+### 1. Clone and install frontend dependencies
 
 ```bash
 git clone <repository-url>
 cd mithril-tiles
+cd frontend && npm install && cd ..
 ```
 
 ### 2. Configure the backend
 
-Copy the example environment file:
+Create a root `.env` file from the example:
 
 ```bash
 cp .env.example .env
 ```
 
-Configure at least:
+At minimum, configure:
 
 ```dotenv
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/mithril_tiles?sslmode=disable
 CORS_TRUSTED_ORIGINS=http://localhost:3000
+RATE_LIMIT_TRUSTED_PROXIES=
 
+# Optional avatar uploads
+CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
-CLOUDINARY_CLOUD_NAME=
-
-# Comma-separated CIDRs for reverse proxies trusted to supply client IP headers.
-RATE_LIMIT_TRUSTED_PROXIES=
 ```
 
-The backend currently requires a root `.env` file at startup. Migrations in [`migrations/`](migrations) run automatically when the API starts, and the process must be launched from the repository root so the migration path resolves correctly.
-
-Start the API:
+Start the API from the repository root. Migrations run automatically during startup.
 
 ```bash
 go run ./cmd/api
@@ -176,42 +169,13 @@ go run ./cmd/api
 
 The API listens on `http://localhost:4000` by default.
 
-Useful development flags:
-
-```text
--port
--env
--db-dsn
--db-max-open-conns
--db-min-idle-conns
--db-max-idle-time
--cors-trusted-origins
--limiter-enabled
--limiter-rps
--limiter-burst
--limiter-trusted-proxies
--message-history-capacity
-```
-
-Example:
-
-```bash
-go run ./cmd/api \
-  -port=4000 \
-  -env=development \
-  -limiter-rps=10 \
-  -limiter-burst=20
-```
-
 ### 3. Configure the frontend
 
 ```bash
-cd frontend
-cp .env.local.example .env.local
-npm install
+cp frontend/.env.local.example frontend/.env.local
 ```
 
-The default local configuration is:
+Default local configuration:
 
 ```dotenv
 BACKEND_API_URL=http://localhost:4000
@@ -222,80 +186,110 @@ APP_ORIGIN=http://localhost:3000
 Start the frontend:
 
 ```bash
+cd frontend
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open `http://localhost:3000`.
 
-### 4. Verify the backend
+### 4. Verify the API
 
 ```bash
 curl http://localhost:4000/v1/healthcheck
 ```
 
-## Configuration reference
+## Bot Profiles and Gameplay
 
-### Backend environment variables
+Bot profiles are persistent database records, separate from a bot's temporary membership in a room.
 
-| Variable | Required | Purpose |
+### Bot profile management
+
+Registered administrators can manage the global bot catalog:
+
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `CORS_TRUSTED_ORIGINS` | Yes for browser use | Comma-separated frontend origins accepted by CORS and WebSocket origin checks |
-| `RATE_LIMIT_TRUSTED_PROXIES` | No | Comma-separated proxy CIDRs trusted for client-IP forwarding |
-| `CLOUDINARY_CLOUD_NAME` | Avatar uploads only | Cloudinary account name |
-| `CLOUDINARY_API_KEY` | Avatar uploads only | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Avatar uploads only | Cloudinary API secret |
+| `GET` | `/v1/admin/bot-profiles` | List active and inactive bot profiles |
+| `POST` | `/v1/admin/bot-profiles` | Create a bot profile |
+| `PATCH` | `/v1/admin/bot-profiles/:id` | Update a bot profile |
+| `DELETE` | `/v1/admin/bot-profiles/:id` | Delete an unused bot profile |
 
-### Frontend environment variables
+Authenticated room hosts discover only active profiles through:
 
-| Variable | Exposure | Purpose |
+| Method | Path | Purpose |
 | --- | --- | --- |
-| `BACKEND_API_URL` | Server only | Base URL used by Next.js Route Handlers |
-| `NEXT_PUBLIC_BACKEND_WS_URL` | Browser | Public WebSocket origin for direct room connections |
-| `APP_ORIGIN` | Server only | Expected frontend origin for mutating BFF requests |
+| `GET` | `/v1/bot-profiles` | List active profiles available to rooms |
+| `POST` | `/v1/rooms/:roomID/bots` | Add a selected active bot to a room |
+| `DELETE` | `/v1/rooms/:roomID/bots` | Remove a bot from a room |
 
-For production, use HTTPS URLs and a `wss://` WebSocket URL.
+Bot profiles support `easy`, `normal`, `hard`, and `custom` difficulty values plus a free-form behavior style such as `cautious`, `fast`, `minimalist`, or `detailed`.
 
-## API overview
+### Bot runtime
 
-The Go API is rooted at `/v1`.
+At round start, every bot receives a round-scoped runtime:
 
-### Identity and sessions
+- A drawer bot receives the private target word and produces validated drawing strokes.
+- A guesser bot receives only public information: the masked word and public drawing strokes.
+- Bot guesses are submitted through the same typed room command path as human guesses.
+- The room remains authoritative for drawer authorization, round identity, score changes, and persistence.
+- If a provider fails, drawing falls back to templates and guessing falls back to deterministic candidates where possible.
 
-| Method | Path | Authentication |
+### Optional AI providers
+
+Provider selection occurs at API startup. Only configure one provider key unless intentional precedence is desired.
+
+| Priority | Environment variable | Provider |
 | --- | --- | --- |
-| `POST` | `/v1/users/register` | Public, rate-limited |
-| `POST` | `/v1/users/login` | Public, rate-limited |
-| `POST` | `/v1/guest-sessions` | Public, rate-limited |
-| `GET` | `/v1/session` | Bearer token |
-| `PATCH` | `/v1/users/update` | Registered user |
-| `DELETE` | `/v1/users/delete` | Registered user |
-| `PATCH` | `/v1/users/avatar` | Registered user |
+| 1 | `GROQ_API_KEY` | Groq-hosted models |
+| 2 | `GROK_API_KEY` | xAI Grok models |
+| 3 | `GEMINI_API_KEY` | Google Gemini models |
+| Fallback | none | Template drawing and deterministic guesses |
 
-### Word packs
+Groq optionally accepts a model override:
 
-| Method | Path | Authentication |
-| --- | --- | --- |
-| `GET` | `/v1/word-packs-getall` | Registered user or guest |
-| `GET` | `/v1/word-packs/:id` | Registered user |
-| `POST` | `/v1/word-packs` | Registered user |
-| `PATCH` / `DELETE` | `/v1/word-packs/:id` | Registered user |
-| `POST` | `/v1/word-packs/:id/words` | Registered user |
-| `PATCH` / `DELETE` | `/v1/words/:id` | Registered user |
+```dotenv
+GROQ_API_KEY=your_groq_key
+GROQ_MODEL=openai/gpt-oss-120b
+```
 
-### Rooms and realtime
+When `GROQ_MODEL` is absent, the current default is `llama-3.3-70b-versatile`.
 
-| Method | Path | Authentication |
-| --- | --- | --- |
-| `POST` | `/v1/rooms/:roomID/start` | Registered user or guest |
-| `POST` | `/v1/rooms/:roomID/ws-ticket` | Registered user or guest |
-| `GET` | `/v1/rooms/:roomID/ws?ticket=...` | Single-use WebSocket ticket |
+Never commit `.env`, frontend `.env.local`, provider keys, database URLs, or WebSocket ticket URLs.
 
-The frontend should use its BFF endpoints instead of calling authenticated backend routes directly from browser JavaScript.
+## Bot Limitations
 
-## Realtime protocol
+The bots are a meaningful engineering milestone, not a finished AI gameplay system. Their weaknesses are intentional to document because they materially affect game quality.
 
-Client messages use JSON envelopes:
+### Drawing quality is experimental
+
+AI drawing providers are text models asked to emit low-level normalized line segments. They may return a valid JSON stroke plan that is visually unrelated to the requested word, overly abstract, repetitive, or difficult for humans to recognize. Prompting can reduce grids, borders, and text, but cannot guarantee semantic drawing quality.
+
+The most reliable current drawings are deterministic templates for a small set of concrete words. The generic fallback is deliberately simple and is not intended to represent the target word.
+
+### Guessing is constrained and incomplete
+
+Guesser bots never receive the secret target word. They infer from the masked word and raw stroke coordinates, which is much less informative than a rendered image. Provider guesses must exactly satisfy the revealed-letter mask, and many plausible responses are rejected because they include punctuation, explanation, wrong spacing, or an incompatible length.
+
+Guess evaluation is currently driven primarily by masked-word updates rather than every incoming stroke, so a bot can miss the moment when enough visual information becomes available. This needs a throttled stroke-driven evaluation strategy.
+
+### External providers are nondeterministic
+
+Hosted AI calls can time out, rate-limit, return malformed JSON, wrap JSON in Markdown fences, return an empty candidate, or incur usage cost. The code validates provider output and falls back when possible, but it does not yet include circuit breaking, budgets, queueing, or production-grade metrics.
+
+### Bots are not network clients
+
+Bots are in-process room participants, not WebSocket connections. Their behavior is driven through internal runtime events rather than a client socket. Direct-message paths intended for human players are therefore not a bot perception channel.
+
+### Recommended next steps
+
+1. Expand curated drawing templates and compose them from reusable shapes.
+2. Trigger guesses after meaningful stroke batches with rate limiting and debouncing.
+3. Add provider circuit breakers, request budgets, metrics, and tracing.
+4. Add deterministic replay fixtures for complete bot rounds.
+5. Consider an SVG or image-generation pipeline for richer bot art instead of raw coordinate generation.
+
+## Realtime Protocol
+
+Client messages use JSON envelopes.
 
 ```json
 {
@@ -318,9 +312,9 @@ Client messages use JSON envelopes:
 }
 ```
 
-The server emits structured drawing strokes, authoritative room snapshots, and private drawer-word events. Some chat, lifecycle, and guessing responses are still legacy plain text.
+The server emits structured room snapshots, draw strokes, private `drawer_word` events, public `guesser_word` events, and correct-guess events. Some chat and lifecycle messages remain legacy plain text while the protocol is standardized.
 
-The drawer word is sent through a private event and is deliberately excluded from the shared room snapshot:
+The private drawer-word event is deliberately excluded from shared room snapshots:
 
 ```json
 {
@@ -332,29 +326,37 @@ The drawer word is sent through a private event and is deliberately excluded fro
 }
 ```
 
-## Testing and quality checks
+## Security Model
+
+Implemented safeguards include:
+
+- bcrypt password hashing
+- expiring scoped authentication tokens
+- HttpOnly frontend session cookies
+- backend bearer tokens hidden from browser JavaScript
+- origin validation on mutating BFF routes
+- explicit CORS and WebSocket origin allowlists
+- short-lived, single-use WebSocket tickets
+- HTTP server timeouts
+- authentication endpoint rate limiting
+- bounded per-room message history
+- database constraints for game and score integrity
+- stable principal IDs for drawing authorization
+- validation of provider-generated bot strokes before broadcast
+
+This is not a security certification. Realtime event rate limiting, comprehensive abuse protection, token revocation, upload hardening, and operational monitoring remain incomplete.
+
+## Testing and Quality Checks
 
 ### Backend
 
-Compile and run the backend tests:
-
 ```bash
 go test ./...
-```
-
-Run race-enabled realtime tests:
-
-```bash
 go test -race ./internal/realtime
-```
-
-Run static analysis:
-
-```bash
 go vet ./...
 ```
 
-Some API end-to-end tests use Testcontainers and therefore require a running Docker daemon.
+Some API end-to-end tests use Testcontainers and require a running Docker daemon.
 
 ### Frontend
 
@@ -366,65 +368,40 @@ npx tsc --noEmit
 npm run build
 ```
 
-## Security model
+## Known Limitations
 
-Implemented protections include:
+Beyond the bot limitations above, important outstanding work includes:
 
-- Password hashing with bcrypt
-- Scoped, expiring authentication tokens
-- HttpOnly frontend session cookies
-- Bearer tokens hidden from browser JavaScript
-- Origin validation on mutating BFF routes
-- Explicit CORS and WebSocket origin allowlists
-- Short-lived, single-use WebSocket tickets
-- HTTP server timeouts
-- Authentication endpoint rate limiting
-- Bounded per-room message history
-- Database constraints for active games and score integrity
+- harden drawing validation, locking, authorization, and realtime event-rate limits
+- standardize all events on one versioned JSON protocol
+- complete reconnect identity restoration and late-join canvas recovery
+- reclaim idle, abandoned, and failed rooms
+- improve guess normalization, eligibility, and multi-word handling
+- replace hard-coded round configuration with persisted immutable settings
+- add server-side logout/token revocation and expired-token cleanup
+- propagate request cancellation through data-model operations
+- add graceful HTTP and room shutdown
+- add CI, deployment manifests, structured metrics, tracing, alerts, and runbooks
+- expand concurrent, failure-injection, accessibility, and browser E2E coverage
 
-This is not a security certification. Realtime event rate limiting, comprehensive drawing validation, token revocation, upload hardening, and operational monitoring remain incomplete.
+For the detailed engineering backlog, see [shortcomings.md](shortcomings.md).
 
-## Known limitations
+## Production Readiness
 
-The most important outstanding work includes:
+Before public deployment:
 
-- Harden drawing validation, authorization, locking, and event-rate limits
-- Standardize all server events on one versioned JSON protocol
-- Complete reconnect identity restoration and late-join canvas recovery
-- Reclaim idle, abandoned, and failed rooms
-- Improve guess normalization, eligibility, and multi-word handling
-- Replace hard-coded round configuration with persisted immutable settings
-- Add server-side logout/token revocation and expired-token cleanup
-- Propagate request cancellation through data-model operations
-- Add graceful HTTP and room shutdown
-- Add CI, container images, deployment manifests, observability, and runbooks
-- Expand concurrent, failure-injection, accessibility, and browser E2E coverage
-
-For the detailed engineering backlog, see [`shortcomings.md`](shortcomings.md).
-
-## Production readiness
-
-Before deploying publicly:
-
-1. Resolve the release blockers documented in `shortcomings.md`.
-2. Run the complete backend, race, frontend, and browser test suites.
-3. Place both applications behind TLS-capable reverse proxies.
-4. Configure exact CORS origins and trusted proxy CIDRs.
-5. Use a managed PostgreSQL instance with backups and migration controls.
-6. Store secrets in the deployment platform's secret manager.
-7. Add graceful shutdown, structured logs, metrics, tracing, and alerts.
-8. Add realtime abuse controls and load-test representative room traffic.
-
-The frontend and backend are designed to deploy separately while remaining in the same repository.
+1. Resolve the release blockers documented in [shortcomings.md](shortcomings.md).
+2. Add CI that runs backend, frontend, race, and browser E2E checks.
+3. Place both applications behind TLS-capable reverse proxies and use exact CORS origins.
+4. Configure managed PostgreSQL backups, migration controls, and secret management.
+5. Add graceful shutdown, structured logs, metrics, tracing, and alerting.
+6. Add WebSocket abuse controls and load-test realistic room traffic.
+7. Treat AI providers as optional integrations with budgets, rate limits, and fallbacks.
 
 ## Contributing
 
-Until formal contribution guidelines are added:
-
 1. Create a focused branch.
-2. Keep changes scoped and preserve existing behavior unless the change is intentional.
+2. Keep changes scoped and document intentional behavior changes.
 3. Add or update tests for behavioral changes.
-4. Run the relevant backend and frontend checks.
-5. Document known trade-offs in the pull request.
-
-When reporting a bug, include reproduction steps, expected and actual behavior, browser or client information, and relevant sanitized logs. Never include tokens, WebSocket ticket URLs, database credentials, or other secrets.
+4. Run the relevant backend and frontend quality checks.
+5. Never include secrets, provider keys, ticket URLs, database credentials, or unsanitized production logs in commits, issues, or pull requests.
