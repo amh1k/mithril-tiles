@@ -43,6 +43,8 @@ func (TemplateDrawingProvider) Plan(ctx context.Context, input DrawingInput) ([]
 
 const defaultGeminiDrawingModel = "gemini-2.5-flash"
 const defaultGrokDrawingModel = "grok-4.3"
+const defaultGroqDrawingModel = "llama-3.3-70b-versatile"
+const defaultGroqDrawingTimeout = 15 * time.Second
 
 type GeminiDrawingProvider struct {
 	APIKey  string
@@ -280,6 +282,126 @@ func (p GrokDrawingProvider) timeout() time.Duration {
 		return p.Timeout
 	}
 	return 3 * time.Second
+}
+
+// GroqDrawingProvider implements DrawingProvider using Groq's OpenAI-compatible API.
+type GroqDrawingProvider struct {
+	APIKey  string
+	BaseURL string
+	Client  *http.Client
+	Model   string
+	Timeout time.Duration
+}
+
+func (p GroqDrawingProvider) Plan(ctx context.Context, input DrawingInput) ([]DrawStroke, error) {
+	if strings.TrimSpace(p.APIKey) == "" {
+		return nil, fmt.Errorf("Groq API key is not configured")
+	}
+
+	requestContext, cancel := context.WithTimeout(ctx, p.timeout())
+	defer cancel()
+	prompt := groqDrawingPrompt(input)
+	payload, err := json.Marshal(grokChatCompletionRequest{
+		Model:       p.model(),
+		Messages:    []grokChatMessage{{Role: "user", Content: prompt}},
+		Temperature: 0.4,
+		MaxTokens:   2048,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal Groq drawing request: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(requestContext, http.MethodPost, p.baseURL()+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("create Groq drawing request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	response, err := p.client().Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("call Groq drawing provider: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 8<<10))
+		return nil, fmt.Errorf("Groq drawing provider returned status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result grokChatCompletionResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode Groq drawing response: %w", err)
+	}
+	if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
+		return nil, fmt.Errorf("Groq drawing provider returned no candidate")
+	}
+
+	plan, err := decodeGroqDrawingPlan(result.Choices[0].Message.Content)
+	if err != nil {
+		return nil, err
+	}
+	return strokesFromDrawingPlan(plan, "Groq")
+}
+
+func decodeGroqDrawingPlan(content string) (geminiDrawingPlan, error) {
+	content = strings.TrimSpace(content)
+	if strings.HasPrefix(content, "```") {
+		firstLineEnd := strings.IndexByte(content, '\n')
+		if firstLineEnd == -1 {
+			return geminiDrawingPlan{}, fmt.Errorf("decode Groq drawing plan: incomplete Markdown code fence")
+		}
+		content = strings.TrimSpace(content[firstLineEnd+1:])
+		if !strings.HasSuffix(content, "```") {
+			return geminiDrawingPlan{}, fmt.Errorf("decode Groq drawing plan: unterminated Markdown code fence")
+		}
+		content = strings.TrimSpace(strings.TrimSuffix(content, "```"))
+	}
+
+	var plan geminiDrawingPlan
+	if err := json.Unmarshal([]byte(content), &plan); err != nil {
+		return geminiDrawingPlan{}, fmt.Errorf("decode Groq drawing plan: %w", err)
+	}
+	return plan, nil
+}
+
+func (p GroqDrawingProvider) baseURL() string {
+	if p.BaseURL != "" {
+		return strings.TrimRight(p.BaseURL, "/")
+	}
+	return "https://api.groq.com/openai/v1"
+}
+
+func (p GroqDrawingProvider) client() *http.Client {
+	if p.Client != nil {
+		return p.Client
+	}
+	return http.DefaultClient
+}
+
+func (p GroqDrawingProvider) model() string {
+	if p.Model != "" {
+		return p.Model
+	}
+	return defaultGroqDrawingModel
+}
+
+func (p GroqDrawingProvider) timeout() time.Duration {
+	if p.Timeout > 0 {
+		return p.Timeout
+	}
+	return defaultGroqDrawingTimeout
+}
+
+func groqDrawingPrompt(input DrawingInput) string {
+	return fmt.Sprintf(
+		"You are drawing a Pictionary clue. Create a recognizable pictogram for the word %q. "+
+			"Plan 8 to 24 black line segments on a normalized 0 to 1 canvas. Use the visual features a human would recognize first and compose the object near the center. "+
+			"Do not write letters, spell the word, draw a border, draw a grid, or add decorative or repeated filler lines. "+
+			"The drawer style is %q and difficulty is %q. Return only a JSON object in this exact shape: {\"strokes\":[{\"from_x\":0.0,\"from_y\":0.0,\"to_x\":0.0,\"to_y\":0.0}]}",
+		input.Word,
+		input.Profile.BehaviorStyle,
+		input.Profile.Difficulty,
+	)
 }
 
 func geminiDrawingPrompt(input DrawingInput) string {

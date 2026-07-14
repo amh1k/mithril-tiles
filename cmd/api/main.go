@@ -43,6 +43,8 @@ type config struct {
 		messageHistoryCapacity int
 		geminiAPIKey           string
 		grokAPIKey             string
+		groqAPIKey             string
+		groqModel              string
 	}
 }
 type application struct {
@@ -96,6 +98,8 @@ func main() {
 	flag.Parse()
 	cfg.realtime.geminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 	cfg.realtime.grokAPIKey = strings.TrimSpace(os.Getenv("GROK_API_KEY"))
+	cfg.realtime.groqAPIKey = strings.TrimSpace(os.Getenv("GROQ_API_KEY"))
+	cfg.realtime.groqModel = strings.TrimSpace(os.Getenv("GROQ_MODEL"))
 	cfg.cors.trustedOrigins, err = parseTrustedOrigins(corsTrustedOrigins)
 	if err != nil {
 		log.Fatal(err)
@@ -127,7 +131,17 @@ func main() {
 		gameLifecycle,
 		cfg.realtime.messageHistoryCapacity,
 	)
-	if cfg.realtime.grokAPIKey != "" {
+	if cfg.realtime.groqAPIKey != "" {
+		roomManager.SetGuessProvider(realtime.GroqGuessProvider{
+			APIKey: cfg.realtime.groqAPIKey,
+			Model:  cfg.realtime.groqModel,
+		})
+		roomManager.SetDrawingProvider(realtime.GroqDrawingProvider{
+			APIKey: cfg.realtime.groqAPIKey,
+			Model:  cfg.realtime.groqModel,
+		})
+		logger.Info("Groq bot providers enabled")
+	} else if cfg.realtime.grokAPIKey != "" {
 		roomManager.SetGuessProvider(realtime.GrokGuessProvider{APIKey: cfg.realtime.grokAPIKey})
 		roomManager.SetDrawingProvider(realtime.GrokDrawingProvider{APIKey: cfg.realtime.grokAPIKey})
 		logger.Info("Grok bot providers enabled")

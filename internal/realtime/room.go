@@ -670,11 +670,13 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 					PreviousGuesses: attemptedGuesses(attempted),
 				}
 				guess, err := provider.Guess(ctx, input)
-				if err == nil {
+				if err != nil {
+					fmt.Println("Error found in provider.guess")
 					fmt.Println(err)
 					guess = validProviderGuess(perception.MaskedWord, guess, attempted)
 				}
 				if guess == "" {
+					fmt.Println("Empty guess")
 					guess, err = DeterministicGuessProvider{}.Guess(ctx, input)
 					if err != nil {
 						continue
@@ -682,6 +684,7 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 				}
 				guess = validProviderGuess(perception.MaskedWord, guess, attempted)
 				if guess == "" {
+					fmt.Println("Guess not valid my man")
 					continue
 				}
 

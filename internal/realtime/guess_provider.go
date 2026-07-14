@@ -38,6 +38,8 @@ func (DeterministicGuessProvider) Guess(ctx context.Context, input GuessInput) (
 
 const defaultGeminiGuessModel = "gemini-2.5-flash"
 const defaultGrokGuessModel = "grok-4.3"
+const defaultGroqGuessModel = "llama-3.3-70b-versatile"
+const defaultGroqGuessTimeout = 10 * time.Second
 
 type GeminiGuessProvider struct {
 	APIKey  string
@@ -271,6 +273,87 @@ func (p GrokGuessProvider) timeout() time.Duration {
 		return p.Timeout
 	}
 	return 2 * time.Second
+}
+
+// GroqGuessProvider implements GuessProvider using Groq's OpenAI-compatible API.
+type GroqGuessProvider struct {
+	APIKey  string
+	BaseURL string
+	Client  *http.Client
+	Model   string
+	Timeout time.Duration
+}
+
+func (p GroqGuessProvider) Guess(ctx context.Context, input GuessInput) (string, error) {
+	if strings.TrimSpace(p.APIKey) == "" {
+		return "", fmt.Errorf("Groq API key is not configured")
+	}
+
+	requestContext, cancel := context.WithTimeout(ctx, p.timeout())
+	defer cancel()
+	payload, err := json.Marshal(grokChatCompletionRequest{
+		Model:       p.model(),
+		Messages:    []grokChatMessage{{Role: "user", Content: geminiGuessPrompt(input)}},
+		Temperature: 0.2,
+		MaxTokens:   16,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal Groq guess request: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(requestContext, http.MethodPost, p.baseURL()+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("create Groq guess request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	response, err := p.client().Do(request)
+	if err != nil {
+		return "", fmt.Errorf("call Groq guess provider: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 8<<10))
+		return "", fmt.Errorf("Groq guess provider returned status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var result grokChatCompletionResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode Groq guess response: %w", err)
+	}
+	if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("Groq guess provider returned no candidate")
+	}
+	return strings.TrimSpace(result.Choices[0].Message.Content), nil
+}
+
+func (p GroqGuessProvider) baseURL() string {
+	if p.BaseURL != "" {
+		return strings.TrimRight(p.BaseURL, "/")
+	}
+	return "https://api.groq.com/openai/v1"
+}
+
+func (p GroqGuessProvider) client() *http.Client {
+	if p.Client != nil {
+		return p.Client
+	}
+	return http.DefaultClient
+}
+
+func (p GroqGuessProvider) model() string {
+	if p.Model != "" {
+		return p.Model
+	}
+	return defaultGroqGuessModel
+}
+
+func (p GroqGuessProvider) timeout() time.Duration {
+	if p.Timeout > 0 {
+		return p.Timeout
+	}
+	return defaultGroqGuessTimeout
 }
 
 func geminiGuessPrompt(input GuessInput) string {

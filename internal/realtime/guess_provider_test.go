@@ -90,3 +90,26 @@ func TestGrokGuessProviderUsesBearerAuthentication(t *testing.T) {
 		t.Fatalf("expected Grok guess %q, got %q", "tree", guess)
 	}
 }
+
+func TestGroqGuessProviderUsesBearerAuthentication(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected request path %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-key" {
+			t.Error("expected Groq Bearer API key header")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"tree"}}]}`))
+	}))
+	defer server.Close()
+
+	provider := GroqGuessProvider{APIKey: "test-key", BaseURL: server.URL}
+	guess, err := provider.Guess(context.Background(), GuessInput{MaskedWord: "____"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if guess != "tree" {
+		t.Fatalf("expected Groq guess %q, got %q", "tree", guess)
+	}
+}
