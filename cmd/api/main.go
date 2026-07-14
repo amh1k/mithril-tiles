@@ -129,7 +129,10 @@ func main() {
 		roomManager.SetGuessProvider(realtime.GeminiGuessProvider{
 			APIKey: cfg.realtime.geminiAPIKey,
 		})
-		logger.Info("Gemini bot guess provider enabled")
+		roomManager.SetDrawingProvider(realtime.GeminiDrawingProvider{
+			APIKey: cfg.realtime.geminiAPIKey,
+		})
+		logger.Info("Gemini bot providers enabled")
 	}
 	app := &application{
 		config:         cfg,
