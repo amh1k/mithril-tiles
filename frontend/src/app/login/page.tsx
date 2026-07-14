@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AuthPageShell } from "@/features/auth/auth-page-shell";
 import { LoginForm } from "@/features/auth/login-form";
 import { redirectAuthenticatedPrincipal } from "@/features/auth/server/session";
 
@@ -19,44 +13,27 @@ export default async function LoginPage() {
   await redirectAuthenticatedPrincipal();
 
   return (
-    <main className="flex flex-1 items-center justify-center px-4 py-10">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-3xl border border-[#946440]/45 bg-[#2b1e12]/65 shadow-[0_28px_90px_rgba(43,30,18,0.4)] backdrop-blur-[2px] md:grid-cols-2">
-        <div className="relative min-h-64 overflow-hidden border-b border-[#bba88d]/25 md:min-h-[36rem] md:border-r md:border-b-0">
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: "url('/images/ring.jpg')" }}
-            aria-hidden="true"
-          />
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-[#2b1e12]/72 via-transparent to-[#2b1e12]/10"
-            aria-hidden="true"
-          />
-        </div>
-
-      <Card className="w-full rounded-none border-0 bg-[#2b1e12]/88 text-[#bba88d] shadow-none backdrop-blur-md">
-        <CardHeader>
-          <CardTitle className="text-xl text-[#f4ead7]">
-            Return to the hall
-          </CardTitle>
-          <CardDescription className="text-[#cdbb9f]">
-            Sign in to use your registered Mithril Tiles identity.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <LoginForm />
-          <p className="text-center text-sm text-[#cdbb9f]">
+    <AuthPageShell
+      eyebrow="Return to the realm"
+      title="Your seat in the fellowship remains."
+      description="Step back into the hall, gather your company, and continue the rivalries waiting beyond the gate."
+      formTitle="Return to the hall"
+      formDescription="Sign in with your registered Mithril Tiles identity."
+      note="A familiar name carries every victory a little further."
+      footer={
+        <p>
             Need an account?{" "}
-            <Link className="font-medium text-[#f4ead7] underline" href="/register">
+            <Link className="font-semibold text-[#2b1e12] underline decoration-[#946440] underline-offset-4" href="/register">
               Register
             </Link>
-            {" · "}
-            <Link className="font-medium text-[#f4ead7] underline" href="/guest">
+            <span className="mx-2 text-[#946440]">·</span>
+            <Link className="font-semibold text-[#2b1e12] underline decoration-[#946440] underline-offset-4" href="/guest">
               Play as a guest
             </Link>
-          </p>
-        </CardContent>
-      </Card>
-      </section>
-    </main>
+        </p>
+      }
+    >
+      <LoginForm />
+    </AuthPageShell>
   );
 }

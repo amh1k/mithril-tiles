@@ -660,9 +660,14 @@ func (r *Room) startRound() {
 	roundNumber := r.currentRoundNo + 1
 	players := make([]*Player, 0, len(r.players))
 	for player := range r.players {
-		players = append(players, player)
+		_, exists := r.trackDrawers[player]
+		if !exists {
+			players = append(players, player)
+		}
+		
 	}
 	drawer := players[rand.Intn(len(players))]
+	r.trackDrawers[drawer] = 1
 	r.mu.Unlock()
 	participants := make([]data.Principal, 0, len(players))
 	for _, player := range players {
@@ -738,10 +743,16 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 	r.gameState = GameStateStarting
 	players := make([]*Player, 0, len(r.players))
 	for player := range r.players {
-		players = append(players, player)
+		_, exists := r.trackDrawers[player]
+		if !exists {
+			players = append(players, player)
+
+		}
+		
 	}
 	host := r.HostPlayer
 	drawer := players[rand.Intn(len(players))]
+	r.trackDrawers[drawer] = 1
 	r.mu.Unlock()
 	r.handleSnapshotRequest()
 

@@ -194,6 +194,7 @@ type Room struct {
 
 	//drawing
 	drawStroke chan DrawStroke
+	trackDrawers   map[*Player]int
 
 	addBot          chan AddBotCommand
 	removeBot       chan RemoveBotCommand
@@ -291,6 +292,7 @@ func newRoom(
 		drawingProvider: TemplateDrawingProvider{},
 		guessProvider:   DeterministicGuessProvider{},
 		botRuntimes:     make(map[uuid.UUID]*BotRuntime),
+		trackDrawers:    make(map[*Player]int),
 	}
 
 	return cr, nil

@@ -314,6 +314,236 @@
   }
 }
 
+@keyframes hero-portal-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 18px 45px rgb(0 0 0 / 45%),
+      0 0 0 0 rgb(244 234 215 / 0%);
+  }
+  50% {
+    box-shadow:
+      0 22px 54px rgb(0 0 0 / 52%),
+      0 0 0 7px rgb(244 234 215 / 10%),
+      0 0 38px rgb(187 168 141 / 35%);
+  }
+}
+
+@keyframes hero-portal-glint {
+  0%,
+  48% {
+    transform: translateX(-180%) skewX(-12deg);
+  }
+  68%,
+  100% {
+    transform: translateX(620%) skewX(-12deg);
+  }
+}
+
+@keyframes hero-portal-frame {
+  0%,
+  100% {
+    border-color: rgb(244 234 215 / 24%);
+    opacity: 0.7;
+  }
+  50% {
+    border-color: rgb(255 247 231 / 62%);
+    opacity: 1;
+  }
+}
+
+@keyframes hero-portal-sigil {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px rgb(255 247 231 / 25%));
+    transform: rotate(-8deg) scale(0.92);
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgb(255 247 231 / 82%));
+    transform: rotate(8deg) scale(1.14);
+  }
+}
+
+@keyframes hero-portal-diamond {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgb(255 247 231 / 0%);
+    opacity: 0.55;
+  }
+  50% {
+    box-shadow: 0 0 9px rgb(255 247 231 / 75%);
+    opacity: 1;
+  }
+}
+
+@keyframes quest-card-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-0.35deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(0.35deg);
+  }
+}
+
+@keyframes quest-border-breathe {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    filter: saturate(0.85);
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: saturate(1.25);
+  }
+}
+
+@keyframes quest-glint-cross {
+  0%,
+  58% {
+    transform: translateX(-180%) rotate(12deg);
+    opacity: 0;
+  }
+  65% {
+    opacity: 0.8;
+  }
+  82%,
+  100% {
+    transform: translateX(620%) rotate(12deg);
+    opacity: 0;
+  }
+}
+
+@keyframes quest-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes quest-rune-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: rotate(0deg) scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(180deg) scale(1.08);
+  }
+}
+
+@keyframes quest-rail-travel {
+  from {
+    left: 0;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes footer-beacon-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(-50%) scaleX(0.8);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateX(-50%) scaleX(1.15);
+  }
+}
+
+@keyframes footer-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(157 155 82 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(157 155 82 / 12%);
+  }
+}
+
+.round-journey::before {
+  background-image:
+    linear-gradient(90deg, transparent 49.8%, rgb(187 168 141 / 4%) 50%, transparent 50.2%),
+    radial-gradient(circle, rgb(187 168 141 / 10%) 1px, transparent 1px);
+  background-size: 100% 100%, 34px 34px;
+  content: "";
+  inset: 0;
+  mask-image: linear-gradient(to bottom, transparent, black 18%, black 82%, transparent);
+  pointer-events: none;
+  position: absolute;
+}
+
+.quest-card {
+  background: linear-gradient(125deg, #5d542b, #e4d4bc, #946440, #6e6c34, #5d542b);
+  background-size: 280% 280%;
+  transition:
+    transform 500ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 500ms ease;
+}
+
+.quest-card:nth-of-type(2) {
+  transform: translateY(1.5rem);
+}
+
+.quest-card:hover {
+  box-shadow: 0 38px 100px rgb(9 5 3 / 72%);
+  transform: translateY(-14px) scale(1.025) rotate(-0.4deg);
+  z-index: 2;
+}
+
+.quest-card:nth-of-type(2):hover {
+  transform: translateY(10px) scale(1.025) rotate(0.4deg);
+}
+
+.quest-card-surface::after {
+  border: 1px solid rgb(93 84 43 / 28%);
+  border-radius: 1.45rem;
+  content: "";
+  inset: 0.7rem;
+  pointer-events: none;
+  position: absolute;
+}
+
+.quest-rail {
+  background: linear-gradient(90deg, transparent, rgb(148 100 64 / 70%) 15%, rgb(187 168 141 / 55%) 50%, rgb(148 100 64 / 70%) 85%, transparent);
+  box-shadow: 0 0 15px rgb(148 100 64 / 20%);
+}
+
+.footer-rune-line {
+  background: linear-gradient(90deg, transparent 5%, #5d542b 32%, #bba88d 50%, #5d542b 68%, transparent 95%);
+  box-shadow: 0 0 18px rgb(148 100 64 / 40%);
+}
+
+.footer-link {
+  color: rgb(187 168 141 / 68%);
+  position: relative;
+  transition: color 220ms ease, transform 220ms ease;
+}
+
+.footer-link::before {
+  color: #946440;
+  content: "\25C6";
+  font-size: 0.45rem;
+  left: -0.9rem;
+  opacity: 0;
+  position: absolute;
+  top: 0.35rem;
+  transform: translateX(-5px) rotate(45deg);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.footer-link:hover {
+  color: #f4ead7;
+  transform: translateX(0.35rem);
+}
+
+.footer-link:hover::before {
+  opacity: 1;
+  transform: translateX(0) rotate(45deg);
+}
+
 @keyframes page-enter {
   from {
     opacity: 0;
@@ -500,6 +730,78 @@
     background-size: 240% 100%;
   }
 
+  .hero-portal-cta {
+    animation: hero-portal-breathe 3.8s ease-in-out infinite;
+  }
+
+  .hero-portal-glint {
+    animation: hero-portal-glint 4.8s ease-in-out infinite;
+  }
+
+  .hero-portal-frame {
+    animation: hero-portal-frame 3.8s ease-in-out infinite;
+  }
+
+  .hero-portal-sigil {
+    animation: hero-portal-sigil 2.8s ease-in-out infinite;
+  }
+
+  .hero-portal-diamond {
+    animation: hero-portal-diamond 2.4s ease-in-out infinite;
+  }
+
+  .hero-portal-diamond:nth-of-type(4) {
+    animation-delay: -1.2s;
+  }
+
+  .quest-card {
+    animation: quest-border-breathe 7s ease-in-out infinite;
+    animation-delay: var(--quest-delay, 0s);
+  }
+
+  .quest-card-surface {
+    animation: quest-card-drift 6s ease-in-out infinite;
+    animation-delay: var(--quest-delay, 0s);
+  }
+
+  .quest-card-glint {
+    animation: quest-glint-cross 6.5s ease-in-out infinite;
+    animation-delay: var(--quest-delay, 0s);
+  }
+
+  .quest-orbit > span:first-child {
+    animation: quest-orbit 13s linear infinite;
+  }
+
+  .quest-orbit > span:nth-child(2) {
+    animation: quest-orbit 9s linear infinite reverse;
+  }
+
+  .quest-rune {
+    animation: quest-rune-pulse 4s ease-in-out infinite;
+    animation-delay: var(--quest-delay, 0s);
+  }
+
+  .quest-rail-spark {
+    animation: quest-rail-travel 4.5s ease-in-out infinite;
+  }
+
+  .journey-halo {
+    animation: hero-pulse 7s ease-in-out infinite;
+  }
+
+  .journey-cta {
+    animation: card-ember 5s ease-in-out infinite;
+  }
+
+  .footer-beacon {
+    animation: footer-beacon-breathe 6s ease-in-out infinite;
+  }
+
+  .footer-status-dot {
+    animation: footer-status-pulse 2.4s ease-in-out infinite;
+  }
+
   @media (max-width: 767px) {
     .site-menu-panel {
       transition:
@@ -514,6 +816,13 @@
     }
   }
 
+}
+
+@media (max-width: 767px) {
+  .quest-card:nth-of-type(2),
+  .quest-card:nth-of-type(2):hover {
+    transform: none;
+  }
 }
 
 @media (pointer: coarse) {

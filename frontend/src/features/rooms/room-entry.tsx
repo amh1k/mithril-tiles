@@ -1,7 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, DoorOpen, LoaderCircle, Plus } from "lucide-react";
+import {
+  ArrowRight,
+  CircleCheck,
+  DoorOpen,
+  LoaderCircle,
+  Plus,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -56,35 +62,42 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
   });
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center px-4 py-12 sm:px-6">
-      <div className="mb-8 panel-enter">
-        <p className="text-sm font-medium text-muted-foreground">
-          Signed in as {displayName}
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-          Choose your room
-        </h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">
-          Open a fresh room for your group or enter the code shared by a
-          friend.
-        </p>
-      </div>
+    <main className="relative isolate flex w-full flex-1 items-center justify-center overflow-hidden px-4 py-12 sm:px-6">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[34rem] w-[56rem] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#946440]/10 blur-[90px]" aria-hidden="true" />
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <Card className="panel-enter [animation-delay:80ms]">
-          <CardHeader>
-            <span className="mb-3 flex size-10 items-center justify-center rounded-lg bg-secondary">
-              <Plus className="size-5" aria-hidden="true" />
-            </span>
-            <CardTitle>Create a room</CardTitle>
-            <CardDescription>
+      <section className="w-full max-w-5xl">
+        <div className="panel-enter mb-9 text-center">
+          <div className="mx-auto flex w-fit items-center gap-2 rounded-full border border-[#946440]/45 bg-[#2b1e12]/75 px-3.5 py-1.5 text-xs font-semibold text-[#cdbb9f] shadow-sm">
+            <CircleCheck className="size-3.5 text-[#8f8d4b]" aria-hidden="true" />
+            Signed in as <span className="max-w-40 truncate text-[#f4ead7]">{displayName}</span>
+          </div>
+          <h1 className="mt-6 font-heading text-3xl font-semibold tracking-tight text-[#2b1e12] sm:text-4xl">
+            Choose your passage
+          </h1>
+          <p className="mx-auto mt-3 max-w-xl text-sm font-medium leading-6 text-[#2b1e12] sm:text-base">
+            Raise a new banner for your company or follow a room code into a
+            gathering already underway.
+          </p>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <Card className="panel-enter group overflow-hidden border-[#5d542b]/60 bg-[#bba88d] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1 hover:border-[#5d542b] hover:shadow-[0_22px_55px_rgba(43,30,18,0.2)] [animation-delay:80ms]">
+          <CardHeader className="pb-5">
+            <div className="mb-5 flex items-center justify-between">
+              <span className="flex size-12 items-center justify-center rounded-full border border-[#5d542b]/40 bg-[#2b1e12] text-[#e4d4bc] shadow-[0_8px_20px_rgba(43,30,18,0.25)] transition-transform duration-200 group-hover:scale-105">
+                <Plus className="size-5" aria-hidden="true" />
+              </span>
+              <span className="text-[0.62rem] font-bold uppercase tracking-[0.22em] text-[#946440]">New company</span>
+            </div>
+            <CardTitle className="text-2xl text-[#2b1e12]">Create a room</CardTitle>
+            <CardDescription className="min-h-12 leading-6 text-[#5d542b]">
               Generate a private room code and become the first player in the
               lobby.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="border-t border-[#946440]/30 pt-5">
             <Button
-              className="h-11 w-full transition-transform active:translate-y-px"
+              className="h-12 w-full bg-[#5d542b] text-[#f4ead7] transition-transform hover:bg-[#6e6c34] active:translate-y-px"
               disabled={isNavigating}
               onClick={() => enterRoom(generateRoomCode())}
               type="button"
@@ -102,28 +115,33 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
               )}
             </Button>
           </CardContent>
-        </Card>
+          </Card>
 
-        <Card className="panel-enter [animation-delay:150ms]">
-          <CardHeader>
-            <span className="mb-3 flex size-10 items-center justify-center rounded-lg bg-secondary">
-              <DoorOpen className="size-5" aria-hidden="true" />
-            </span>
-            <CardTitle>Join a room</CardTitle>
-            <CardDescription>
+          <Card className="panel-enter group overflow-hidden border-[#946440]/65 bg-[#d0bda1] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-1 hover:border-[#5d542b] hover:shadow-[0_22px_55px_rgba(43,30,18,0.2)] [animation-delay:150ms]">
+          <CardHeader className="pb-5">
+            <div className="mb-5 flex items-center justify-between">
+              <span className="flex size-12 items-center justify-center rounded-full border border-[#5d542b]/40 bg-[#946440] text-[#2b1e12] shadow-[0_8px_20px_rgba(43,30,18,0.18)] transition-transform duration-200 group-hover:scale-105">
+                <DoorOpen className="size-5" aria-hidden="true" />
+              </span>
+              <span className="text-[0.62rem] font-bold uppercase tracking-[0.22em] text-[#946440]">Known passage</span>
+            </div>
+            <CardTitle className="text-2xl text-[#2b1e12]">Join a room</CardTitle>
+            <CardDescription className="min-h-12 leading-6 text-[#5d542b]">
               Enter a room code. Spaces, hyphens, and letter case are
               normalized automatically.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="border-t border-[#946440]/30 pt-5">
             <form className="space-y-4" onSubmit={joinRoom} noValidate>
               <div className="space-y-2">
-                <Label htmlFor="room-code">Room code</Label>
+                <Label className="font-bold text-[#2b1e12]" htmlFor="room-code">
+                  Room code
+                </Label>
                 <Input
                   id="room-code"
                   autoCapitalize="characters"
                   autoComplete="off"
-                  className="h-11 uppercase"
+                  className="h-12 border-[#946440]/70 bg-[#f0e2cd]/55 text-center font-heading text-base tracking-[0.2em] uppercase placeholder:tracking-[0.2em]"
                   placeholder="ROOM01"
                   aria-describedby={
                     errors.room_code ? "room-code-error" : undefined
@@ -144,7 +162,7 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
               </div>
 
               <Button
-                className="h-11 w-full transition-transform active:translate-y-px"
+                className="h-12 w-full border-[#5d542b]/60 bg-transparent text-[#2b1e12] transition-transform hover:bg-[#5d542b] hover:text-[#f4ead7] active:translate-y-px"
                 disabled={isSubmitting || isNavigating}
                 aria-busy={isNavigating}
                 type="submit"
@@ -164,8 +182,9 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
               </Button>
             </form>
           </CardContent>
-        </Card>
-      </div>
+          </Card>
+        </div>
+      </section>
     </main>
   );
 }

@@ -16,7 +16,6 @@ import {
   Play,
   Send,
   ShieldCheck,
-  Sparkles,
   Trophy,
   Users,
   Wifi,
@@ -1328,16 +1327,7 @@ function RoundTransitionOverlay({ transition }: RoundTransitionOverlayProps) {
         <div className="absolute -left-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
         <div className="absolute -right-12 top-1/2 h-24 w-24 -translate-y-1/2 rounded-full bg-current/10 blur-2xl" />
 
-        <div
-          className={`relative mx-auto flex size-14 items-center justify-center rounded-full border ${
-            isRoundStart
-              ? "border-[#bba88d]/70 bg-[#5d542b]/60 text-[#f4ead7]"
-              : "border-[#946440]/70 bg-[#2b1e12]/10 text-[#5d542b]"
-          }`}
-        >
-          <Sparkles className="size-7 animate-pulse" aria-hidden="true" />
-        </div>
-        <p className="relative mt-5 text-xs font-bold uppercase tracking-[0.34em] opacity-80">
+        <p className="relative text-xs font-bold uppercase tracking-[0.34em] opacity-80">
           {isRoundStart ? "New parchment" : "Interlude"}
         </p>
         <h2 className="relative mt-2 font-serif text-3xl font-bold sm:text-4xl">
