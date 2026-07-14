@@ -51,6 +51,12 @@ import {
   type RoomSocketStatus,
 } from "@/features/realtime/use-room-socket";
 import {
+  addBotToRoom,
+  fetchActiveBotProfiles,
+  removeBotFromRoom,
+  type BotProfile,
+} from "@/features/rooms/bot-profiles";
+import {
   fetchFinalScores,
   fetchParticipantPrincipal,
   type ResolvedGameFinalScore,
@@ -122,6 +128,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [wordPack, setWordPack] = useState<WordPack | null>(null);
   const [selectedWordPackId, setSelectedWordPackId] = useState("");
+  const [botProfiles, setBotProfiles] = useState<BotProfile[]>([]);
+  const [botProfilesStatus, setBotProfilesStatus] = useState<
+    "idle" | "loading" | "ready" | "failed"
+  >("idle");
+  const [selectedBotProfileId, setSelectedBotProfileId] = useState("");
+  const [pendingBotProfileId, setPendingBotProfileId] = useState<string | null>(null);
+  const [botControlError, setBotControlError] = useState<string | null>(null);
   const [wordPackStatus, setWordPackStatus] = useState<
     "idle" | "preparing" | "ready" | "failed"
   >("idle");
@@ -167,6 +180,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       ),
     [roomSnapshot.players],
   );
+  const isCurrentPlayerHost = roomSnapshot.players.some(
+    (player) => player.id === principal.id && player.isHost,
+  );
 
   useEffect(() => {
     if (storedRoomSnapshot === null) {
@@ -183,6 +199,32 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       realtimeSnapshotToRoomSnapshot(socket.roomSnapshot, principal.id),
     );
   }, [principal.id, setRoomSnapshot, socket.roomSnapshot]);
+
+  useEffect(() => {
+    if (!isCurrentPlayerHost || roomSnapshot.phase !== "lobby") {
+      return;
+    }
+
+    const controller = new AbortController();
+    setBotProfilesStatus("loading");
+    void fetchActiveBotProfiles(controller.signal)
+      .then((profiles) => {
+        setBotProfiles(profiles);
+        setSelectedBotProfileId((currentID) => currentID || profiles[0]?.id || "");
+        setBotProfilesStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setBotControlError(
+          error instanceof Error ? error.message : "Bot profiles could not be loaded.",
+        );
+        setBotProfilesStatus("failed");
+      });
+
+    return () => controller.abort();
+  }, [isCurrentPlayerHost, roomSnapshot.phase]);
 
   useEffect(() => {
     const transitionKey = `${roomSnapshot.phase}:${roomSnapshot.gameId ?? "none"}:${roomSnapshot.roundStartedAt ?? roomSnapshot.roundLabel}`;
@@ -554,14 +596,38 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
     socket.guesserWord.round_number === socket.roomSnapshot?.game?.round_number
       ? socket.guesserWord.word
       : null;
-  const isCurrentPlayerHost = roomSnapshot.players.some(
-    (player) => player.id === principal.id && player.isHost,
-  );
   const shouldSendDrawStrokes =
     isCurrentPlayerDrawer &&
     (roomSnapshot.phase === "active_round" ||
       startGameStatus === "started") &&
-    socket.status === "connected";
+      socket.status === "connected";
+
+  async function handleAddBot(botProfileId: string) {
+    if (botProfileId === "") {
+      return;
+    }
+    setBotControlError(null);
+    setPendingBotProfileId(botProfileId);
+    try {
+      await addBotToRoom(roomCode, botProfileId);
+    } catch (error) {
+      setBotControlError(error instanceof Error ? error.message : "Bot could not be added.");
+    } finally {
+      setPendingBotProfileId(null);
+    }
+  }
+
+  async function handleRemoveBot(botProfileId: string) {
+    setBotControlError(null);
+    setPendingBotProfileId(botProfileId);
+    try {
+      await removeBotFromRoom(roomCode, botProfileId);
+    } catch (error) {
+      setBotControlError(error instanceof Error ? error.message : "Bot could not be removed.");
+    } finally {
+      setPendingBotProfileId(null);
+    }
+  }
 
   if (socket.hasReceivedSnapshot === false) {
     return <RoomSynchronizingPanel socketStatus={socket.status} />;
@@ -733,6 +799,19 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                       ? "Reconnect to realtime before starting."
                       : "Start when everyone is ready."}
                 </p>
+                {roomSnapshot.phase === "lobby" && (
+                  <BotLobbyControls
+                    botProfiles={botProfiles}
+                    errorMessage={botControlError}
+                    onAdd={handleAddBot}
+                    onRemove={handleRemoveBot}
+                    onSelect={setSelectedBotProfileId}
+                    pendingBotProfileId={pendingBotProfileId}
+                    players={roomSnapshot.players}
+                    selectedBotProfileId={selectedBotProfileId}
+                    status={botProfilesStatus}
+                  />
+                )}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-sm">
@@ -985,6 +1064,91 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       <FinalScoresOverlay finalScores={finalScores} status={finalScoresStatus} />
     </main>
+  );
+}
+
+type BotLobbyControlsProps = {
+  botProfiles: BotProfile[];
+  errorMessage: string | null;
+  onAdd: (botProfileId: string) => void;
+  onRemove: (botProfileId: string) => void;
+  onSelect: (botProfileId: string) => void;
+  pendingBotProfileId: string | null;
+  players: RoomPlayer[];
+  selectedBotProfileId: string;
+  status: "idle" | "loading" | "ready" | "failed";
+};
+
+function BotLobbyControls({
+  botProfiles,
+  errorMessage,
+  onAdd,
+  onRemove,
+  onSelect,
+  pendingBotProfileId,
+  players,
+  selectedBotProfileId,
+  status,
+}: BotLobbyControlsProps) {
+  const roomBotIDs = new Set(
+    players.filter((player) => player.principalType === "bot").map((player) => player.id),
+  );
+  const availableProfiles = botProfiles.filter((profile) => !roomBotIDs.has(profile.id));
+  const roomBots = players.filter((player) => player.principalType === "bot");
+  const isPending = pendingBotProfileId !== null;
+  const selectedAvailableProfileId = availableProfiles.some(
+    (profile) => profile.id === selectedBotProfileId,
+  )
+    ? selectedBotProfileId
+    : (availableProfiles[0]?.id ?? "");
+
+  return (
+    <div className="space-y-2 border-t border-primary/15 pt-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-primary">Bot players</p>
+      <div className="flex gap-2">
+        <select
+          aria-label="Bot profile"
+          className="min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
+          disabled={status !== "ready" || isPending || availableProfiles.length === 0}
+          onChange={(event) => onSelect(event.target.value)}
+          value={selectedAvailableProfileId}
+        >
+          {availableProfiles.length === 0 ? (
+            <option value="">No bots available</option>
+          ) : (
+            availableProfiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name} ({profile.difficulty})
+              </option>
+            ))
+          )}
+        </select>
+        <Button
+          disabled={isPending || selectedAvailableProfileId === "" || status !== "ready"}
+          onClick={() => onAdd(selectedAvailableProfileId)}
+          size="sm"
+          type="button"
+        >
+          {pendingBotProfileId === selectedAvailableProfileId ? "Adding..." : "Add bot"}
+        </Button>
+      </div>
+      {status === "loading" && <p className="text-xs text-muted-foreground">Loading bot profiles...</p>}
+      {errorMessage !== null && <p className="text-xs text-destructive">{errorMessage}</p>}
+      {roomBots.map((bot) => (
+        <div key={bot.id} className="flex items-center justify-between gap-2 text-sm">
+          <span className="truncate">{bot.displayName}</span>
+          <Button
+            disabled={isPending}
+            onClick={() => onRemove(bot.id)}
+            size="xs"
+            type="button"
+            variant="destructive"
+          >
+            {pendingBotProfileId === bot.id ? "Removing..." : "Remove"}
+          </Button>
+        </div>
+      ))}
+    </div>
   );
 }
 

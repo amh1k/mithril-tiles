@@ -14,6 +14,18 @@ import (
 // POST   /v1/rooms/:roomCode/bots
 // DELETE /v1/rooms/:roomCode/bots/:botProfileID
 // ```
+func (app *application) listActiveBotProfiles(w http.ResponseWriter, r *http.Request) {
+	botProfiles, err := app.models.BotProfile.ListActive()
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	app.writeJSON(w, http.StatusOK, envelope{
+		"bot_profiles": botProfiles,
+	}, nil)
+}
+
 func (app *application) insertBotToRoom(w http.ResponseWriter, r *http.Request) {
 	params := httprouter.ParamsFromContext(r.Context())
 	roomID := params.ByName("roomID")
