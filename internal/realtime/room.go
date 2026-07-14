@@ -154,6 +154,13 @@ type SubmitGuessCommand struct {
 	GameID        uuid.UUID
 	RoundNo       int
 }
+type BotBehaviorPolicy struct {
+	GuessDelay         time.Duration
+	MaxGuessAttempts   int
+	MinRevealedLetters int
+	DrawDelay          time.Duration
+	MaxDrawingStrokes  int
+}
 
 type Room struct {
 
@@ -568,8 +575,9 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 		r.runGuesserRuntime(ctx, runtime, metadata)
 		return
 	}
+	policy := behaviorPolicyFor(runtime.Profile)
 
-	timer := time.NewTimer(time.Second)
+	timer := time.NewTimer(policy.DrawStartDelay)
 	defer timer.Stop()
 
 	select {
@@ -584,7 +592,7 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 	if planner == nil {
 		planner = TemplateDrawingPlanner{}
 	}
-	for _, stroke := range planner.Plan(word, runtime.Profile) {
+	for _, stroke := range limitDrawingStrokes(planner.Plan(word, runtime.Profile), policy.MaxDrawingStrokes) {
 		completion := botActionCompletion{
 			Metadata: metadata,
 			Kind:     botActionDraw,
@@ -600,7 +608,7 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 			return
 		}
 
-		timer := time.NewTimer(150 * time.Millisecond)
+		timer := time.NewTimer(policy.DrawStrokeDelay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -615,6 +623,7 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 
 func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata) {
 	perception := BotPerception{RoundNo: metadata.RoundNo}
+	policy := behaviorPolicyFor(runtime.Profile)
 	attempted := make(map[string]struct{})
 	attempts := 0
 	for {
@@ -630,7 +639,7 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 			switch event.Type {
 			case botEventMaskedWord:
 				perception.MaskedWord = event.MaskedWord
-				if attempts >= 3 {
+				if attempts >= policy.MaxGuessAttempts || revealedLetterCount(perception.MaskedWord) < policy.MinRevealedLetters {
 					continue
 				}
 				guess := deterministicTemplateGuess(perception.MaskedWord, attempted)
@@ -638,7 +647,7 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 					continue
 				}
 
-				timer := time.NewTimer(800 * time.Millisecond)
+				timer := time.NewTimer(policy.GuessDelay)
 				select {
 				case <-ctx.Done():
 					timer.Stop()

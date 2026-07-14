@@ -156,6 +156,29 @@ func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestBehaviorPolicyUsesDifficultyAndStyleWithinLimits(t *testing.T) {
+	policy := behaviorPolicyFor(data.BotProfile{Difficulty: "hard", BehaviorStyle: "minimalist"})
+	if policy.GuessDelay != 400*time.Millisecond || policy.MaxGuessAttempts != 5 || policy.MinRevealedLetters != 1 {
+		t.Fatalf("unexpected hard guess policy: %+v", policy)
+	}
+	if policy.MaxDrawingStrokes != 3 || policy.DrawStrokeDelay != 80*time.Millisecond {
+		t.Fatalf("unexpected minimalist drawing policy: %+v", policy)
+	}
+
+	unknown := behaviorPolicyFor(data.BotProfile{Difficulty: "unknown", BehaviorStyle: "unknown"})
+	if unknown.MaxGuessAttempts != 3 || unknown.MaxDrawingStrokes != 64 {
+		t.Fatalf("unexpected fallback policy: %+v", unknown)
+	}
+}
+
+func TestLimitDrawingStrokesPreservesPlanEndpoints(t *testing.T) {
+	strokes := []DrawStroke{stroke(0, 0, 0.1, 0.1), stroke(0.1, 0.1, 0.2, 0.2), stroke(0.2, 0.2, 0.3, 0.3), stroke(0.3, 0.3, 0.4, 0.4)}
+	limited := limitDrawingStrokes(strokes, 2)
+	if len(limited) != 2 || limited[0] != strokes[0] || limited[1] != strokes[3] {
+		t.Fatalf("unexpected limited strokes: %+v", limited)
+	}
+}
+
 func TestBotDrawerCompletionBroadcastsStroke(t *testing.T) {
 	room, err := NewRoomUnitTest("bot-draw")
 	if err != nil {
