@@ -44,7 +44,7 @@ type RoomPlayer struct {
 	ID          uuid.UUID `json:"id"`
 	Type        string    `json:"type"`
 	DisplayName string    `json:"display_name"`
-	AvatarURL   string    `json:"avatar_url,omitempty"`
+	AvatarURL   *string   `json:"avatar_url"`
 	Score       int       `json:"score"`
 	IsConnected bool      `json:"is_connected"`
 }

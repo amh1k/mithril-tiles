@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   Check,
   CircleAlert,
   Clock,
@@ -912,7 +913,16 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               aria-live="polite"
               onScroll={handleChatListScroll}
             >
-              {socket.messages.length === 0 ? (
+              {socket.guessResults.map(({ id, result }) => (
+                <p
+                  key={`guess-result-${id}`}
+                  className="status-enter rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-emerald-800 dark:text-emerald-200"
+                >
+                  <span className="font-medium">{result.display_name}</span>{" "}
+                  guessed correctly (+{result.points_awarded} pts)
+                </p>
+              ))}
+              {socket.messages.length === 0 && socket.guessResults.length === 0 ? (
                 <p className="text-muted-foreground">
                   {roomSnapshot.phase === "active_round"
                     ? "Guesses and room activity will appear here."
@@ -1334,7 +1344,10 @@ function PlayerCard({ player, rank }: PlayerCardProps) {
           <div className="mt-1 flex flex-wrap gap-1.5">
             {player.isHost && <PlayerBadge icon={Crown} label="Host" />}
             {player.isDrawer && <PlayerBadge icon={Palette} label="Drawer" />}
-            <PlayerBadge icon={ShieldCheck} label={player.principalType} />
+            <PlayerBadge
+              icon={player.principalType === "bot" ? Bot : ShieldCheck}
+              label={player.principalType === "bot" ? "Bot" : player.principalType}
+            />
           </div>
         </div>
       </div>

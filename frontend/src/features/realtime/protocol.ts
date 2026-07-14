@@ -32,9 +32,9 @@ export const roomSnapshotSchema = z.object({
   players: z.array(
     z.object({
       id: z.uuid(),
-      type: z.enum(["user", "guest"]),
+      type: z.enum(["user", "guest", "bot"]),
       display_name: z.string().min(1),
-      avatar_url: z.string().optional(),
+      avatar_url: z.string().nullable().optional(),
       score: z.number().int(),
       is_connected: z.boolean(),
     }),
@@ -81,9 +81,22 @@ const guesserWordEnvelopeSchema = z.object({
   data: guesserWordSchema,
 });
 
+export const guessResultSchema = z.object({
+  participant_id: z.uuid(),
+  display_name: z.string().min(1),
+  correct: z.literal(true),
+  points_awarded: z.number().int().positive(),
+});
+
+const guessResultEnvelopeSchema = z.object({
+  type: z.literal("guess_result"),
+  data: guessResultSchema,
+});
+
 export type DrawStroke = z.infer<typeof drawStrokeSchema>;
 export type DrawerWord = z.infer<typeof drawerWordSchema>;
 export type GuesserWord = z.infer<typeof guesserWordSchema>;
+export type GuessResult = z.infer<typeof guessResultSchema>;
 export type RealtimeRoomSnapshot = z.infer<typeof roomSnapshotSchema>;
 
 export type RoomSocketEvent =
@@ -102,6 +115,10 @@ export type RoomSocketEvent =
   | {
       guesserWord: GuesserWord;
       type: "guesser_word";
+    }
+  | {
+      guessResult: GuessResult;
+      type: "guess_result";
     }
   | {
       text: string;
@@ -174,6 +191,17 @@ export function parseRoomSocketMessage(data: unknown): RoomSocketEvent {
       return {
         guesserWord: guesserWordEnvelope.data.data,
         type: "guesser_word",
+      };
+    }
+
+    const guessResultEnvelope = guessResultEnvelopeSchema.safeParse(
+      parsedJson.value,
+    );
+
+    if (guessResultEnvelope.success) {
+      return {
+        guessResult: guessResultEnvelope.data.data,
+        type: "guess_result",
       };
     }
 

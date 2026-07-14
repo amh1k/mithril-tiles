@@ -9,7 +9,7 @@ export type RoomPlayer = {
   id: string;
   isDrawer: boolean;
   isHost: boolean;
-  principalType: Principal["type"];
+  principalType: "user" | "guest" | "bot";
   score: number;
 };
 
@@ -70,8 +70,7 @@ export function startGameResponseToRoomSnapshot(
       id: participant.id,
       isDrawer: participant.id === response.round.drawer_participant_id,
       isHost: participant.is_host,
-      principalType:
-        participant.participant_type === "user" ? "user" : "guest",
+      principalType: roomPlayerType(participant.participant_type),
       score: 0,
     })),
     roundEndsAt: addSecondsToIsoDate(
@@ -82,6 +81,13 @@ export function startGameResponseToRoomSnapshot(
     roundStartedAt: response.round.started_at,
     serverTime: null,
   };
+}
+
+function roomPlayerType(type: string | undefined): RoomPlayer["principalType"] {
+  if (type === "user" || type === "guest" || type === "bot") {
+    return type;
+  }
+  return "guest";
 }
 
 export function realtimeSnapshotToRoomSnapshot(
