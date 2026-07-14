@@ -230,20 +230,21 @@
 
 @keyframes background-drift {
   0% {
-    transform: translate3d(-1.5%, -1%, 0) scale(1.06);
+    transform: translate3d(-2.5%, -2%, 0) scale(1.08);
   }
-  25% {
-    transform: translate3d(1.5%, 1%, 0) scale(1.1);
+  33% {
+    transform: translate3d(2.5%, 1.5%, 0) scale(1.13);
   }
-  50% {
-    transform: translate3d(-0.5%, 1.5%, 0) scale(1.07);
-  }
-  75% {
-    transform: translate3d(-2%, 0.5%, 0) scale(1.09);
+  66% {
+    transform: translate3d(-1%, 2.5%, 0) scale(1.1);
   }
   100% {
-    transform: translate3d(-1.5%, -1%, 0) scale(1.06);
+    transform: translate3d(-2.5%, -2%, 0) scale(1.08);
   }
+}
+
+.hero-background-drift {
+  animation: background-drift 14s ease-in-out infinite;
 }
 
 @keyframes hero-enter {
@@ -254,33 +255,6 @@
   to {
     opacity: 1;
     transform: translateY(0);
-  }
-}
-
-@keyframes dust-drift {
-  0% {
-    opacity: 0;
-    transform: translate3d(0, 18vh, 0) scale(0.8);
-  }
-  20%,
-  75% {
-    opacity: 0.68;
-  }
-  100% {
-    opacity: 0;
-    transform: translate3d(7vw, -110vh, 0) scale(1.25);
-  }
-}
-
-@keyframes title-breathe {
-  0%,
-  100% {
-    filter: drop-shadow(0 3px 8px rgb(0 0 0 / 85%));
-  }
-  50% {
-    filter:
-      drop-shadow(0 3px 8px rgb(0 0 0 / 95%))
-      drop-shadow(0 0 16px rgb(187 168 141 / 45%));
   }
 }
 
@@ -697,15 +671,6 @@
   .feature-card-reveal {
     animation: hero-enter 650ms cubic-bezier(0.22, 1, 0.36, 1) both;
     animation-delay: var(--reveal-delay, 0ms);
-  }
-
-  .dust-mote {
-    animation: dust-drift var(--dust-duration, 16s) linear infinite;
-    animation-delay: var(--dust-delay, 0s);
-  }
-
-  .hero-title-breathe {
-    animation: title-breathe 4.5s ease-in-out infinite;
   }
 
   .feature-card-ambient {

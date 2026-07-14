@@ -634,7 +634,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
   if (wordPack === null && isCurrentPlayerHost) {
     return (
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6 sm:px-6">
+      <main className="relative isolate mx-auto flex w-full max-w-7xl flex-1 flex-col overflow-hidden px-4 py-6 sm:px-6">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_12%,rgba(148,100,64,0.16),transparent_25%),radial-gradient(circle_at_88%_82%,rgba(110,108,52,0.12),transparent_28%)]" aria-hidden="true" />
         <WordPackSelectionPanel
           selectedWordPackId={selectedWordPackId}
           status={wordPackStatus}
@@ -648,18 +649,21 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-3 py-4 sm:px-6 sm:py-6">
-      <section className="grid gap-5 overflow-hidden rounded-2xl border bg-card/80 p-4 shadow-sm sm:p-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+    <main className="relative isolate mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 overflow-hidden px-3 py-4 text-[#2b1e12] sm:px-6 sm:py-6">
+      {roomSnapshot.phase === "lobby" && (
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_10%_8%,rgba(148,100,64,0.16),transparent_24%),radial-gradient(circle_at_90%_88%,rgba(110,108,52,0.12),transparent_28%)]" aria-hidden="true" />
+      )}
+      <section className="grid gap-6 overflow-hidden rounded-[1.75rem] border border-[#946440]/65 bg-[#21160e] p-5 text-[#f4ead7] shadow-[0_22px_60px_rgba(43,30,18,0.3)] sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Room
+            <span className="text-[0.65rem] font-bold uppercase tracking-[0.24em] text-[#a98d63]">
+              Room charter
             </span>
-            <span className="font-mono text-sm font-semibold tracking-widest">
+            <span className="rounded-full border border-[#bba88d]/20 bg-[#bba88d]/5 px-3 py-1 font-mono text-sm font-semibold tracking-[0.2em] text-[#e4d4bc]">
               {roomCode}
             </span>
             <Button
-              className="h-7 gap-1.5 px-2 text-xs"
+              className="h-8 gap-1.5 rounded-full border-[#946440]/60 bg-transparent px-3 text-xs text-[#cdbb9f] hover:bg-[#946440] hover:text-[#2b1e12]"
               onClick={handleCopyRoomCode}
               size="sm"
               type="button"
@@ -673,12 +677,12 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               {roomCodeCopied ? "Copied" : "Copy code"}
             </Button>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+          <h1 className="mt-5 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             {roomSnapshot.phase === "lobby" ? "Game lobby" : "Game in progress"}
           </h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm leading-6 text-[#cdbb9f]/75">
             Playing as{" "}
-            <span className="font-medium text-foreground">
+            <span className="font-semibold text-[#f4ead7]">
               {principal.display_name}
             </span>
             {isCurrentPlayerHost
@@ -687,7 +691,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </p>
         </div>
 
-        <div className="grid min-w-0 grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[28rem]">
+        <div className="grid min-w-0 grid-cols-2 gap-2.5 text-sm sm:grid-cols-4 lg:min-w-[30rem]">
           <StatusTile
             icon={Users}
             label="Players"
@@ -750,24 +754,24 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
       <RoundTransitionOverlay transition={roundTransition} />
 
-      <section className="grid min-h-0 gap-4 lg:h-[42rem] lg:grid-cols-[14rem_minmax(0,1fr)_18rem] xl:h-[46rem] xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
-        <Card className="order-2 min-h-0 lg:order-1">
-          <CardHeader>
+      <section className="grid min-h-0 gap-4 lg:h-[42rem] lg:grid-cols-[15rem_minmax(0,1fr)_19rem] xl:h-[46rem] xl:grid-cols-[17rem_minmax(0,1fr)_21rem]">
+        <Card className="order-2 min-h-0 gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:order-1">
+          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <CardTitle>Players</CardTitle>
-                <CardDescription>
+                <CardTitle className="text-[#fff7e7]">Players</CardTitle>
+                <CardDescription className="text-[#d8c7aa]">
                   {roomSnapshot.phase === "active_round"
                     ? "Current players and round scores."
                     : "Everyone currently in this room."}
                 </CardDescription>
               </div>
-              <span className="rounded-full border border-[#bba88d]/55 bg-[#6e6c34]/70 px-2 py-1 text-xs font-semibold text-[#f4ead7] shadow-sm">
+              <span className="rounded-full border border-[#5d542b]/35 bg-[#2b1e12] px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wide text-[#e4d4bc] shadow-sm">
                 {socketStatusLabel}
               </span>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 py-4">
             <div className="space-y-2">
               {rankedPlayers.map((player, index) => (
                 <PlayerCard key={player.id} player={player} rank={index + 1} />
@@ -775,12 +779,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </div>
 
             {isCurrentPlayerHost ? (
-              <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  Host controls
+              <div className="space-y-3 rounded-2xl border border-[#a68a58]/45 bg-[#18231b] p-3.5 text-[#f8f0df] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <p className="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[#d3b878]">
+                  <Crown className="size-3.5" aria-hidden="true" />
+                  Host authority
                 </p>
                 <Button
-                  className="w-full gap-2"
+                  className="h-11 w-full gap-2 border border-[#f1d59a]/55 bg-[#c89b52] font-bold text-[#24160b] shadow-[0_8px_22px_rgba(0,0,0,0.24)] hover:bg-[#e0b66f]"
                   disabled={!canStartGame}
                   onClick={handleStartGame}
                   size="lg"
@@ -791,7 +796,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     ? "Starting game…"
                     : "Start game"}
                 </Button>
-                <p className="text-xs leading-relaxed text-muted-foreground">
+                <p className="text-xs leading-relaxed text-[#ded3bd]">
                   {startGameStatus === "started"
                     ? "The game has started."
                     : socket.status !== "connected"
@@ -813,9 +818,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 )}
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-sm">
-                <p className="font-medium">Waiting for the host</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+              <div className="rounded-2xl border border-dashed border-[#a68a58]/60 bg-[#fffaf0] p-3.5 text-sm">
+                <p className="font-heading font-semibold text-[#2b1e12]">Awaiting the host’s command</p>
+                <p className="mt-1 text-xs leading-5 text-[#5d542b]">
                   The host will start the game when everyone is ready.
                 </p>
               </div>
@@ -831,17 +836,17 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
 
         <Card
-          className={`order-1 min-h-[30rem] lg:order-2 lg:min-h-0 ${
+          className={`order-1 min-h-[30rem] gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:order-2 lg:min-h-0 ${
             roomSnapshot.phase === "active_round"
               ? "border-primary/30 shadow-lg shadow-primary/5"
               : ""
           }`}
         >
-          <CardHeader>
+          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle>Canvas</CardTitle>
+                  <CardTitle className="text-[#fff7e7]">Canvas</CardTitle>
                   {roomSnapshot.phase === "active_round" && (
                     <span
                       className={`status-enter inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -861,7 +866,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     </span>
                   )}
                 </div>
-                <CardDescription>
+                <CardDescription className="text-[#d8c7aa]">
                   {roomSnapshot.phase === "active_round"
                     ? isCurrentPlayerDrawer
                       ? "Draw clearly—the room is watching in real time."
@@ -895,7 +900,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                         key={color.value}
                         aria-checked={drawingColor === color.value}
                         aria-label={color.label}
-                        className="relative flex size-11 touch-manipulation items-center justify-center rounded-full border border-foreground/30 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                        className="relative flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/65 ring-offset-[#101812] transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
                         onClick={() => setDrawingColor(color.value)}
                         role="radio"
                         style={{
@@ -914,7 +919,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     <button
                       aria-checked={isErasing}
                       aria-label="Eraser"
-                      className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-foreground/30 bg-white text-slate-900 ring-offset-background transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2"
+                      className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/65 bg-white text-slate-900 ring-offset-[#101812] transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
                       onClick={() => setDrawingColor(ERASER_COLOR)}
                       role="radio"
                       type="button"
@@ -937,7 +942,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                         key={size.label}
                         aria-checked={brushSize === size.value}
                         aria-label={`${size.label} brush`}
-                        className="flex size-11 touch-manipulation items-center justify-center rounded-lg border border-[#946440]/55 bg-[#bba88d]/30 text-[#2b1e12] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-[#bba88d]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:translate-y-0 aria-checked:border-[#5d542b] aria-checked:bg-[#5d542b] aria-checked:text-[#f4ead7]"
+                        className="flex size-11 touch-manipulation items-center justify-center rounded-lg border border-[#d3b878]/65 bg-[#fffaf0] text-[#182018] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101812] active:translate-y-0 aria-checked:border-[#e5c982] aria-checked:bg-[#d3b878] aria-checked:text-[#101812]"
                         onClick={() => setBrushSize(size.value)}
                         role="radio"
                         title={`${size.label} brush`}
@@ -957,7 +962,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               )}
             </div>
           </CardHeader>
-          <CardContent className="flex flex-1">
+          <CardContent className="flex flex-1 py-4">
             <DrawingCanvas
               brushSize={brushSize}
               color={drawingColor}
@@ -974,34 +979,34 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
 
-        <Card className="order-3 min-h-0 max-h-[36rem] lg:max-h-none">
-          <CardHeader>
-            <CardTitle>Chat & guesses</CardTitle>
-            <CardDescription>
+        <Card className="order-3 min-h-0 max-h-[36rem] gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:max-h-none">
+          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
+            <CardTitle className="text-[#fff7e7]">Chat & guesses</CardTitle>
+            <CardDescription className="text-[#d8c7aa]">
               {roomSnapshot.phase === "active_round"
                 ? "Share reactions or submit a guess."
                 : "Chat with everyone in the room."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-3 py-4">
             <div
               ref={chatMessageListRef}
               data-testid="chat-message-list"
-              className="flex min-h-[18rem] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-lg border bg-background/60 p-3 text-sm lg:min-h-0"
+              className="flex min-h-[18rem] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-xl border border-[#a68a58]/55 bg-[#fffaf0] p-3 text-sm text-[#182018] shadow-[inset_0_2px_8px_rgba(16,24,18,0.14)] lg:min-h-0 dark:bg-[#fffaf0] dark:text-[#182018]"
               aria-live="polite"
               onScroll={handleChatListScroll}
             >
               {socket.guessResults.map(({ id, result }) => (
                 <p
                   key={`guess-result-${id}`}
-                  className="status-enter rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1.5 text-emerald-800 dark:text-emerald-200"
+                  className="status-enter rounded-md border border-emerald-800/25 bg-emerald-100 px-2 py-1.5 text-emerald-950 dark:bg-emerald-100 dark:text-emerald-950"
                 >
                   <span className="font-medium">{result.display_name}</span>{" "}
                   guessed correctly (+{result.points_awarded} pts)
                 </p>
               ))}
               {socket.messages.length === 0 && socket.guessResults.length === 0 ? (
-                <p className="text-muted-foreground">
+                <p className="text-[#6d563e]">
                   {roomSnapshot.phase === "active_round"
                     ? "Guesses and room activity will appear here."
                     : "No chat messages yet."}
@@ -1020,7 +1025,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
             {unreadMessageCount > 0 && (
               <Button
-                className="status-enter self-center"
+                className="status-enter self-center border-[#a68a58]/60 bg-[#fffaf0] text-[#182018] hover:bg-white dark:border-[#a68a58]/60 dark:bg-[#fffaf0] dark:text-[#182018] dark:hover:bg-white"
                 onClick={scrollChatToLatestMessage}
                 size="sm"
                 type="button"
@@ -1034,6 +1039,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <Input
                 aria-label="Chat message"
                 autoComplete="off"
+                className="border-[#a68a58]/60 bg-[#fffaf0] text-[#182018] placeholder:text-[#665d4c] focus-visible:border-[#d3b878] focus-visible:ring-[#d3b878]/35 disabled:bg-[#d9d3c5] dark:bg-[#fffaf0] dark:text-[#182018] dark:disabled:bg-[#d9d3c5]"
                 disabled={socket.status !== "connected"}
                 onChange={(event) => setChatMessage(event.target.value)}
                 placeholder={
@@ -1047,6 +1053,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 value={chatMessage}
               />
               <Button
+                className="border border-[#f1d59a]/55 bg-[#c89b52] text-[#21160e] hover:bg-[#e0b66f]"
                 disabled={
                   socket.status !== "connected" || chatMessage.trim() === ""
                 }
@@ -1102,12 +1109,12 @@ function BotLobbyControls({
     : (availableProfiles[0]?.id ?? "");
 
   return (
-    <div className="space-y-2 border-t border-primary/15 pt-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-primary">Bot players</p>
+    <div className="space-y-2.5 border-t border-[#bba88d]/15 pt-3">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-[#a98d63]">Bot retainers</p>
       <div className="flex gap-2">
         <select
           aria-label="Bot profile"
-          className="min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-[#c89b52]/60 bg-[#f4ead7] px-2 text-sm font-medium text-[#2b1e12] outline-none focus:border-[#e0b66f] focus:ring-2 focus:ring-[#c89b52]/30"
           disabled={status !== "ready" || isPending || availableProfiles.length === 0}
           onChange={(event) => onSelect(event.target.value)}
           value={selectedAvailableProfileId}
@@ -1123,6 +1130,7 @@ function BotLobbyControls({
           )}
         </select>
         <Button
+          className="border border-[#f1d59a]/55 bg-[#c89b52] font-semibold text-[#21160e] hover:bg-[#e0b66f]"
           disabled={isPending || selectedAvailableProfileId === "" || status !== "ready"}
           onClick={() => onAdd(selectedAvailableProfileId)}
           size="sm"
@@ -1131,17 +1139,17 @@ function BotLobbyControls({
           {pendingBotProfileId === selectedAvailableProfileId ? "Adding..." : "Add bot"}
         </Button>
       </div>
-      {status === "loading" && <p className="text-xs text-muted-foreground">Loading bot profiles...</p>}
-      {errorMessage !== null && <p className="text-xs text-destructive">{errorMessage}</p>}
+      {status === "loading" && <p className="text-xs text-[#cdbb9f]/65">Consulting the bot roster...</p>}
+      {errorMessage !== null && <p className="text-xs text-[#f0c39b]">{errorMessage}</p>}
       {roomBots.map((bot) => (
-        <div key={bot.id} className="flex items-center justify-between gap-2 text-sm">
-          <span className="truncate">{bot.displayName}</span>
+        <div key={bot.id} className="flex items-center justify-between gap-2 rounded-lg border border-[#bba88d]/15 bg-[#bba88d]/5 px-2.5 py-2 text-sm">
+          <span className="truncate text-[#e4d4bc]">{bot.displayName}</span>
           <Button
+            className="border border-[#c46f64]/55 bg-[#4a1f1b] text-[#ffd9d4] hover:bg-[#642b25]"
             disabled={isPending}
             onClick={() => onRemove(bot.id)}
             size="xs"
             type="button"
-            variant="destructive"
           >
             {pendingBotProfileId === bot.id ? "Removing..." : "Remove"}
           </Button>
@@ -1450,14 +1458,14 @@ type StatusTileProps = {
 
 function StatusTile({ icon: Icon, label, value }: StatusTileProps) {
   return (
-    <div className="min-w-0 rounded-xl border bg-background/60 p-3">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="size-4" aria-hidden="true" />
-        <span className="text-xs font-medium uppercase tracking-wide">
+    <div className="min-w-0 rounded-xl border border-[#bba88d]/15 bg-[#bba88d]/5 p-3 shadow-[inset_0_1px_0_rgba(244,234,215,0.04)]">
+      <div className="flex items-center gap-2 text-[#a98d63]">
+        <Icon className="size-3.5" aria-hidden="true" />
+        <span className="text-[0.62rem] font-bold uppercase tracking-[0.16em]">
           {label}
         </span>
       </div>
-      <p className="mt-2 truncate font-medium" title={value}>
+      <p className="mt-2 truncate font-semibold text-[#f4ead7]" title={value}>
         {value}
       </p>
     </div>
@@ -1472,24 +1480,24 @@ type PlayerCardProps = {
 function PlayerCard({ player, rank }: PlayerCardProps) {
   return (
     <div
-      className="player-card-enter rounded-xl border bg-background/70 p-3 transition-[border-color,box-shadow] duration-200 hover:border-primary/40"
+      className="player-card-enter rounded-xl border border-[#a68a58]/45 bg-[#fffaf0] p-3 text-[#182018] transition-[border-color,box-shadow] duration-200 hover:border-[#a68a58] hover:shadow-sm dark:bg-[#fffaf0] dark:text-[#182018]"
       style={{ "--player-index": rank - 1 } as CSSProperties}
     >
       <div className="flex items-center gap-3">
         <div className="relative">
-          <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          <div className="flex size-10 items-center justify-center rounded-full border border-[#946440]/45 bg-[#2b1e12] font-heading text-xs font-semibold text-[#e4d4bc]">
             {player.displayName.slice(0, 2).toUpperCase()}
           </div>
-          <span className="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border bg-background text-[0.6rem] font-bold text-muted-foreground">
+          <span className="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border border-[#946440] bg-[#bba88d] text-[0.6rem] font-bold text-[#2b1e12]">
             {rank}
           </span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-medium">{player.displayName}</p>
+            <p className="truncate text-sm font-semibold text-[#2b1e12]">{player.displayName}</p>
             <span
               key={player.score}
-              className="score-pop inline-block text-xs font-semibold text-muted-foreground"
+              className="score-pop inline-block text-xs font-bold text-[#5d542b]"
               aria-label={`${player.score} points`}
             >
               {player.score} pts
@@ -1516,7 +1524,7 @@ type PlayerBadgeProps = {
 
 function PlayerBadge({ icon: Icon, label }: PlayerBadgeProps) {
   return (
-    <span className="status-enter inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+    <span className="status-enter inline-flex items-center gap-1 rounded-full border border-[#946440]/30 bg-[#f4ead7]/30 px-2 py-0.5 text-[0.65rem] font-semibold capitalize text-[#5d542b]">
       <Icon className="size-3" aria-hidden="true" />
       {label}
     </span>
@@ -1531,20 +1539,20 @@ type WordPackStatusProps = {
 function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
-      <div className="status-enter rounded-xl border bg-background/70 p-3">
+      <div className="status-enter rounded-xl border border-[#a68a58]/55 bg-[#fffaf0] p-3 text-[#182018] shadow-sm dark:bg-[#fffaf0] dark:text-[#182018]">
         <div className="flex items-start gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#946440]/40 bg-[#2b1e12] text-[#e4d4bc]">
             <Palette className="size-4" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Selected word pack
+            <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[#6a5436]">
+              Sealed word pack
             </p>
-            <p className="mt-0.5 truncate text-sm font-semibold">
+            <p className="mt-0.5 truncate text-sm font-bold text-[#182018]">
               {wordPack.name}
             </p>
             {wordPack.description && (
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+              <p className="mt-1 line-clamp-2 text-xs text-[#5e584b]">
                 {wordPack.description}
               </p>
             )}
@@ -1564,8 +1572,8 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   }
 
   return (
-    <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-      Choose a word pack to unlock game start.
+    <div className="rounded-xl border border-dashed border-[#a68a58]/55 bg-[#fffaf0] p-3 text-xs font-medium text-[#4f493e] dark:bg-[#fffaf0] dark:text-[#4f493e]">
+      Seal a word pack before the host begins the game.
     </div>
   );
 }
@@ -1589,13 +1597,13 @@ function WordPackSelectionPanel({
 }: WordPackSelectionPanelProps) {
   if (status === "preparing" || status === "idle") {
     return (
-      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-[2rem] border border-[#946440]/60 bg-[#2b1e12] p-6 text-center text-[#f4ead7] shadow-[0_24px_70px_rgba(43,30,18,0.35)]">
         <div>
-          <LoaderCircle className="parchment-spinner mx-auto size-8 text-primary" aria-hidden="true" />
-          <p className="text-sm font-medium text-muted-foreground">
-            Loading word packs…
+          <LoaderCircle className="parchment-spinner mx-auto size-8 text-[#bba88d]" aria-hidden="true" />
+          <p className="mt-5 text-xs font-bold uppercase tracking-[0.22em] text-[#a98d63]">
+            Consulting the archive
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+          <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight">
             Preparing the lobby
           </h2>
         </div>
@@ -1621,15 +1629,15 @@ function WordPackSelectionPanel({
 
   if (!isHost) {
     return (
-      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-6 text-center shadow-sm">
+      <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-[2rem] border border-[#946440]/60 bg-[#2b1e12] p-6 text-center text-[#f4ead7] shadow-[0_24px_70px_rgba(43,30,18,0.35)]">
         <div className="max-w-md">
-          <p className="text-sm font-medium uppercase tracking-wide text-primary">
-            Waiting for host
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#a98d63]">
+            Awaiting the host
           </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight">
             The host is choosing a word pack
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-3 text-sm leading-6 text-[#cdbb9f]/75">
             You will enter the room once the host locks the pack for this game.
           </p>
         </div>
@@ -1638,24 +1646,24 @@ function WordPackSelectionPanel({
   }
 
   return (
-    <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center rounded-3xl border bg-card/80 p-4 shadow-sm sm:p-6">
+    <section className="panel-enter flex h-[calc(100vh-8rem)] min-h-[30rem] items-center justify-center overflow-hidden rounded-[2rem] border border-[#946440]/60 bg-[#2b1e12] p-4 text-[#f4ead7] shadow-[0_24px_70px_rgba(43,30,18,0.35)] sm:p-6">
       <div className="flex max-h-full w-full max-w-2xl flex-col">
         <div className="text-center">
-          <p className="text-sm font-medium uppercase tracking-wide text-primary">
-            Choose the word pack
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#a98d63]">
+            The host’s first decree
           </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+          <h2 className="mt-3 font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             Pick the theme for this room
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Once selected, this pack is locked for the game.
+          <p className="mt-3 text-sm text-[#cdbb9f]/75">
+            Once sealed, this collection remains bound to the game.
           </p>
         </div>
 
-        <div className="mt-6 grid min-h-0 gap-3 overflow-y-auto pr-1">
+        <div className="mt-7 grid min-h-0 gap-3 overflow-y-auto rounded-2xl border border-[#bba88d]/15 bg-[#bba88d]/5 p-3 pr-2">
           {wordPacks.map((pack, index) => (
             <button
-              className="panel-enter rounded-2xl border bg-background/70 p-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md active:translate-y-0 aria-pressed:border-primary aria-pressed:bg-primary/10 aria-pressed:shadow-[0_0_0_2px_color-mix(in_srgb,var(--primary)_28%,transparent)]"
+              className="panel-enter rounded-xl border border-[#946440]/45 bg-[#d0bda1] p-4 text-left text-[#2b1e12] transition-[border-color,background-color,box-shadow] duration-200 hover:border-[#e4d4bc] hover:bg-[#ddccb2] hover:shadow-md aria-pressed:border-[#e4d4bc] aria-pressed:bg-[#bba88d] aria-pressed:shadow-[0_0_0_2px_rgba(228,212,188,0.28)]"
               key={pack.id}
               onClick={() => onSelect(pack.id)}
               type="button"
@@ -1664,12 +1672,12 @@ function WordPackSelectionPanel({
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-semibold">{pack.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="font-heading font-semibold">{pack.name}</p>
+                  <p className="mt-1 text-xs text-[#5d542b]">
                     {pack.description || pack.slug}
                   </p>
                 </div>
-                <span className="rounded-full border px-2 py-1 text-xs text-muted-foreground">
+                <span className="rounded-full border border-[#946440]/45 bg-[#f4ead7]/30 px-2 py-1 text-xs font-semibold text-[#5d542b]">
                   {selectedWordPackId === pack.id ? "Chosen" : pack.slug}
                 </span>
               </div>
@@ -1678,7 +1686,7 @@ function WordPackSelectionPanel({
         </div>
 
         <Button
-          className="mt-6 w-full transition-transform active:translate-y-px"
+          className="mt-6 h-12 w-full border border-[#d0bda1]/35 bg-[#75683a] text-[#fff7e7] transition-transform hover:bg-[#827442] active:translate-y-px"
           disabled={selectedWordPackId === ""}
           onClick={onConfirm}
           type="button"

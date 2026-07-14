@@ -50,69 +50,47 @@ export default async function Home() {
     <div
       className="relative flex flex-1 flex-col overflow-hidden bg-[#2b1e12] text-[#bba88d]"
     >
-      <div
-        className="pointer-events-none absolute -inset-[4%] bg-[length:100%_auto] bg-top bg-repeat-y will-change-transform motion-safe:animate-[background-drift_24s_linear_infinite] sm:bg-cover sm:bg-center sm:bg-no-repeat"
-        aria-hidden="true"
-        style={{
-          backgroundImage: "url('/images/7%20-%2087UWVJq.jpg')",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(43,30,18,0.5),rgba(43,30,18,0.6)),radial-gradient(circle_at_center,transparent_42%,rgba(43,30,18,0.38)_125%)]"
-        aria-hidden="true"
-      />
-      <div
-        className="pointer-events-none absolute inset-0 z-[1] overflow-hidden"
-        aria-hidden="true"
-      >
-        {[
-          ["12%", "5px", "18s", "-4s"],
-          ["28%", "4px", "15s", "-9s"],
-          ["46%", "7px", "22s", "-13s"],
-          ["67%", "4px", "17s", "-6s"],
-          ["84%", "6px", "20s", "-15s"],
-          ["94%", "4px", "14s", "-2s"],
-        ].map(([left, size, duration, delay]) => (
-          <span
-            key={left}
-            className="dust-mote absolute bottom-[-10%] rounded-full bg-[#bba88d]/70 blur-[0.5px]"
+      <main className="relative flex-1">
+        <section className="relative isolate min-h-[calc(100vh-5rem)] overflow-hidden bg-[#2b1e12]">
+          <div
+            className="hero-background-drift pointer-events-none absolute -inset-[8%] z-0 bg-cover bg-center bg-no-repeat will-change-transform"
+            aria-hidden="true"
             style={{
-              left,
-              width: size,
-              height: size,
-              "--dust-duration": duration,
-              "--dust-delay": delay,
-            } as CSSProperties}
+              backgroundImage: "url('/images/7%20-%2087UWVJq.jpg')",
+            }}
           />
-        ))}
-      </div>
-      <div
-        className="pointer-events-none absolute left-1/2 top-24 h-72 w-72 -translate-x-1/2 rounded-full bg-[#946440]/20 blur-3xl motion-safe:animate-[hero-pulse_7s_ease-in-out_infinite]"
-        aria-hidden="true"
-      />
+          <div
+            className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(20,13,8,0.58),rgba(43,30,18,0.4)_46%,rgba(20,13,8,0.84)),radial-gradient(circle_at_center,transparent_26%,rgba(20,13,8,0.6)_118%)]"
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(20,13,8,0.44),transparent_25%,transparent_75%,rgba(20,13,8,0.44))]"
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute left-1/2 top-16 z-[1] h-72 w-[40rem] max-w-[90vw] -translate-x-1/2 rounded-full bg-[#946440]/12 blur-[90px]"
+            aria-hidden="true"
+          />
 
-      <main className="relative z-10 flex-1">
-        <section className="relative isolate min-h-[calc(100vh-8rem)] overflow-hidden">
-          <div className="mx-auto flex min-h-[calc(100vh-8rem)] w-full max-w-5xl items-center justify-center px-4 py-16 sm:px-6 sm:py-20">
-          <div className="max-w-3xl px-6 py-10 text-center sm:px-10 sm:py-12">
+          <div className="relative z-10 mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center justify-center px-4 py-16 sm:px-6 sm:py-20">
+          <div className="relative max-w-4xl px-7 py-12 text-center sm:px-14 sm:py-14">
             <div
-              className="hero-reveal mb-8 inline-flex items-center gap-3 rounded-full border border-[#bba88d]/60 bg-[#2b1e12]/55 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#bba88d] shadow-lg backdrop-blur-md"
+              className="hero-reveal mb-8 flex items-center justify-center gap-4 text-[0.65rem] font-bold uppercase tracking-[0.32em] text-[#cdbb9f] sm:text-xs"
               style={{ "--reveal-delay": "80ms" } as CSSProperties}
             >
-              <span className="relative flex size-2.5">
-                <span className="absolute inline-flex size-full rounded-full bg-[#946440] opacity-60 motion-safe:animate-ping" />
-                <span className="relative inline-flex size-2.5 rounded-full bg-[#946440]" />
-              </span>
+              <span className="h-px w-8 bg-[#946440]/75 sm:w-14" />
               Multiplayer sketch rooms
+              <span className="h-px w-8 bg-[#946440]/75 sm:w-14" />
             </div>
             <h1
-              className="hero-reveal hero-title-breathe font-heading text-4xl font-semibold leading-[1.18] tracking-tight text-balance text-[#f4ead7] sm:text-5xl lg:text-6xl"
+              className="hero-reveal font-heading text-4xl font-semibold leading-[1.12] tracking-tight text-balance text-[#f4ead7] drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)] sm:text-6xl lg:text-7xl"
               style={{ "--reveal-delay": "180ms" } as CSSProperties}
             >
-              Draw the word. Outsmart the room.
+              <span className="block">Draw the word.</span>
+              <span className="mt-2 block text-[#d7c6aa]">Outsmart the room.</span>
             </h1>
             <p
-              className="hero-reveal mx-auto mt-7 max-w-2xl text-lg leading-8 text-[#e4d4bc] drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)]"
+              className="hero-reveal mx-auto mt-7 max-w-2xl text-base font-medium leading-8 text-[#e4d4bc]/90 drop-shadow-[0_2px_5px_rgba(0,0,0,0.9)] sm:text-lg"
               style={{ "--reveal-delay": "280ms" } as CSSProperties}
             >
               Mithril Tiles is a real-time drawing and guessing game built for
@@ -188,6 +166,21 @@ export default async function Home() {
                 </Link>
               </div>
             )}
+
+            <div
+              className="hero-reveal mx-auto mt-9 flex max-w-xl flex-wrap items-center justify-center gap-2.5 text-[0.65rem] font-bold uppercase tracking-[0.16em] text-[#f4ead7]"
+              style={{ "--reveal-delay": "480ms" } as CSSProperties}
+            >
+              <span className="rounded-full border border-[#bba88d]/35 bg-[#160f09]/80 px-3.5 py-2 shadow-[0_4px_14px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+                Private rooms
+              </span>
+              <span className="rounded-full border border-[#bba88d]/35 bg-[#160f09]/80 px-3.5 py-2 shadow-[0_4px_14px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+                Live canvas
+              </span>
+              <span className="rounded-full border border-[#bba88d]/35 bg-[#160f09]/80 px-3.5 py-2 shadow-[0_4px_14px_rgba(0,0,0,0.28)] backdrop-blur-sm">
+                AI rivals
+              </span>
+            </div>
           </div>
 
           </div>
