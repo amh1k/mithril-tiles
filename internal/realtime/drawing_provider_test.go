@@ -38,7 +38,30 @@ func TestGeminiDrawingProviderParsesNormalizedStrokePlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(strokes) != 1 || strokes[0].Color != "#000000" || strokes[0].BrushSize != 5 {
+	if len(strokes) != 1 || strokes[0].Color != "#000000" || strokes[0].BrushSize != 0.012 {
 		t.Fatalf("unexpected Gemini drawing plan: %+v", strokes)
+	}
+}
+
+func TestGrokDrawingProviderParsesNormalizedStrokePlan(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected request path %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-key" {
+			t.Error("expected Grok Bearer API key header")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"strokes\":[{\"from_x\":0.1,\"from_y\":0.2,\"to_x\":0.3,\"to_y\":0.4}]}"}}]}`))
+	}))
+	defer server.Close()
+
+	provider := GrokDrawingProvider{APIKey: "test-key", BaseURL: server.URL}
+	strokes, err := provider.Plan(context.Background(), DrawingInput{Word: "secret-word"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(strokes) != 1 || strokes[0].Color != "#000000" || strokes[0].BrushSize != 0.012 {
+		t.Fatalf("unexpected Grok drawing plan: %+v", strokes)
 	}
 }

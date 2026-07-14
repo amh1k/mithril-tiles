@@ -59,3 +59,34 @@ func TestGeminiGuessProviderSendsOnlyPublicGuessInput(t *testing.T) {
 		t.Fatalf("expected Gemini guess %q, got %q", "tree", guess)
 	}
 }
+
+func TestGrokGuessProviderUsesBearerAuthentication(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected request path %q", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-key" {
+			t.Error("expected Grok Bearer API key header")
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read provider request: %v", err)
+			return
+		}
+		if strings.Contains(string(body), "secret-word") {
+			t.Error("provider request exposed a secret word")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"tree"}}]}`))
+	}))
+	defer server.Close()
+
+	provider := GrokGuessProvider{APIKey: "test-key", BaseURL: server.URL}
+	guess, err := provider.Guess(context.Background(), GuessInput{MaskedWord: "____"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if guess != "tree" {
+		t.Fatalf("expected Grok guess %q, got %q", "tree", guess)
+	}
+}

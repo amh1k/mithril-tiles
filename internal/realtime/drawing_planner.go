@@ -42,6 +42,7 @@ func (TemplateDrawingProvider) Plan(ctx context.Context, input DrawingInput) ([]
 }
 
 const defaultGeminiDrawingModel = "gemini-2.5-flash"
+const defaultGrokDrawingModel = "grok-4.3"
 
 type GeminiDrawingProvider struct {
 	APIKey  string
@@ -108,20 +109,96 @@ func (p GeminiDrawingProvider) Plan(ctx context.Context, input DrawingInput) ([]
 		return nil, fmt.Errorf("Gemini drawing plan has %d strokes", len(plan.Strokes))
 	}
 
+	return strokesFromDrawingPlan(plan, "Gemini")
+}
+
+// GrokDrawingProvider implements DrawingProvider using xAI's OpenAI-compatible API.
+type GrokDrawingProvider struct {
+	APIKey  string
+	BaseURL string
+	Client  *http.Client
+	Model   string
+	Timeout time.Duration
+}
+
+func (p GrokDrawingProvider) Plan(ctx context.Context, input DrawingInput) ([]DrawStroke, error) {
+	if strings.TrimSpace(p.APIKey) == "" {
+		return nil, fmt.Errorf("Grok API key is not configured")
+	}
+
+	requestContext, cancel := context.WithTimeout(ctx, p.timeout())
+	defer cancel()
+	payload, err := json.Marshal(grokChatCompletionRequest{
+		Model:       p.model(),
+		Messages:    []grokChatMessage{{Role: "user", Content: geminiDrawingPrompt(input)}},
+		Temperature: 0.4,
+		MaxTokens:   2048,
+		ResponseFormat: &grokResponseFormat{
+			Type: "json_schema",
+			JSONSchema: grokJSONSchemaSpec{
+				Name:   "drawing_plan",
+				Strict: true,
+				Schema: geminiDrawingSchema(),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal Grok drawing request: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(
+		requestContext,
+		http.MethodPost,
+		p.baseURL()+"/chat/completions",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create Grok drawing request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	response, err := p.client().Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("call Grok drawing provider: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 8<<10))
+		return nil, fmt.Errorf(
+			"Grok drawing provider returned status %d: %s",
+			response.StatusCode,
+			strings.TrimSpace(string(body)),
+		)
+	}
+
+	var result grokChatCompletionResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode Grok drawing response: %w", err)
+	}
+	if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
+		return nil, fmt.Errorf("Grok drawing provider returned no candidate")
+	}
+
+	var plan geminiDrawingPlan
+	if err := json.Unmarshal([]byte(result.Choices[0].Message.Content), &plan); err != nil {
+		return nil, fmt.Errorf("decode Grok drawing plan: %w", err)
+	}
+	return strokesFromDrawingPlan(plan, "Grok")
+}
+
+func strokesFromDrawingPlan(plan geminiDrawingPlan, provider string) ([]DrawStroke, error) {
+	if len(plan.Strokes) == 0 || len(plan.Strokes) > 64 {
+		return nil, fmt.Errorf("%s drawing plan has %d strokes", provider, len(plan.Strokes))
+	}
+
 	strokes := make([]DrawStroke, len(plan.Strokes))
 	for i, stroke := range plan.Strokes {
 		if !normalizedCoordinate(stroke.FromX) || !normalizedCoordinate(stroke.FromY) ||
 			!normalizedCoordinate(stroke.ToX) || !normalizedCoordinate(stroke.ToY) {
-			return nil, fmt.Errorf("Gemini drawing plan has invalid coordinates")
+			return nil, fmt.Errorf("%s drawing plan has invalid coordinates", provider)
 		}
-		strokes[i] = DrawStroke{
-			FromX:     stroke.FromX,
-			FromY:     stroke.FromY,
-			ToX:       stroke.ToX,
-			ToY:       stroke.ToY,
-			Color:     "#000000",
-			BrushSize: 5,
-		}
+		strokes[i] = DrawStroke{FromX: stroke.FromX, FromY: stroke.FromY, ToX: stroke.ToX, ToY: stroke.ToY, Color: "#000000", BrushSize: 0.012}
 	}
 	return strokes, nil
 }
@@ -171,6 +248,34 @@ func (p GeminiDrawingProvider) model() string {
 }
 
 func (p GeminiDrawingProvider) timeout() time.Duration {
+	if p.Timeout > 0 {
+		return p.Timeout
+	}
+	return 3 * time.Second
+}
+
+func (p GrokDrawingProvider) baseURL() string {
+	if p.BaseURL != "" {
+		return strings.TrimRight(p.BaseURL, "/")
+	}
+	return "https://api.x.ai/v1"
+}
+
+func (p GrokDrawingProvider) client() *http.Client {
+	if p.Client != nil {
+		return p.Client
+	}
+	return http.DefaultClient
+}
+
+func (p GrokDrawingProvider) model() string {
+	if p.Model != "" {
+		return p.Model
+	}
+	return defaultGrokDrawingModel
+}
+
+func (p GrokDrawingProvider) timeout() time.Duration {
 	if p.Timeout > 0 {
 		return p.Timeout
 	}
@@ -242,6 +347,6 @@ func stroke(fromX, fromY, toX, toY float64) DrawStroke {
 		ToX:       toX,
 		ToY:       toY,
 		Color:     "#000000",
-		BrushSize: 5,
+		BrushSize: 0.012,
 	}
 }

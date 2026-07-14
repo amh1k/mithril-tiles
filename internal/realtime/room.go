@@ -501,6 +501,7 @@ func (r *Room) handleRemoveBot(removeBotCommand RemoveBotCommand) {
 func (r *Room) AddToAddBotChannel(ctx context.Context, addBotCommand AddBotCommand) error {
 	select {
 	case r.addBot <- addBotCommand:
+		fmt.Println("Success adding bot my lord!")
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -532,6 +533,7 @@ func (r *Room) SubmitGuess(ctx context.Context, command SubmitGuessCommand) erro
 
 func (r *Room) startBotRuntimesForRound() {
 	r.stopBotRuntimes()
+	fmt.Println("Start bot runtimeForround called ")
 
 	r.mu.Lock()
 	gameID := r.gameID
@@ -562,6 +564,7 @@ func (r *Room) startBotRuntimesForRound() {
 		if isDrawer {
 			drawerWord = word
 		}
+		fmt.Println("Start bot runtimeForround called ")
 		go r.runBotRuntime(ctx, runtime, BotActionMetadata{
 			GameID:  gameID,
 			RoundNo: roundNo,
@@ -589,12 +592,14 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 		return
 	case <-timer.C:
 	}
+	fmt.Println("Runbotruntime!")
 
 	provider := r.drawingProvider
 	if provider == nil {
 		provider = TemplateDrawingProvider{}
 	}
 	strokes, err := provider.Plan(ctx, DrawingInput{Word: word, Profile: runtime.Profile})
+	fmt.Println(err)
 	if err != nil {
 		strokes, err = TemplateDrawingProvider{}.Plan(ctx, DrawingInput{Word: word, Profile: runtime.Profile})
 		if err != nil {
@@ -609,6 +614,7 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 		}
 		select {
 		case r.botAction <- completion:
+			fmt.Println("Successful sent completiton to bot action for bot drawer!")
 		case <-ctx.Done():
 			return
 		case <-r.done:
@@ -646,7 +652,9 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 				continue
 			}
 			switch event.Type {
+				
 			case botEventMaskedWord:
+				fmt.Println("maksed word sent to the runtime atleast")
 				perception.MaskedWord = event.MaskedWord
 				if attempts >= policy.MaxGuessAttempts || revealedLetterCount(perception.MaskedWord) < policy.MinRevealedLetters {
 					continue
@@ -663,6 +671,7 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 				}
 				guess, err := provider.Guess(ctx, input)
 				if err == nil {
+					fmt.Println(err)
 					guess = validProviderGuess(perception.MaskedWord, guess, attempted)
 				}
 				if guess == "" {
@@ -689,6 +698,8 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 
 				attempted[guess] = struct{}{}
 				attempts++
+				fmt.Println("Atleast runGueeserruntime called")
+				fmt.Println(guess)
 				_ = r.SubmitGuess(ctx, SubmitGuessCommand{
 					ParticipantID: runtime.BotID,
 					Text:          guess,
@@ -696,6 +707,7 @@ func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metad
 					RoundNo:       metadata.RoundNo,
 				})
 			case botEventStroke:
+				// fmt.Println("bot event stroke sent to the runtime atleast")
 				if event.Stroke == nil {
 					continue
 				}
@@ -771,6 +783,8 @@ func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
 		stroke.ActorID = completion.Metadata.BotID
 		stroke.From = drawerName
 		stroke.RoomCode = roomCode
+		fmt.Println("This was called in handleBotActionCompleteds!")
+		fmt.Println(stroke)
 		r.handleDrawStroke(stroke)
 	}
 }

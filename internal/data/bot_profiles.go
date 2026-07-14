@@ -3,16 +3,21 @@ package data
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"mithrilTiles.abdulmoiz.net/internal/validator"
 )
+
 var (
 	ErrDuplicateBotProfileName = errors.New("duplicate bot profile name")
+	ErrBotProfileInUse         = errors.New("bot profile is referenced by game history")
 )
+
 type BotProfile struct {
 	ID            uuid.UUID `json:"id"`
 	Name          string    `json:"name"`
@@ -135,6 +140,61 @@ func (m *BotProfileModel) ListActive() ([]*BotProfile, error) {
 	return botProfiles, nil
 }
 
+func (m *BotProfileModel) List() ([]*BotProfile, error) {
+	query := `
+	SELECT id, name, difficulty, behavior_style, avatar_url, is_active, created_at, updated_at
+	FROM bot_profiles
+	ORDER BY name ASC`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+
+	rows, err := m.DB.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	botProfiles := []*BotProfile{}
+	for rows.Next() {
+		var botProfile BotProfile
+		if err := rows.Scan(
+			&botProfile.ID,
+			&botProfile.Name,
+			&botProfile.Difficulty,
+			&botProfile.BehaviorStyle,
+			&botProfile.AvatarURL,
+			&botProfile.IsActive,
+			&botProfile.CreatedAt,
+			&botProfile.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		botProfiles = append(botProfiles, &botProfile)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return botProfiles, nil
+}
+
+func ValidateBotProfile(v *validator.Validator, botProfile *BotProfile) {
+	v.Check(strings.TrimSpace(botProfile.Name) != "", "name", "must be provided")
+	v.Check(len(botProfile.Name) <= 100, "name", "must not be more than 100 bytes long")
+	v.Check(
+		validator.PermittedValue(botProfile.Difficulty, "easy", "normal", "hard", "custom"),
+		"difficulty",
+		"must be easy, normal, hard, or custom",
+	)
+	v.Check(strings.TrimSpace(botProfile.BehaviorStyle) != "", "behavior_style", "must be provided")
+	v.Check(len(botProfile.BehaviorStyle) <= 100, "behavior_style", "must not be more than 100 bytes long")
+	if botProfile.AvatarURL != nil {
+		v.Check(strings.TrimSpace(*botProfile.AvatarURL) != "", "avatar_url", "must not be blank")
+		v.Check(len(*botProfile.AvatarURL) <= 2048, "avatar_url", "must not be more than 2048 bytes long")
+	}
+}
+
 func (m *BotProfileModel) Insert(botProfile *BotProfile) error {
 	query := `
 	INSERT INTO bot_profiles (name, difficulty, behavior_style, avatar_url, is_active)
@@ -220,6 +280,10 @@ func (m *BotProfileModel) Delete(id uuid.UUID) error {
 
 	res, err := m.DB.Exec(ctx, query, id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return ErrBotProfileInUse
+		}
 		return err
 	}
 	if res.RowsAffected() == 0 {

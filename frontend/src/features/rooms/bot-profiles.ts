@@ -8,21 +8,36 @@ export const botProfileSchema = z.object({
   name: z.string().min(1),
   difficulty: z.string().min(1),
   behavior_style: z.string().min(1),
-  avatar_url: z.string().nullable(),
+  avatar_url: z.string().nullable().optional(),
   is_active: z.boolean(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
 });
 
-const botProfilesResponseSchema = z.object({
+export const botProfilesResponseSchema = z.object({
   bot_profiles: z.array(botProfileSchema),
 });
+
+export const botProfileMutationSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(100),
+    difficulty: z.enum(["easy", "normal", "hard", "custom"]),
+    behavior_style: z
+      .string()
+      .trim()
+      .min(1, "Behavior style is required")
+      .max(100),
+    avatar_url: z.string().trim().url("Avatar URL must be valid").nullable(),
+    is_active: z.boolean(),
+  })
+  .strict();
 
 const botMutationRequestSchema = z.object({
   id: z.uuid(),
 });
 
 export type BotProfile = z.infer<typeof botProfileSchema>;
+export type BotProfileMutation = z.infer<typeof botProfileMutationSchema>;
 
 export async function fetchActiveBotProfiles(
   signal?: AbortSignal,

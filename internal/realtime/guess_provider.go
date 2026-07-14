@@ -37,6 +37,7 @@ func (DeterministicGuessProvider) Guess(ctx context.Context, input GuessInput) (
 }
 
 const defaultGeminiGuessModel = "gemini-2.5-flash"
+const defaultGrokGuessModel = "grok-4.3"
 
 type GeminiGuessProvider struct {
 	APIKey  string
@@ -96,6 +97,7 @@ func (p GeminiGuessProvider) Guess(ctx context.Context, input GuessInput) (strin
 	if len(result.Candidates) == 0 || len(result.Candidates[0].Content.Parts) == 0 {
 		return "", fmt.Errorf("Gemini guess provider returned no candidate")
 	}
+	fmt.Println(strings.TrimSpace(result.Candidates[0].Content.Parts[0].Text), nil)
 
 	return strings.TrimSpace(result.Candidates[0].Content.Parts[0].Text), nil
 }
@@ -147,6 +149,124 @@ func (p GeminiGuessProvider) model() string {
 }
 
 func (p GeminiGuessProvider) timeout() time.Duration {
+	if p.Timeout > 0 {
+		return p.Timeout
+	}
+	return 2 * time.Second
+}
+
+// GrokGuessProvider implements GuessProvider using xAI's OpenAI-compatible API.
+type GrokGuessProvider struct {
+	APIKey  string
+	BaseURL string
+	Client  *http.Client
+	Model   string
+	Timeout time.Duration
+}
+
+func (p GrokGuessProvider) Guess(ctx context.Context, input GuessInput) (string, error) {
+	if strings.TrimSpace(p.APIKey) == "" {
+		return "", fmt.Errorf("Grok API key is not configured")
+	}
+
+	requestContext, cancel := context.WithTimeout(ctx, p.timeout())
+	defer cancel()
+	payload, err := json.Marshal(grokChatCompletionRequest{
+		Model:       p.model(),
+		Messages:    []grokChatMessage{{Role: "user", Content: geminiGuessPrompt(input)}},
+		Temperature: 0.2,
+		MaxTokens:   16,
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal Grok guess request: %w", err)
+	}
+
+	request, err := http.NewRequestWithContext(
+		requestContext,
+		http.MethodPost,
+		p.baseURL()+"/chat/completions",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return "", fmt.Errorf("create Grok guess request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+p.APIKey)
+
+	response, err := p.client().Do(request)
+	if err != nil {
+		return "", fmt.Errorf("call Grok guess provider: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("Grok guess provider returned status %d", response.StatusCode)
+	}
+
+	var result grokChatCompletionResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&result); err != nil {
+		return "", fmt.Errorf("decode Grok guess response: %w", err)
+	}
+	if len(result.Choices) == 0 || strings.TrimSpace(result.Choices[0].Message.Content) == "" {
+		return "", fmt.Errorf("Grok guess provider returned no candidate")
+	}
+
+	return strings.TrimSpace(result.Choices[0].Message.Content), nil
+}
+
+type grokChatCompletionRequest struct {
+	Model          string              `json:"model"`
+	Messages       []grokChatMessage   `json:"messages"`
+	Temperature    float64             `json:"temperature"`
+	MaxTokens      int                 `json:"max_tokens"`
+	ResponseFormat *grokResponseFormat `json:"response_format,omitempty"`
+}
+
+type grokChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type grokResponseFormat struct {
+	Type       string             `json:"type"`
+	JSONSchema grokJSONSchemaSpec `json:"json_schema"`
+}
+
+type grokJSONSchemaSpec struct {
+	Name   string         `json:"name"`
+	Strict bool           `json:"strict"`
+	Schema map[string]any `json:"schema"`
+}
+
+type grokChatCompletionResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
+}
+
+func (p GrokGuessProvider) baseURL() string {
+	if p.BaseURL != "" {
+		return strings.TrimRight(p.BaseURL, "/")
+	}
+	return "https://api.x.ai/v1"
+}
+
+func (p GrokGuessProvider) client() *http.Client {
+	if p.Client != nil {
+		return p.Client
+	}
+	return http.DefaultClient
+}
+
+func (p GrokGuessProvider) model() string {
+	if p.Model != "" {
+		return p.Model
+	}
+	return defaultGrokGuessModel
+}
+
+func (p GrokGuessProvider) timeout() time.Duration {
 	if p.Timeout > 0 {
 		return p.Timeout
 	}
