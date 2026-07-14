@@ -3,6 +3,7 @@ package realtime
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ type RoomPlayer struct {
 	ID          uuid.UUID `json:"id"`
 	Type        string    `json:"type"`
 	DisplayName string    `json:"display_name"`
-	AvatarURL   string    `json:"avatar_url,omitempty"`
+	AvatarURL   *string   `json:"avatar_url"`
 	Score       int       `json:"score"`
 	IsConnected bool      `json:"is_connected"`
 }
@@ -103,6 +104,7 @@ type RemoveBotCommand struct {
 type BotRuntime struct {
 	BotID   uuid.UUID
 	Profile data.BotProfile
+	events  chan BotEvent
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -112,6 +114,25 @@ type BotActionMetadata struct {
 	GameID  uuid.UUID
 	RoundNo int
 	BotID   uuid.UUID
+}
+type BotPerception struct {
+	RoundNo    int
+	MaskedWord string
+	Strokes    []DrawStroke
+}
+
+type botEventType string
+
+const (
+	botEventMaskedWord botEventType = "masked_word"
+	botEventStroke     botEventType = "stroke"
+)
+
+type BotEvent struct {
+	Metadata   BotActionMetadata
+	Type       botEventType
+	MaskedWord string
+	Stroke     *DrawStroke
 }
 
 type botActionKind string
@@ -131,6 +152,13 @@ type SubmitGuessCommand struct {
 	Text          string
 	GameID        uuid.UUID
 	RoundNo       int
+}
+type BotBehaviorPolicy struct {
+	GuessDelay         time.Duration
+	MaxGuessAttempts   int
+	MinRevealedLetters int
+	DrawDelay          time.Duration
+	MaxDrawingStrokes  int
 }
 
 type Room struct {
@@ -167,11 +195,12 @@ type Room struct {
 	//drawing
 	drawStroke chan DrawStroke
 
-	addBot         chan AddBotCommand
-	removeBot      chan RemoveBotCommand
-	botAction      chan botActionCompletion
-	submitGuess    chan SubmitGuessCommand
-	drawingPlanner DrawingPlanner
+	addBot          chan AddBotCommand
+	removeBot       chan RemoveBotCommand
+	botAction       chan botActionCompletion
+	submitGuess     chan SubmitGuessCommand
+	drawingProvider DrawingProvider
+	guessProvider   GuessProvider
 
 	//Scores
 	scoresMu     sync.Mutex
@@ -229,38 +258,39 @@ func newRoom(
 	}
 
 	cr := &Room{
-		players:        make(map[*Player]bool),
-		join:           make(chan joinRequest),
-		leave:          make(chan *Player),
-		broadcast:      make(chan string),
-		listPlayers:    make(chan *Player),
-		startGame:      make(chan gameStartCommand),
-		gameStartDone:  make(chan gameStartCompletion, 1),
-		directMessage:  make(chan DirectMessage),
-		snapshot:       make(chan struct{}),
-		drawStroke:     make(chan DrawStroke, 256),
-		scores:         make(map[*Player]int),
-		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
-		sessions:       make(map[string]*SessionInfo),
-		messages:       messages,
-		startTime:      time.Now(),
-		roomCode:       roomCode,
-		gameState:      GameStateIdle,
-		RoundState:     RoundStateIdle,
-		correctGuesses: 0,
-		currentRoundNo: 0,
-		roundInfo:      make(chan string, 20),
-		gameLifecycle:  gameLifecycle,
-		endGameRetry:   defaultEndGameRetryPolicy,
-		done:           make(chan struct{}),
-		endGame:        make(chan struct{}),
-		deleteRoom:     deleteRoom,
-		addBot:         make(chan AddBotCommand, 10),
-		removeBot:      make(chan RemoveBotCommand, 10),
-		botAction:      make(chan botActionCompletion, 16),
-		submitGuess:    make(chan SubmitGuessCommand, 32),
-		drawingPlanner: TemplateDrawingPlanner{},
-		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
+		players:         make(map[*Player]bool),
+		join:            make(chan joinRequest),
+		leave:           make(chan *Player),
+		broadcast:       make(chan string),
+		listPlayers:     make(chan *Player),
+		startGame:       make(chan gameStartCommand),
+		gameStartDone:   make(chan gameStartCompletion, 1),
+		directMessage:   make(chan DirectMessage),
+		snapshot:        make(chan struct{}),
+		drawStroke:      make(chan DrawStroke, 256),
+		scores:          make(map[*Player]int),
+		globalScores:    make(map[principalScoreKey]PlayerFinalScore),
+		sessions:        make(map[string]*SessionInfo),
+		messages:        messages,
+		startTime:       time.Now(),
+		roomCode:        roomCode,
+		gameState:       GameStateIdle,
+		RoundState:      RoundStateIdle,
+		correctGuesses:  0,
+		currentRoundNo:  0,
+		roundInfo:       make(chan string, 20),
+		gameLifecycle:   gameLifecycle,
+		endGameRetry:    defaultEndGameRetryPolicy,
+		done:            make(chan struct{}),
+		endGame:         make(chan struct{}),
+		deleteRoom:      deleteRoom,
+		addBot:          make(chan AddBotCommand, 10),
+		removeBot:       make(chan RemoveBotCommand, 10),
+		botAction:       make(chan botActionCompletion, 16),
+		submitGuess:     make(chan SubmitGuessCommand, 32),
+		drawingProvider: TemplateDrawingProvider{},
+		guessProvider:   DeterministicGuessProvider{},
+		botRuntimes:     make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -272,34 +302,35 @@ func NewRoomUnitTest(roomCode string) (*Room, error) {
 	}
 
 	cr := &Room{
-		players:        make(map[*Player]bool),
-		join:           make(chan joinRequest),
-		leave:          make(chan *Player),
-		broadcast:      make(chan string),
-		listPlayers:    make(chan *Player),
-		startGame:      make(chan gameStartCommand),
-		gameStartDone:  make(chan gameStartCompletion, 1),
-		directMessage:  make(chan DirectMessage),
-		snapshot:       make(chan struct{}),
-		drawStroke:     make(chan DrawStroke, 256),
-		scores:         make(map[*Player]int),
-		globalScores:   make(map[principalScoreKey]PlayerFinalScore),
-		sessions:       make(map[string]*SessionInfo),
-		messages:       messages,
-		startTime:      time.Now(),
-		roomCode:       roomCode,
-		gameState:      GameStateIdle,
-		correctGuesses: 0,
-		currentRoundNo: 0,
-		roundInfo:      make(chan string, 20),
-		endGameRetry:   defaultEndGameRetryPolicy,
-		done:           make(chan struct{}),
-		addBot:         make(chan AddBotCommand, 10),
-		removeBot:      make(chan RemoveBotCommand, 10),
-		botAction:      make(chan botActionCompletion, 16),
-		submitGuess:    make(chan SubmitGuessCommand, 32),
-		drawingPlanner: TemplateDrawingPlanner{},
-		botRuntimes:    make(map[uuid.UUID]*BotRuntime),
+		players:         make(map[*Player]bool),
+		join:            make(chan joinRequest),
+		leave:           make(chan *Player),
+		broadcast:       make(chan string),
+		listPlayers:     make(chan *Player),
+		startGame:       make(chan gameStartCommand),
+		gameStartDone:   make(chan gameStartCompletion, 1),
+		directMessage:   make(chan DirectMessage),
+		snapshot:        make(chan struct{}),
+		drawStroke:      make(chan DrawStroke, 256),
+		scores:          make(map[*Player]int),
+		globalScores:    make(map[principalScoreKey]PlayerFinalScore),
+		sessions:        make(map[string]*SessionInfo),
+		messages:        messages,
+		startTime:       time.Now(),
+		roomCode:        roomCode,
+		gameState:       GameStateIdle,
+		correctGuesses:  0,
+		currentRoundNo:  0,
+		roundInfo:       make(chan string, 20),
+		endGameRetry:    defaultEndGameRetryPolicy,
+		done:            make(chan struct{}),
+		addBot:          make(chan AddBotCommand, 10),
+		removeBot:       make(chan RemoveBotCommand, 10),
+		botAction:       make(chan botActionCompletion, 16),
+		submitGuess:     make(chan SubmitGuessCommand, 32),
+		drawingProvider: TemplateDrawingProvider{},
+		guessProvider:   DeterministicGuessProvider{},
+		botRuntimes:     make(map[uuid.UUID]*BotRuntime),
 	}
 
 	return cr, nil
@@ -470,6 +501,7 @@ func (r *Room) handleRemoveBot(removeBotCommand RemoveBotCommand) {
 func (r *Room) AddToAddBotChannel(ctx context.Context, addBotCommand AddBotCommand) error {
 	select {
 	case r.addBot <- addBotCommand:
+		fmt.Println("Success adding bot my lord!")
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -501,6 +533,7 @@ func (r *Room) SubmitGuess(ctx context.Context, command SubmitGuessCommand) erro
 
 func (r *Room) startBotRuntimesForRound() {
 	r.stopBotRuntimes()
+	fmt.Println("Start bot runtimeForround called ")
 
 	r.mu.Lock()
 	gameID := r.gameID
@@ -520,24 +553,36 @@ func (r *Room) startBotRuntimesForRound() {
 		runtime := &BotRuntime{
 			BotID:   player.Principal.ID(),
 			Profile: *player.Principal.BotProfile,
+			events:  make(chan BotEvent, 128),
 			cancel:  cancel,
 			done:    make(chan struct{}),
 		}
 		r.botRuntimes[runtime.BotID] = runtime
 		runtimes = append(runtimes, runtime)
+		isDrawer := runtime.BotID == drawerID
+		drawerWord := ""
+		if isDrawer {
+			drawerWord = word
+		}
+		fmt.Println("Start bot runtimeForround called ")
 		go r.runBotRuntime(ctx, runtime, BotActionMetadata{
 			GameID:  gameID,
 			RoundNo: roundNo,
 			BotID:   runtime.BotID,
-		}, runtime.BotID == drawerID, word)
+		}, isDrawer, drawerWord)
 	}
 	r.mu.Unlock()
 }
 
 func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool, word string) {
 	defer close(runtime.done)
+	if !isDrawer {
+		r.runGuesserRuntime(ctx, runtime, metadata)
+		return
+	}
+	policy := behaviorPolicyFor(runtime.Profile)
 
-	timer := time.NewTimer(time.Second)
+	timer := time.NewTimer(policy.DrawStartDelay)
 	defer timer.Stop()
 
 	select {
@@ -547,51 +592,162 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 		return
 	case <-timer.C:
 	}
+	fmt.Println("Runbotruntime!")
 
-	kind := botActionGuess
-	if isDrawer {
-		kind = botActionDraw
-		planner := r.drawingPlanner
-		if planner == nil {
-			planner = TemplateDrawingPlanner{}
+	provider := r.drawingProvider
+	if provider == nil {
+		provider = TemplateDrawingProvider{}
+	}
+	strokes, err := provider.Plan(ctx, DrawingInput{Word: word, Profile: runtime.Profile})
+	fmt.Println(err)
+	if err != nil {
+		strokes, err = TemplateDrawingProvider{}.Plan(ctx, DrawingInput{Word: word, Profile: runtime.Profile})
+		if err != nil {
+			return
 		}
-		for _, stroke := range planner.Plan(word, runtime.Profile) {
-			completion := botActionCompletion{
-				Metadata: metadata,
-				Kind:     kind,
-				Strokes:  []DrawStroke{stroke},
-			}
-			select {
-			case r.botAction <- completion:
-			case <-ctx.Done():
-				return
-			case <-r.done:
-				return
-			default:
-				return
-			}
+	}
+	for _, stroke := range limitDrawingStrokes(strokes, policy.MaxDrawingStrokes) {
+		completion := botActionCompletion{
+			Metadata: metadata,
+			Kind:     botActionDraw,
+			Strokes:  []DrawStroke{stroke},
+		}
+		select {
+		case r.botAction <- completion:
+			fmt.Println("Successful sent completiton to bot action for bot drawer!")
+		case <-ctx.Done():
+			return
+		case <-r.done:
+			return
+		default:
+			return
+		}
 
-			timer := time.NewTimer(150 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return
-			case <-r.done:
-				timer.Stop()
-				return
-			case <-timer.C:
+		timer := time.NewTimer(policy.DrawStrokeDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-r.done:
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata) {
+	perception := BotPerception{RoundNo: metadata.RoundNo}
+	policy := behaviorPolicyFor(runtime.Profile)
+	attempted := make(map[string]struct{})
+	attempts := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-r.done:
+			return
+		case event := <-runtime.events:
+			if event.Metadata != metadata {
+				continue
+			}
+			switch event.Type {
+				
+			case botEventMaskedWord:
+				fmt.Println("maksed word sent to the runtime atleast")
+				perception.MaskedWord = event.MaskedWord
+				if attempts >= policy.MaxGuessAttempts || revealedLetterCount(perception.MaskedWord) < policy.MinRevealedLetters {
+					continue
+				}
+				provider := r.guessProvider
+				if provider == nil {
+					provider = DeterministicGuessProvider{}
+				}
+				input := GuessInput{
+					RoundNo:         perception.RoundNo,
+					MaskedWord:      perception.MaskedWord,
+					Strokes:         append([]DrawStroke(nil), perception.Strokes...),
+					PreviousGuesses: attemptedGuesses(attempted),
+				}
+				guess, err := provider.Guess(ctx, input)
+				if err != nil {
+					fmt.Println("Error found in provider.guess")
+					fmt.Println(err)
+					guess = validProviderGuess(perception.MaskedWord, guess, attempted)
+				}
+				if guess == "" {
+					fmt.Println("Empty guess")
+					guess, err = DeterministicGuessProvider{}.Guess(ctx, input)
+					if err != nil {
+						continue
+					}
+				}
+				guess = validProviderGuess(perception.MaskedWord, guess, attempted)
+				if guess == "" {
+					fmt.Println("Guess not valid my man")
+					continue
+				}
+
+				timer := time.NewTimer(policy.GuessDelay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-r.done:
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+
+				attempted[guess] = struct{}{}
+				attempts++
+				fmt.Println("Atleast runGueeserruntime called")
+				fmt.Println(guess)
+				_ = r.SubmitGuess(ctx, SubmitGuessCommand{
+					ParticipantID: runtime.BotID,
+					Text:          guess,
+					GameID:        metadata.GameID,
+					RoundNo:       metadata.RoundNo,
+				})
+			case botEventStroke:
+				// fmt.Println("bot event stroke sent to the runtime atleast")
+				if event.Stroke == nil {
+					continue
+				}
+				perception.Strokes = append(perception.Strokes, *event.Stroke)
+				if len(perception.Strokes) > 512 {
+					perception.Strokes = perception.Strokes[len(perception.Strokes)-512:]
+				}
 			}
 		}
-		return
+	}
+}
+
+func deterministicTemplateGuess(maskedWord string, attempted map[string]struct{}) string {
+	maskedWord = strings.ToLower(strings.TrimSpace(maskedWord))
+	if maskedWord == "" {
+		return ""
 	}
 
-	completion := botActionCompletion{Metadata: metadata, Kind: kind}
-	select {
-	case r.botAction <- completion:
-	case <-ctx.Done():
-	case <-r.done:
-	default:
+	candidates := templateCandidates()
+	for _, candidate := range candidates {
+		if _, alreadyTried := attempted[candidate]; alreadyTried || len(candidate) != len(maskedWord) {
+			continue
+		}
+
+		matches := true
+		for i := range candidate {
+			if maskedWord[i] != '_' && maskedWord[i] != candidate[i] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return candidate
+		}
 	}
+
+	return ""
 }
 
 func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
@@ -630,6 +786,8 @@ func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
 		stroke.ActorID = completion.Metadata.BotID
 		stroke.From = drawerName
 		stroke.RoomCode = roomCode
+		fmt.Println("This was called in handleBotActionCompleteds!")
+		fmt.Println(stroke)
 		r.handleDrawStroke(stroke)
 	}
 }

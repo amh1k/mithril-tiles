@@ -15,10 +15,10 @@ export const finalScoresResponseSchema = z.object({
 });
 
 export const participantPrincipalSchema = z.object({
-  type: z.enum(["user", "guest"]),
+  type: z.enum(["user", "guest", "bot"]),
   id: z.uuid(),
   display_name: z.string().min(1),
-  avatar_url: z.string().optional(),
+  avatar_url: z.string().nullable().optional(),
 });
 
 export const participantPrincipalResponseSchema = z.object({

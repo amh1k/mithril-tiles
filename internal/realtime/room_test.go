@@ -156,6 +156,83 @@ func TestDrawStrokeBeforeRoundDoesNotPanic(t *testing.T) {
 	})
 }
 
+func TestSnapshotIncludesBotTypeAndNullAvatar(t *testing.T) {
+	room, err := NewRoomUnitTest("bot-snapshot")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	viewer := &Player{Outgoing: make(chan string, 1)}
+	bot := &Player{Type: botPlayer, Principal: *data.NewBotPrincipal(&data.BotProfile{ID: uuid.New(), Name: "Snapshot Bot"})}
+	room.players[viewer] = true
+	room.players[bot] = true
+	room.handleSnapshotRequest()
+
+	var payload struct {
+		Data struct {
+			Players []struct {
+				Type      string  `json:"type"`
+				AvatarURL *string `json:"avatar_url"`
+			} `json:"players"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(<-viewer.Outgoing), &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, player := range payload.Data.Players {
+		if player.Type == "bot" && player.AvatarURL != nil {
+			t.Fatalf("expected null bot avatar, got %q", *player.AvatarURL)
+		}
+	}
+}
+
+func TestCorrectGuessPublishesStructuredResult(t *testing.T) {
+	room, err := NewRoomUnitTest("guess-result")
+	if err != nil {
+		t.Fatal(err)
+	}
+	player := &Player{Principal: data.Principal{Type: data.PrincipalUser, User: &data.User{ID: uuid.New(), DisplayName: "Guesser"}}, Outgoing: make(chan string, 2)}
+	room.players[player] = true
+	room.scores[player] = 0
+	room.startTime = time.Now()
+
+	room.handleCorrectGuess(player)
+	for range 2 {
+		message := <-player.Outgoing
+		if !strings.Contains(message, `"type":"guess_result"`) {
+			continue
+		}
+		if strings.Contains(message, `"word"`) || !strings.Contains(message, `"correct":true`) {
+			t.Fatalf("unexpected guess result payload: %s", message)
+		}
+		return
+	}
+	t.Fatal("expected structured guess result event")
+}
+
+func TestBehaviorPolicyUsesDifficultyAndStyleWithinLimits(t *testing.T) {
+	policy := behaviorPolicyFor(data.BotProfile{Difficulty: "hard", BehaviorStyle: "minimalist"})
+	if policy.GuessDelay != 400*time.Millisecond || policy.MaxGuessAttempts != 5 || policy.MinRevealedLetters != 1 {
+		t.Fatalf("unexpected hard guess policy: %+v", policy)
+	}
+	if policy.MaxDrawingStrokes != 3 || policy.DrawStrokeDelay != 80*time.Millisecond {
+		t.Fatalf("unexpected minimalist drawing policy: %+v", policy)
+	}
+
+	unknown := behaviorPolicyFor(data.BotProfile{Difficulty: "unknown", BehaviorStyle: "unknown"})
+	if unknown.MaxGuessAttempts != 3 || unknown.MaxDrawingStrokes != 64 {
+		t.Fatalf("unexpected fallback policy: %+v", unknown)
+	}
+}
+
+func TestLimitDrawingStrokesPreservesPlanEndpoints(t *testing.T) {
+	strokes := []DrawStroke{stroke(0, 0, 0.1, 0.1), stroke(0.1, 0.1, 0.2, 0.2), stroke(0.2, 0.2, 0.3, 0.3), stroke(0.3, 0.3, 0.4, 0.4)}
+	limited := limitDrawingStrokes(strokes, 2)
+	if len(limited) != 2 || limited[0] != strokes[0] || limited[1] != strokes[3] {
+		t.Fatalf("unexpected limited strokes: %+v", limited)
+	}
+}
+
 func TestBotDrawerCompletionBroadcastsStroke(t *testing.T) {
 	room, err := NewRoomUnitTest("bot-draw")
 	if err != nil {

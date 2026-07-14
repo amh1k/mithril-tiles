@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Archive, ScrollText, ShieldCheck, UsersRound } from "lucide-react";
+import { Archive, Bot, ScrollText, ShieldCheck, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
+import { BotProfileDashboard } from "@/features/admin/bot-profile-dashboard";
 import { lookupSession } from "@/features/auth/server/session";
 import { getSessionToken } from "@/lib/auth/session-cookie";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,15 @@ export default async function AdminDashboardPage() {
             </div>
           </article>
 
+          <article className="relative overflow-hidden rounded-t-[6rem] border border-[#946440]/75 bg-[linear-gradient(145deg,rgba(244,231,200,0.9),rgba(187,168,141,0.82)_45%,rgba(148,100,64,0.58)),url('/textures/parchment-background.png')] bg-cover p-6 pt-8 text-[#2b1e12] shadow-[0_16px_32px_rgba(43,30,18,0.28)] before:pointer-events-none before:absolute before:inset-2 before:rounded-t-[5.5rem] before:border before:border-[#5d542b]/30">
+            <div className="relative">
+              <span className="flex size-11 items-center justify-center rounded-t-full border border-[#5d542b]/50 bg-[#bba88d]/45 text-[#5d542b]"><Bot className="size-5" aria-hidden="true" /></span>
+              <h2 className="mt-5 text-xl font-bold">Bot profiles</h2>
+              <p className="mt-3 min-h-20 text-sm leading-6 text-[#3b2818]">Create and tune the computer players hosts can add to their rooms.</p>
+              <Link className={cn(buttonVariants(), "mt-6 bg-[#2b1e12] text-[#f4e7c8] hover:bg-[#5d542b]")} href="#bot-profiles">Manage bot profiles</Link>
+            </div>
+          </article>
+
           {comingSoon.map(({ icon: Icon, title, description }) => (
             <article
               className="relative overflow-hidden rounded-t-[6rem] border border-dashed border-[#946440]/65 bg-[#bba88d]/55 p-6 pt-8 text-[#2b1e12] shadow-[0_12px_26px_rgba(43,30,18,0.18)] before:pointer-events-none before:absolute before:inset-2 before:rounded-t-[5.5rem] before:border before:border-[#5d542b]/20"
@@ -104,6 +114,15 @@ export default async function AdminDashboardPage() {
             </article>
           ))}
         </div>
+
+        <section className="mt-10" id="bot-profiles">
+          <header className="mb-5 border-l-4 border-[#d7bd89] bg-[#2b1e12]/90 px-5 py-4 text-[#f4e7c8] shadow-[0_12px_26px_rgba(43,30,18,0.24)]">
+            <p className="font-heading text-xs tracking-[0.22em] text-[#d7bd89] uppercase">Fellowship roster</p>
+            <h2 className="font-heading mt-1 text-2xl font-semibold text-[#fff0cc]">Bot Profiles</h2>
+            <p className="mt-1 text-sm text-[#f4e7c8]">Manage the persistent bots that room hosts can choose from.</p>
+          </header>
+          <BotProfileDashboard />
+        </section>
       </section>
     </main>
   );

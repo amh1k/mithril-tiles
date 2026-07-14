@@ -50,6 +50,25 @@ func (r *Room) handleBroadcast(message string) {
 	}
 }
 
+func (r *Room) broadcastRealtimeEvent(message string) {
+	r.mu.Lock()
+	players := make([]*Player, 0, len(r.players))
+	for player := range r.players {
+		players = append(players, player)
+	}
+	r.mu.Unlock()
+
+	for _, player := range players {
+		if player.Type == botPlayer {
+			continue
+		}
+		select {
+		case player.Outgoing <- message:
+		default:
+		}
+	}
+}
+
 func (r *Room) handleJoin(request joinRequest) {
 	player := request.player
 	// if player.Conn == nil && player.Type == botPlayer {
@@ -236,6 +255,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 
 		case <-timer2.C:
 			tempArr := arr[:3]
@@ -247,6 +267,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 		case <-timer3.C:
 			tempArr := arr[:4]
 			wordToSend := maskedWordhelper(word, tempArr)
@@ -257,6 +278,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 
 		case <-ctx.Done():
 			return
@@ -339,10 +361,12 @@ func (r *Room) handleSnapshotRequest() {
 		snapshot.HostID = r.HostPlayer.Principal.ID()
 	}
 	for player := range r.players {
+		avatarURL := playerAvatarURL(player.Principal)
 		snapshot.Players = append(snapshot.Players, RoomPlayer{
 			ID:          player.Principal.ID(),
 			Type:        string(player.Principal.Type),
 			DisplayName: player.Principal.DisplayName(),
+			AvatarURL:   avatarURL,
 			IsConnected: true,
 		})
 	}
@@ -387,6 +411,18 @@ func (r *Room) handleSnapshotRequest() {
 			toClient: player,
 			message:  string(data),
 		})
+	}
+}
+
+func playerAvatarURL(principal data.Principal) *string {
+	switch {
+	case principal.IsUser() && principal.User.AvatarURL != "":
+		avatarURL := principal.User.AvatarURL
+		return &avatarURL
+	case principal.IsBot():
+		return principal.BotProfile.AvatarURL
+	default:
+		return nil
 	}
 }
 
@@ -456,7 +492,74 @@ func (r *Room) broadcastStroke(stroke DrawStroke) {
 
 		}
 	}
+	r.publishStrokeToGuessers(stroke)
 
+}
+
+func (r *Room) publishMaskedWordToGuessers(maskedWord string, roundNo int) {
+	r.mu.Lock()
+	if r.RoundState != RoundStateStarted || r.currentRoundNo != roundNo {
+		r.mu.Unlock()
+		return
+	}
+	gameID := r.gameID
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make(map[uuid.UUID]*BotRuntime, len(r.botRuntimes))
+	for botID, runtime := range r.botRuntimes {
+		runtimes[botID] = runtime
+	}
+	r.mu.Unlock()
+
+	for botID, runtime := range runtimes {
+		if botID == drawerID {
+			continue
+		}
+		select {
+		case runtime.events <- BotEvent{
+			Metadata:   BotActionMetadata{GameID: gameID, RoundNo: roundNo, BotID: botID},
+			Type:       botEventMaskedWord,
+			MaskedWord: maskedWord,
+		}:
+		default:
+		}
+	}
+}
+
+func (r *Room) publishStrokeToGuessers(stroke DrawStroke) {
+	r.mu.Lock()
+	if r.RoundState != RoundStateStarted {
+		r.mu.Unlock()
+		return
+	}
+	gameID := r.gameID
+	roundNo := r.currentRoundNo
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make(map[uuid.UUID]*BotRuntime, len(r.botRuntimes))
+	for botID, runtime := range r.botRuntimes {
+		runtimes[botID] = runtime
+	}
+	r.mu.Unlock()
+
+	for botID, runtime := range runtimes {
+		if botID == drawerID {
+			continue
+		}
+		strokeCopy := stroke
+		select {
+		case runtime.events <- BotEvent{
+			Metadata: BotActionMetadata{GameID: gameID, RoundNo: roundNo, BotID: botID},
+			Type:     botEventStroke,
+			Stroke:   &strokeCopy,
+		}:
+		default:
+		}
+	}
 }
 
 func (r *Room) canJoin() bool {
@@ -594,9 +697,9 @@ func (r *Room) startRound() {
 	r.startTime = result.StartedAt
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
+	r.startBotRuntimesForRound()
 	r.sendDrawerWord(drawer, result.Word, roundNumber)
 	r.startGuesserWord(result.Word, roundNumber)
-	r.startBotRuntimesForRound()
 
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
 
@@ -726,13 +829,13 @@ func (r *Room) handleGameStartCompleted(completion gameStartCompletion) {
 }
 
 func (r *Room) handleCorrectGuess(player *Player) {
-
 	r.scoresMu.Lock()
-	defer r.scoresMu.Unlock()
 	if _, eligible := r.scores[player]; !eligible {
+		r.scoresMu.Unlock()
 		return
 	}
 	if r.scores[player] > 0 {
+		r.scoresMu.Unlock()
 		select {
 		case player.Outgoing <- "You have already guessed brother":
 		default:
@@ -744,20 +847,24 @@ func (r *Room) handleCorrectGuess(player *Player) {
 	default:
 	}
 	diff := time.Since(r.startTime)
+	pointsAwarded := 1
 	key := newPrincipalScoreKey(player.Principal)
 	finalScore := r.globalScores[key]
 	finalScore.Principal = player.Principal
 	if diff < 10*time.Second {
 		r.scores[player] += 5
 		finalScore.Points += 5
+		pointsAwarded = 5
 
 	} else if diff < 30*time.Second {
 		r.scores[player] += 3
 		finalScore.Points += 3
+		pointsAwarded = 3
 
 	} else if diff < 50*time.Second {
 		r.scores[player] += 2
 		finalScore.Points += 2
+		pointsAwarded = 2
 
 	} else {
 		r.scores[player] += 1
@@ -767,6 +874,33 @@ func (r *Room) handleCorrectGuess(player *Player) {
 
 	r.globalScores[key] = finalScore
 	r.correctGuesses++
+	r.scoresMu.Unlock()
+
+	r.publishGuessResult(player, pointsAwarded)
+}
+
+func (r *Room) publishGuessResult(player *Player, pointsAwarded int) {
+	payload := struct {
+		Type string `json:"type"`
+		Data struct {
+			ParticipantID string `json:"participant_id"`
+			DisplayName   string `json:"display_name"`
+			Correct       bool   `json:"correct"`
+			PointsAwarded int    `json:"points_awarded"`
+		} `json:"data"`
+	}{
+		Type: "guess_result",
+	}
+	payload.Data.ParticipantID = player.Principal.ID().String()
+	payload.Data.DisplayName = player.Principal.DisplayName()
+	payload.Data.Correct = true
+	payload.Data.PointsAwarded = pointsAwarded
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	r.broadcastRealtimeEvent(string(encoded))
 }
 
 func (r *Room) handleGuess(command SubmitGuessCommand) {

@@ -6,6 +6,7 @@ import {
   parseRoomSocketMessage,
   type DrawStroke,
   type DrawerWord,
+  type GuessResult,
   type GuesserWord,
   type RealtimeRoomSnapshot,
 } from "@/features/realtime/protocol";
@@ -27,6 +28,7 @@ type RoomSocketState = {
   drawerWord: DrawerWord | null;
   errorMessage?: string;
   gameEndedAt: number | null;
+  guessResults: RoomGuessResult[];
   guesserWord: GuesserWord | null;
   hasReceivedSnapshot: boolean;
   messages: RoomChatMessage[];
@@ -50,6 +52,11 @@ export type RoomDrawStroke = {
   stroke: DrawStroke;
 };
 
+export type RoomGuessResult = {
+  id: number;
+  result: GuessResult;
+};
+
 type UseRoomSocketOptions = {
   roomCode: RoomCode;
   maxRetries?: number;
@@ -66,6 +73,7 @@ export function useRoomSocket({
   const socketRef = useRef<WebSocket | null>(null);
   const nextMessageIdRef = useRef(1);
   const nextStrokeIdRef = useRef(1);
+  const nextGuessResultIdRef = useRef(1);
   const ticketEndpoint = useMemo(
     () => `/api/rooms/${encodeURIComponent(roomCode)}/ticket`,
     [roomCode],
@@ -104,6 +112,7 @@ export function useRoomSocket({
     drawStrokes: [],
     drawerWord: null,
     gameEndedAt: null,
+    guessResults: [],
     guesserWord: null,
     hasReceivedSnapshot: false,
     messages: [],
@@ -236,6 +245,17 @@ export function useRoomSocket({
           return;
         }
 
+        if (parsedMessage.type === "guess_result") {
+          setState((currentState) => ({
+            ...currentState,
+            guessResults: appendBoundedGuessResult(currentState.guessResults, {
+              id: nextGuessResultIdRef.current++,
+              result: parsedMessage.guessResult,
+            }),
+          }));
+          return;
+        }
+
         if (parsedMessage.type === "room_snapshot") {
           setState((currentState) => {
             const previousRoundKey = activeRoundKey(currentState.roomSnapshot);
@@ -259,6 +279,10 @@ export function useRoomSocket({
               drawStrokes:
                 previousRoundKey === nextRoundKey
                   ? currentState.drawStrokes
+                  : [],
+              guessResults:
+                previousRoundKey === nextRoundKey
+                  ? currentState.guessResults
                   : [],
               roomSnapshot: parsedMessage.snapshot,
             };
@@ -468,4 +492,11 @@ function appendBoundedStroke(
   stroke: RoomDrawStroke,
 ): RoomDrawStroke[] {
   return [...strokes, stroke].slice(-MAX_DRAW_STROKES);
+}
+
+function appendBoundedGuessResult(
+  results: RoomGuessResult[],
+  result: RoomGuessResult,
+): RoomGuessResult[] {
+  return [...results, result].slice(-MAX_CHAT_MESSAGES);
 }
