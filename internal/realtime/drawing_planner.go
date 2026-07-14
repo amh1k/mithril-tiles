@@ -6,7 +6,6 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
-// DrawingPlanner produces normalized canvas strokes without accessing room state.
 type DrawingPlanner interface {
 	Plan(word string, profile data.BotProfile) []DrawStroke
 }

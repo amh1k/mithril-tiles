@@ -236,6 +236,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 
 		case <-timer2.C:
 			tempArr := arr[:3]
@@ -247,6 +248,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 		case <-timer3.C:
 			tempArr := arr[:4]
 			wordToSend := maskedWordhelper(word, tempArr)
@@ -257,6 +259,7 @@ func (r *Room) sendGuesserWord(word string, roundNumber int, ctx context.Context
 				continue
 			}
 			r.broadcast <- string(data)
+			r.publishMaskedWordToGuessers(wordToSend, roundNumber)
 
 		case <-ctx.Done():
 			return
@@ -456,7 +459,74 @@ func (r *Room) broadcastStroke(stroke DrawStroke) {
 
 		}
 	}
+	r.publishStrokeToGuessers(stroke)
 
+}
+
+func (r *Room) publishMaskedWordToGuessers(maskedWord string, roundNo int) {
+	r.mu.Lock()
+	if r.RoundState != RoundStateStarted || r.currentRoundNo != roundNo {
+		r.mu.Unlock()
+		return
+	}
+	gameID := r.gameID
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make(map[uuid.UUID]*BotRuntime, len(r.botRuntimes))
+	for botID, runtime := range r.botRuntimes {
+		runtimes[botID] = runtime
+	}
+	r.mu.Unlock()
+
+	for botID, runtime := range runtimes {
+		if botID == drawerID {
+			continue
+		}
+		select {
+		case runtime.events <- BotEvent{
+			Metadata:   BotActionMetadata{GameID: gameID, RoundNo: roundNo, BotID: botID},
+			Type:       botEventMaskedWord,
+			MaskedWord: maskedWord,
+		}:
+		default:
+		}
+	}
+}
+
+func (r *Room) publishStrokeToGuessers(stroke DrawStroke) {
+	r.mu.Lock()
+	if r.RoundState != RoundStateStarted {
+		r.mu.Unlock()
+		return
+	}
+	gameID := r.gameID
+	roundNo := r.currentRoundNo
+	drawerID := uuid.Nil
+	if r.currentDrawer != nil {
+		drawerID = r.currentDrawer.Principal.ID()
+	}
+	runtimes := make(map[uuid.UUID]*BotRuntime, len(r.botRuntimes))
+	for botID, runtime := range r.botRuntimes {
+		runtimes[botID] = runtime
+	}
+	r.mu.Unlock()
+
+	for botID, runtime := range runtimes {
+		if botID == drawerID {
+			continue
+		}
+		strokeCopy := stroke
+		select {
+		case runtime.events <- BotEvent{
+			Metadata: BotActionMetadata{GameID: gameID, RoundNo: roundNo, BotID: botID},
+			Type:     botEventStroke,
+			Stroke:   &strokeCopy,
+		}:
+		default:
+		}
+	}
 }
 
 func (r *Room) canJoin() bool {
@@ -594,9 +664,9 @@ func (r *Room) startRound() {
 	r.startTime = result.StartedAt
 	r.RoundState = RoundStateStarted
 	r.mu.Unlock()
+	r.startBotRuntimesForRound()
 	r.sendDrawerWord(drawer, result.Word, roundNumber)
 	r.startGuesserWord(result.Word, roundNumber)
-	r.startBotRuntimesForRound()
 
 	r.broadcast <- fmt.Sprintf("Round%d has started", r.currentRoundNo)
 

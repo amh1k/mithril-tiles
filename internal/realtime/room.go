@@ -3,6 +3,8 @@ package realtime
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -103,6 +105,7 @@ type RemoveBotCommand struct {
 type BotRuntime struct {
 	BotID   uuid.UUID
 	Profile data.BotProfile
+	events  chan BotEvent
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -112,6 +115,25 @@ type BotActionMetadata struct {
 	GameID  uuid.UUID
 	RoundNo int
 	BotID   uuid.UUID
+}
+type BotPerception struct {
+	RoundNo    int
+	MaskedWord string
+	Strokes    []DrawStroke
+}
+
+type botEventType string
+
+const (
+	botEventMaskedWord botEventType = "masked_word"
+	botEventStroke     botEventType = "stroke"
+)
+
+type BotEvent struct {
+	Metadata   BotActionMetadata
+	Type       botEventType
+	MaskedWord string
+	Stroke     *DrawStroke
 }
 
 type botActionKind string
@@ -520,22 +542,32 @@ func (r *Room) startBotRuntimesForRound() {
 		runtime := &BotRuntime{
 			BotID:   player.Principal.ID(),
 			Profile: *player.Principal.BotProfile,
+			events:  make(chan BotEvent, 128),
 			cancel:  cancel,
 			done:    make(chan struct{}),
 		}
 		r.botRuntimes[runtime.BotID] = runtime
 		runtimes = append(runtimes, runtime)
+		isDrawer := runtime.BotID == drawerID
+		drawerWord := ""
+		if isDrawer {
+			drawerWord = word
+		}
 		go r.runBotRuntime(ctx, runtime, BotActionMetadata{
 			GameID:  gameID,
 			RoundNo: roundNo,
 			BotID:   runtime.BotID,
-		}, runtime.BotID == drawerID, word)
+		}, isDrawer, drawerWord)
 	}
 	r.mu.Unlock()
 }
 
 func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata, isDrawer bool, word string) {
 	defer close(runtime.done)
+	if !isDrawer {
+		r.runGuesserRuntime(ctx, runtime, metadata)
+		return
+	}
 
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
@@ -548,50 +580,125 @@ func (r *Room) runBotRuntime(ctx context.Context, runtime *BotRuntime, metadata 
 	case <-timer.C:
 	}
 
-	kind := botActionGuess
-	if isDrawer {
-		kind = botActionDraw
-		planner := r.drawingPlanner
-		if planner == nil {
-			planner = TemplateDrawingPlanner{}
+	planner := r.drawingPlanner
+	if planner == nil {
+		planner = TemplateDrawingPlanner{}
+	}
+	for _, stroke := range planner.Plan(word, runtime.Profile) {
+		completion := botActionCompletion{
+			Metadata: metadata,
+			Kind:     botActionDraw,
+			Strokes:  []DrawStroke{stroke},
 		}
-		for _, stroke := range planner.Plan(word, runtime.Profile) {
-			completion := botActionCompletion{
-				Metadata: metadata,
-				Kind:     kind,
-				Strokes:  []DrawStroke{stroke},
-			}
-			select {
-			case r.botAction <- completion:
-			case <-ctx.Done():
-				return
-			case <-r.done:
-				return
-			default:
-				return
-			}
+		select {
+		case r.botAction <- completion:
+		case <-ctx.Done():
+			return
+		case <-r.done:
+			return
+		default:
+			return
+		}
 
-			timer := time.NewTimer(150 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return
-			case <-r.done:
-				timer.Stop()
-				return
-			case <-timer.C:
+		timer := time.NewTimer(150 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-r.done:
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func (r *Room) runGuesserRuntime(ctx context.Context, runtime *BotRuntime, metadata BotActionMetadata) {
+	perception := BotPerception{RoundNo: metadata.RoundNo}
+	attempted := make(map[string]struct{})
+	attempts := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-r.done:
+			return
+		case event := <-runtime.events:
+			if event.Metadata != metadata {
+				continue
+			}
+			switch event.Type {
+			case botEventMaskedWord:
+				perception.MaskedWord = event.MaskedWord
+				if attempts >= 3 {
+					continue
+				}
+				guess := deterministicTemplateGuess(perception.MaskedWord, attempted)
+				if guess == "" {
+					continue
+				}
+
+				timer := time.NewTimer(800 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return
+				case <-r.done:
+					timer.Stop()
+					return
+				case <-timer.C:
+				}
+
+				attempted[guess] = struct{}{}
+				attempts++
+				_ = r.SubmitGuess(ctx, SubmitGuessCommand{
+					ParticipantID: runtime.BotID,
+					Text:          guess,
+					GameID:        metadata.GameID,
+					RoundNo:       metadata.RoundNo,
+				})
+			case botEventStroke:
+				if event.Stroke == nil {
+					continue
+				}
+				perception.Strokes = append(perception.Strokes, *event.Stroke)
+				if len(perception.Strokes) > 512 {
+					perception.Strokes = perception.Strokes[len(perception.Strokes)-512:]
+				}
 			}
 		}
-		return
+	}
+}
+
+func deterministicTemplateGuess(maskedWord string, attempted map[string]struct{}) string {
+	maskedWord = strings.ToLower(strings.TrimSpace(maskedWord))
+	if maskedWord == "" {
+		return ""
 	}
 
-	completion := botActionCompletion{Metadata: metadata, Kind: kind}
-	select {
-	case r.botAction <- completion:
-	case <-ctx.Done():
-	case <-r.done:
-	default:
+	candidates := make([]string, 0, len(drawingTemplates))
+	for candidate := range drawingTemplates {
+		candidates = append(candidates, candidate)
 	}
+	sort.Strings(candidates)
+	for _, candidate := range candidates {
+		if _, alreadyTried := attempted[candidate]; alreadyTried || len(candidate) != len(maskedWord) {
+			continue
+		}
+
+		matches := true
+		for i := range candidate {
+			if maskedWord[i] != '_' && maskedWord[i] != candidate[i] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return candidate
+		}
+	}
+
+	return ""
 }
 
 func (r *Room) handleBotActionCompletion(completion botActionCompletion) {
