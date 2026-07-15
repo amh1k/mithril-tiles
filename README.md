@@ -9,6 +9,22 @@
 </p>
 
 <p align="center">
+  <strong>The Drawing Halls</strong><br />
+  <em>A Middle-earth-inspired home for every fellowship.</em>
+</p>
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
+    <img src="docs/images/mithril-tiles-hero-preview.gif" alt="Animated Mithril Tiles hero page preview" width="800" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>Into the game</strong><br />
+  <em>Draw, guess, and claim the final score.</em>
+</p>
+
+<p align="center">
   <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
     <img src="docs/images/mithril-tiles-gameplay-preview.gif" alt="Animated Mithril Tiles gameplay preview" width="800" />
   </a>
