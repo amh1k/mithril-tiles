@@ -1804,11 +1804,11 @@ function FinalScoresOverlay({
   const remainingScores = sortedScores.slice(3);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/85 px-4 py-6 backdrop-blur-sm animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#160f09]/90 px-4 py-6 backdrop-blur-sm animate-in fade-in duration-300">
       <div
         aria-labelledby="final-scores-title"
         aria-modal="true"
-        className="panel-enter relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border bg-card shadow-2xl"
+        className="panel-enter relative flex max-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-[#8a6538] bg-[#efe2c2] text-[#2b1b0d] shadow-2xl"
         role="dialog"
       >
         <Link
@@ -1818,9 +1818,9 @@ function FinalScoresOverlay({
         >
           <X className="size-4" aria-hidden="true" />
         </Link>
-        <div className="relative overflow-hidden border-b bg-primary/10 px-6 py-7 text-center">
-          <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-primary/20 blur-3xl" />
-          <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg">
+        <div className="relative overflow-hidden border-b border-[#9b7544] bg-[#dbc491] px-6 py-7 text-center">
+          <div className="absolute inset-x-8 top-0 h-24 rounded-full bg-[#a77a35]/25 blur-3xl" />
+          <div className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-[#563819] text-[#fff4d6] shadow-lg">
             <Trophy className="size-8 animate-pulse" aria-hidden="true" />
           </div>
           <h2
@@ -1829,7 +1829,7 @@ function FinalScoresOverlay({
           >
             Game over
           </h2>
-          <p className="relative mt-2 text-sm text-muted-foreground">
+          <p className="relative mt-2 text-sm text-[#5b4329]">
             {winner === undefined
               ? "Final rankings are ready."
               : `${finalScoreDisplayName(winner)} takes the crown.`}
@@ -1840,7 +1840,7 @@ function FinalScoresOverlay({
           {sortedScores.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-8 text-center">
               <p className="font-medium">Scores are still being prepared</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-[#644a2d]">
                 The game ended successfully, but no persisted scores were
                 returned yet.
               </p>
@@ -1854,7 +1854,7 @@ function FinalScoresOverlay({
               </div>
               {remainingScores.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#644a2d]">
                     Final standings
                   </p>
                   {remainingScores.map((score, index) => (
@@ -1882,15 +1882,15 @@ function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
     <div
       className={`panel-enter rounded-2xl border p-4 text-center ${
         score.is_winner
-          ? "border-amber-500/40 bg-amber-500/10"
-          : "bg-background/70"
+          ? "border-[#9a6a22] bg-[#e0c482]"
+          : "border-[#a98758] bg-[#f7edda]"
       }`}
       style={{ animationDelay: `${revealDelay}ms` }}
     >
-      <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
+      <div className="mx-auto flex size-11 items-center justify-center rounded-full bg-[#5a3a1c] text-base font-bold text-[#fff2d0]">
         #{score.final_rank}
       </div>
-      <p className="mt-3 truncate font-semibold">
+      <p className="mt-3 truncate font-semibold text-[#241609]">
         {finalScoreDisplayName(score)}
       </p>
       {score.is_winner && (
@@ -1898,10 +1898,10 @@ function ScorePodiumCard({ score }: { score: ResolvedGameFinalScore }) {
           Winner
         </span>
       )}
-      <p className="mt-3 text-2xl font-bold tabular-nums">
+      <p className="mt-3 text-2xl font-bold tabular-nums text-[#241609]">
         {score.final_score}
       </p>
-      <p className="text-xs text-muted-foreground">points</p>
+      <p className="text-xs text-[#644a2d]">points</p>
     </div>
   );
 }
@@ -1915,17 +1915,17 @@ function ScoreRow({
 }) {
   return (
     <div
-      className="panel-enter flex items-center gap-3 rounded-xl border bg-background/70 p-3"
+      className="panel-enter flex items-center gap-3 rounded-xl border border-[#a98758] bg-[#f7edda] p-3 text-[#241609]"
       style={{ animationDelay: `${560 + index * 70}ms` }}
     >
-      <span className="w-8 text-center text-sm font-bold text-muted-foreground">
+      <span className="w-8 text-center text-sm font-bold text-[#644a2d]">
         #{score.final_rank}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">
+        <p className="truncate text-sm font-semibold text-[#241609]">
           {finalScoreDisplayName(score)}
         </p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#644a2d]">
           {score.principal?.type === "user" ? "Registered player" : "Guest"}
         </p>
       </div>

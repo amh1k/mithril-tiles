@@ -659,14 +659,18 @@ func (r *Room) startRound() {
 	}
 	roundNumber := r.currentRoundNo + 1
 	players := make([]*Player, 0, len(r.players))
+	drawerCandidates := make([]*Player, 0, len(r.players))
 	for player := range r.players {
-		_, exists := r.trackDrawers[player]
-		if !exists {
-			players = append(players, player)
+		players = append(players, player)
+		if _, hasDrawn := r.trackDrawers[player]; !hasDrawn {
+			drawerCandidates = append(drawerCandidates, player)
 		}
-		
 	}
-	drawer := players[rand.Intn(len(players))]
+	if len(drawerCandidates) == 0 {
+		clear(r.trackDrawers)
+		drawerCandidates = append(drawerCandidates, players...)
+	}
+	drawer := drawerCandidates[rand.Intn(len(drawerCandidates))]
 	r.trackDrawers[drawer] = 1
 	r.mu.Unlock()
 	participants := make([]data.Principal, 0, len(players))
@@ -748,7 +752,7 @@ func (r *Room) handleStartGame(command gameStartCommand) {
 			players = append(players, player)
 
 		}
-		
+
 	}
 	host := r.HostPlayer
 	drawer := players[rand.Intn(len(players))]

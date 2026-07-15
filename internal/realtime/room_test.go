@@ -12,6 +12,27 @@ import (
 	"mithrilTiles.abdulmoiz.net/internal/data"
 )
 
+type roundStartLifecycleStub struct {
+	request RoundStartRequest
+}
+
+func (s *roundStartLifecycleStub) StartGame(context.Context, GamePersistenceRequest) (*GamePersistenceResult, error) {
+	return nil, errors.New("unexpected StartGame call")
+}
+
+func (s *roundStartLifecycleStub) StartRound(_ context.Context, request RoundStartRequest) (*RoundStartResult, error) {
+	s.request = request
+	return &RoundStartResult{Word: "tree", StartedAt: time.Now()}, nil
+}
+
+func (s *roundStartLifecycleStub) EndRound(context.Context, RoundEndRequest) error {
+	return errors.New("unexpected EndRound call")
+}
+
+func (s *roundStartLifecycleStub) EndGame(context.Context, GameEndRequest) (*GameEndResult, error) {
+	return nil, errors.New("unexpected EndGame call")
+}
+
 func TestBroadcast(t *testing.T) {
 	roomTest, err := NewRoomUnitTest("abc")
 	if err != nil {
@@ -208,6 +229,60 @@ func TestCorrectGuessPublishesStructuredResult(t *testing.T) {
 		return
 	}
 	t.Fatal("expected structured guess result event")
+}
+
+func TestPreviousDrawerCanGuessInNextRound(t *testing.T) {
+	lifecycle := &roundStartLifecycleStub{}
+	room, err := NewRoom("round-rotation", lifecycle, func(string) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(room.close)
+	room.broadcast = make(chan string, 10)
+
+	previousDrawer := &Player{
+		Type: humanPlayer,
+		Principal: data.Principal{Type: data.PrincipalUser, User: &data.User{
+			ID:          uuid.New(),
+			DisplayName: "First Drawer",
+		}},
+		Outgoing: make(chan string, 10),
+	}
+	nextDrawer := &Player{
+		Type: humanPlayer,
+		Principal: data.Principal{Type: data.PrincipalGuest, GuestSession: &data.GuestSession{
+			ID:          uuid.New(),
+			DisplayName: "Second Drawer",
+		}},
+		Outgoing: make(chan string, 10),
+	}
+	room.players[previousDrawer] = true
+	room.players[nextDrawer] = true
+	room.gameState = GameStateStarted
+	room.currentRoundNo = 1
+	room.trackDrawers[previousDrawer] = 1
+
+	room.startRound()
+
+	if room.currentDrawer != nextDrawer {
+		t.Fatal("expected drawer rotation to select the player who has not drawn")
+	}
+	if len(lifecycle.request.Participants) != 2 {
+		t.Fatalf("expected both players in round persistence, got %d", len(lifecycle.request.Participants))
+	}
+	if _, eligible := room.scores[previousDrawer]; !eligible {
+		t.Fatal("previous drawer was excluded from next-round guess eligibility")
+	}
+
+	room.handleGuess(SubmitGuessCommand{
+		ParticipantID: previousDrawer.Principal.ID(),
+		Text:          "tree",
+		GameID:        room.gameID,
+		RoundNo:       room.currentRoundNo,
+	})
+	if room.scores[previousDrawer] == 0 {
+		t.Fatal("previous drawer's correct second-round guess was not scored")
+	}
 }
 
 func TestBehaviorPolicyUsesDifficultyAndStyleWithinLimits(t *testing.T) {
