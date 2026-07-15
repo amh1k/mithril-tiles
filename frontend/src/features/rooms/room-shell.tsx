@@ -44,7 +44,10 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { Principal } from "@/features/auth/schemas";
-import { DrawingCanvas } from "@/features/drawing/drawing-canvas";
+import {
+  CANVAS_PARCHMENT_COLOR,
+  DrawingCanvas,
+} from "@/features/drawing/drawing-canvas";
 import {
   useRoomSocket,
   type RoomSocketStatus,
@@ -110,7 +113,7 @@ const DRAWING_COLORS = [
     value: "#ec4899",
   },
 ];
-const ERASER_COLOR = "#ffffff";
+const ERASER_COLOR = CANVAS_PARCHMENT_COLOR;
 const BRUSH_SIZES = [
   { label: "Fine", value: 0.006 },
   { label: "Medium", value: 0.012 },
@@ -755,8 +758,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
       <RoundTransitionOverlay transition={roundTransition} />
 
       <section className="grid min-h-0 gap-4 lg:h-[42rem] lg:grid-cols-[15rem_minmax(0,1fr)_19rem] xl:h-[46rem] xl:grid-cols-[17rem_minmax(0,1fr)_21rem]">
-        <Card className="order-2 min-h-0 gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:order-1">
-          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
+        <Card className="order-2 min-h-0 gap-0 overflow-hidden border-[#9b7449]/70 bg-[#24170f] py-0 text-[#f8ecd8] shadow-[0_18px_46px_rgba(24,14,8,0.4)] lg:order-1">
+          <CardHeader className="border-b border-[#9b7449]/45 bg-[#1b100a] py-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-[#fff7e7]">Players</CardTitle>
@@ -779,7 +782,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             </div>
 
             {isCurrentPlayerHost ? (
-              <div className="space-y-3 rounded-2xl border border-[#a68a58]/45 bg-[#18231b] p-3.5 text-[#f8f0df] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <div className="space-y-3 rounded-2xl border border-[#9b7449]/50 bg-[#302016] p-3.5 text-[#f8ecd8] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                 <p className="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-[#d3b878]">
                   <Crown className="size-3.5" aria-hidden="true" />
                   Host authority
@@ -818,9 +821,9 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                 )}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-[#a68a58]/60 bg-[#fffaf0] p-3.5 text-sm">
-                <p className="font-heading font-semibold text-[#2b1e12]">Awaiting the host’s command</p>
-                <p className="mt-1 text-xs leading-5 text-[#5d542b]">
+              <div className="rounded-2xl border border-dashed border-[#9b7449]/65 bg-[#352318] p-3.5 text-sm">
+                <p className="font-heading font-semibold text-[#fff1d6]">Awaiting the host’s command</p>
+                <p className="mt-1 text-xs leading-5 text-[#d4c0a0]">
                   The host will start the game when everyone is ready.
                 </p>
               </div>
@@ -836,13 +839,13 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
         </Card>
 
         <Card
-          className={`order-1 min-h-[30rem] gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:order-2 lg:min-h-0 ${
+          className={`order-1 min-h-[30rem] gap-0 overflow-hidden border-[#9b7449]/70 bg-[#24170f] py-0 text-[#f8ecd8] shadow-[0_18px_46px_rgba(24,14,8,0.4)] lg:order-2 lg:min-h-0 ${
             roomSnapshot.phase === "active_round"
               ? "border-primary/30 shadow-lg shadow-primary/5"
               : ""
           }`}
         >
-          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
+          <CardHeader className="border-b border-[#9b7449]/45 bg-[#1b100a] py-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -900,7 +903,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                         key={color.value}
                         aria-checked={drawingColor === color.value}
                         aria-label={color.label}
-                        className="relative flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/65 ring-offset-[#101812] transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
+                        className="relative flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/65 ring-offset-[#1b100a] transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
                         onClick={() => setDrawingColor(color.value)}
                         role="radio"
                         style={{
@@ -919,7 +922,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                     <button
                       aria-checked={isErasing}
                       aria-label="Eraser"
-                      className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/65 bg-white text-slate-900 ring-offset-[#101812] transition-[transform,box-shadow] duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
+                      className="flex size-11 touch-manipulation items-center justify-center rounded-full border border-[#d3b878]/70 bg-[#8d6b45] text-[#fff1d6] ring-offset-[#1b100a] transition-[transform,background-color,box-shadow] duration-200 hover:scale-105 hover:bg-[#a27d51] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 active:scale-95 aria-checked:bg-[#d3b878] aria-checked:text-[#24170f] aria-checked:ring-2 aria-checked:ring-[#e5c982] aria-checked:ring-offset-2"
                       onClick={() => setDrawingColor(ERASER_COLOR)}
                       role="radio"
                       type="button"
@@ -942,7 +945,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
                         key={size.label}
                         aria-checked={brushSize === size.value}
                         aria-label={`${size.label} brush`}
-                        className="flex size-11 touch-manipulation items-center justify-center rounded-lg border border-[#d3b878]/65 bg-[#fffaf0] text-[#182018] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 focus-visible:ring-offset-[#101812] active:translate-y-0 aria-checked:border-[#e5c982] aria-checked:bg-[#d3b878] aria-checked:text-[#101812]"
+                        className="flex size-11 touch-manipulation items-center justify-center rounded-lg border border-[#9b7449]/70 bg-[#3a281b] text-[#ead9bd] transition-[transform,background-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:bg-[#4a3322] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e5c982] focus-visible:ring-offset-2 focus-visible:ring-offset-[#1b100a] active:translate-y-0 aria-checked:border-[#e5c982] aria-checked:bg-[#d3b878] aria-checked:text-[#24170f]"
                         onClick={() => setBrushSize(size.value)}
                         role="radio"
                         title={`${size.label} brush`}
@@ -979,8 +982,8 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
           </CardContent>
         </Card>
 
-        <Card className="order-3 min-h-0 max-h-[36rem] gap-0 overflow-hidden border-[#a68a58]/70 bg-[#101812] py-0 text-[#f8f0df] shadow-[0_18px_46px_rgba(10,15,11,0.34)] lg:max-h-none">
-          <CardHeader className="border-b border-[#a68a58]/40 bg-[#101812] py-4">
+        <Card className="order-3 min-h-0 max-h-[36rem] gap-0 overflow-hidden border-[#9b7449]/70 bg-[#24170f] py-0 text-[#f8ecd8] shadow-[0_18px_46px_rgba(24,14,8,0.4)] lg:max-h-none">
+          <CardHeader className="border-b border-[#9b7449]/45 bg-[#1b100a] py-4">
             <CardTitle className="text-[#fff7e7]">Chat & guesses</CardTitle>
             <CardDescription className="text-[#d8c7aa]">
               {roomSnapshot.phase === "active_round"
@@ -992,21 +995,21 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
             <div
               ref={chatMessageListRef}
               data-testid="chat-message-list"
-              className="flex min-h-[18rem] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-xl border border-[#a68a58]/55 bg-[#fffaf0] p-3 text-sm text-[#182018] shadow-[inset_0_2px_8px_rgba(16,24,18,0.14)] lg:min-h-0 dark:bg-[#fffaf0] dark:text-[#182018]"
+              className="flex min-h-[18rem] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-xl border border-[#9b7449]/60 bg-[#352318] p-3 text-sm text-[#f6e8d0] shadow-[inset_0_2px_10px_rgba(16,8,4,0.35)] lg:min-h-0 dark:bg-[#352318] dark:text-[#f6e8d0]"
               aria-live="polite"
               onScroll={handleChatListScroll}
             >
               {socket.guessResults.map(({ id, result }) => (
                 <p
                   key={`guess-result-${id}`}
-                  className="status-enter rounded-md border border-emerald-800/25 bg-emerald-100 px-2 py-1.5 text-emerald-950 dark:bg-emerald-100 dark:text-emerald-950"
+                  className="status-enter rounded-md border border-[#71845c]/45 bg-[#30402b] px-2 py-1.5 text-[#e8f0d5] dark:bg-[#30402b] dark:text-[#e8f0d5]"
                 >
                   <span className="font-medium">{result.display_name}</span>{" "}
                   guessed correctly (+{result.points_awarded} pts)
                 </p>
               ))}
               {socket.messages.length === 0 && socket.guessResults.length === 0 ? (
-                <p className="text-[#6d563e]">
+                <p className="text-[#c5b292]">
                   {roomSnapshot.phase === "active_round"
                     ? "Guesses and room activity will appear here."
                     : "No chat messages yet."}
@@ -1025,7 +1028,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
 
             {unreadMessageCount > 0 && (
               <Button
-                className="status-enter self-center border-[#a68a58]/60 bg-[#fffaf0] text-[#182018] hover:bg-white dark:border-[#a68a58]/60 dark:bg-[#fffaf0] dark:text-[#182018] dark:hover:bg-white"
+                className="status-enter self-center border-[#9b7449]/65 bg-[#3a281b] text-[#f6e8d0] hover:bg-[#4a3322] dark:border-[#9b7449]/65 dark:bg-[#3a281b] dark:text-[#f6e8d0] dark:hover:bg-[#4a3322]"
                 onClick={scrollChatToLatestMessage}
                 size="sm"
                 type="button"
@@ -1039,7 +1042,7 @@ export function RoomShell({ principal, roomCode }: RoomShellProps) {
               <Input
                 aria-label="Chat message"
                 autoComplete="off"
-                className="border-[#a68a58]/60 bg-[#fffaf0] text-[#182018] placeholder:text-[#665d4c] focus-visible:border-[#d3b878] focus-visible:ring-[#d3b878]/35 disabled:bg-[#d9d3c5] dark:bg-[#fffaf0] dark:text-[#182018] dark:disabled:bg-[#d9d3c5]"
+                className="border-[#9b7449]/65 bg-[#352318] text-[#f6e8d0] placeholder:text-[#b9a689] focus-visible:border-[#d3b878] focus-visible:ring-[#d3b878]/35 disabled:bg-[#2a1d15] disabled:text-[#9d8c73] dark:bg-[#352318] dark:text-[#f6e8d0] dark:disabled:bg-[#2a1d15]"
                 disabled={socket.status !== "connected"}
                 onChange={(event) => setChatMessage(event.target.value)}
                 placeholder={
@@ -1114,7 +1117,7 @@ function BotLobbyControls({
       <div className="flex gap-2">
         <select
           aria-label="Bot profile"
-          className="h-9 min-w-0 flex-1 rounded-lg border border-[#c89b52]/60 bg-[#f4ead7] px-2 text-sm font-medium text-[#2b1e12] outline-none focus:border-[#e0b66f] focus:ring-2 focus:ring-[#c89b52]/30"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-[#c89b52]/60 bg-[#3a281b] px-2 text-sm font-medium text-[#f6e8d0] outline-none focus:border-[#e0b66f] focus:ring-2 focus:ring-[#c89b52]/30"
           disabled={status !== "ready" || isPending || availableProfiles.length === 0}
           onChange={(event) => onSelect(event.target.value)}
           value={selectedAvailableProfileId}
@@ -1480,7 +1483,7 @@ type PlayerCardProps = {
 function PlayerCard({ player, rank }: PlayerCardProps) {
   return (
     <div
-      className="player-card-enter rounded-xl border border-[#a68a58]/45 bg-[#fffaf0] p-3 text-[#182018] transition-[border-color,box-shadow] duration-200 hover:border-[#a68a58] hover:shadow-sm dark:bg-[#fffaf0] dark:text-[#182018]"
+      className="player-card-enter rounded-xl border border-[#8f6a43]/55 bg-[#352318] p-3 text-[#f6e8d0] transition-[border-color,background-color,box-shadow] duration-200 hover:border-[#c19a62] hover:bg-[#3d291c] hover:shadow-sm dark:bg-[#352318] dark:text-[#f6e8d0]"
       style={{ "--player-index": rank - 1 } as CSSProperties}
     >
       <div className="flex items-center gap-3">
@@ -1494,10 +1497,10 @@ function PlayerCard({ player, rank }: PlayerCardProps) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-semibold text-[#2b1e12]">{player.displayName}</p>
+            <p className="truncate text-sm font-semibold text-[#fff1d6]">{player.displayName}</p>
             <span
               key={player.score}
-              className="score-pop inline-block text-xs font-bold text-[#5d542b]"
+              className="score-pop inline-block text-xs font-bold text-[#d7bd89]"
               aria-label={`${player.score} points`}
             >
               {player.score} pts
@@ -1524,7 +1527,7 @@ type PlayerBadgeProps = {
 
 function PlayerBadge({ icon: Icon, label }: PlayerBadgeProps) {
   return (
-    <span className="status-enter inline-flex items-center gap-1 rounded-full border border-[#946440]/30 bg-[#f4ead7]/30 px-2 py-0.5 text-[0.65rem] font-semibold capitalize text-[#5d542b]">
+    <span className="status-enter inline-flex items-center gap-1 rounded-full border border-[#a98252]/45 bg-[#24170f] px-2 py-0.5 text-[0.65rem] font-semibold capitalize text-[#e0cda9]">
       <Icon className="size-3" aria-hidden="true" />
       {label}
     </span>
@@ -1539,20 +1542,20 @@ type WordPackStatusProps = {
 function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   if (status === "ready" && wordPack !== null) {
     return (
-      <div className="status-enter rounded-xl border border-[#a68a58]/55 bg-[#fffaf0] p-3 text-[#182018] shadow-sm dark:bg-[#fffaf0] dark:text-[#182018]">
+      <div className="status-enter rounded-xl border border-[#9b7449]/60 bg-[#352318] p-3 text-[#f6e8d0] shadow-sm dark:bg-[#352318] dark:text-[#f6e8d0]">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#946440]/40 bg-[#2b1e12] text-[#e4d4bc]">
             <Palette className="size-4" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[#6a5436]">
+            <p className="text-[0.62rem] font-bold uppercase tracking-[0.16em] text-[#d7bd89]">
               Sealed word pack
             </p>
-            <p className="mt-0.5 truncate text-sm font-bold text-[#182018]">
+            <p className="mt-0.5 truncate text-sm font-bold text-[#fff1d6]">
               {wordPack.name}
             </p>
             {wordPack.description && (
-              <p className="mt-1 line-clamp-2 text-xs text-[#5e584b]">
+              <p className="mt-1 line-clamp-2 text-xs text-[#cdbb9f]">
                 {wordPack.description}
               </p>
             )}
@@ -1572,7 +1575,7 @@ function WordPackStatus({ status, wordPack }: WordPackStatusProps) {
   }
 
   return (
-    <div className="rounded-xl border border-dashed border-[#a68a58]/55 bg-[#fffaf0] p-3 text-xs font-medium text-[#4f493e] dark:bg-[#fffaf0] dark:text-[#4f493e]">
+    <div className="rounded-xl border border-dashed border-[#9b7449]/60 bg-[#352318] p-3 text-xs font-medium text-[#d8c7aa] dark:bg-[#352318] dark:text-[#d8c7aa]">
       Seal a word pack before the host begins the game.
     </div>
   );

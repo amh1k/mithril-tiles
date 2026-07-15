@@ -10,6 +10,8 @@ import {
 import type { DrawStroke } from "@/features/realtime/protocol";
 import { cn } from "@/lib/utils";
 
+export const CANVAS_PARCHMENT_COLOR = "#f3e7cf";
+
 type LocalStrokeSegment = {
   brushSize: number;
   color: string;
@@ -174,7 +176,7 @@ export function DrawingCanvas({
   return (
     <div
       className={cn(
-        "relative min-h-[22rem] flex-1 overflow-hidden rounded-xl border bg-white shadow-inner",
+        "relative min-h-[22rem] flex-1 overflow-hidden rounded-xl border border-[#9b7449]/65 bg-[#f3e7cf] shadow-[inset_0_2px_12px_rgba(85,55,32,0.14)]",
         className,
       )}
     >
@@ -196,13 +198,13 @@ export function DrawingCanvas({
       />
 
       {disabled && (
-        <div className="pointer-events-none absolute left-3 top-3 rounded-full border bg-background/85 px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur">
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-[#8c6742]/55 bg-[#3a281b]/90 px-3 py-1 text-xs font-medium text-[#f4e4c8] shadow-sm backdrop-blur">
           Viewing only
         </div>
       )}
 
       {!canvasReady && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-medium text-[#71583f]">
           Preparing canvas…
         </div>
       )}

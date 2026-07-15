@@ -141,7 +141,7 @@ export function RoomEntry({ displayName }: RoomEntryProps) {
                   id="room-code"
                   autoCapitalize="characters"
                   autoComplete="off"
-                  className="h-12 border-[#946440]/70 bg-[#f0e2cd]/55 text-center font-heading text-base tracking-[0.2em] uppercase placeholder:tracking-[0.2em]"
+                  className="h-12 border-[#5d3d27]/75 bg-[#f3e3c8] text-center font-heading text-base font-bold tracking-[0.2em] text-[#24170f] uppercase caret-[#5d3d27] selection:bg-[#946440]/35 placeholder:text-[#7b6248] placeholder:tracking-[0.2em] focus-visible:border-[#5d3d27] focus-visible:ring-[#946440]/35 disabled:bg-[#d8c4a5] disabled:text-[#5d4a38] dark:bg-[#f3e3c8] dark:text-[#24170f] dark:placeholder:text-[#7b6248] dark:disabled:bg-[#d8c4a5]"
                   placeholder="ROOM01"
                   aria-describedby={
                     errors.room_code ? "room-code-error" : undefined

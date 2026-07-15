@@ -25,6 +25,7 @@ vi.mock("@/features/realtime/use-room-socket", () => ({
 }));
 
 vi.mock("@/features/drawing/drawing-canvas", () => ({
+  CANVAS_PARCHMENT_COLOR: "#f3e7cf",
   DrawingCanvas: drawingCanvasMock,
 }));
 
