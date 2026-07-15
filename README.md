@@ -5,12 +5,14 @@
 </p>
 
 <p align="center">
-  <a href="./mithril-tiles-vid.mp4">Watch the Mithril Tiles gameplay demo</a>
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">Watch the full Mithril Tiles gameplay demo</a>
 </p>
 
-<video src="./mithril-tiles-vid.mp4" controls muted playsinline width="100%">
-  Your browser does not support embedded video. <a href="./mithril-tiles-vid.mp4">Watch the gameplay demo</a>.
-</video>
+<p align="center">
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
+    <img src="docs/images/mithril-tiles-gameplay-preview.gif" alt="Animated Mithril Tiles gameplay preview" width="800" />
+  </a>
+</p>
 
 Mithril Tiles turns the classic draw-and-guess party game into a shared realtime experience with a Middle-earth-inspired visual world. Create a room, gather a company, choose a word pack, race against the round clock, and see the final standings when the game ends.
 
