@@ -27,7 +27,7 @@ Mithril Tiles transforms the familiar draw-and-guess party game into a complete 
 This is not a static frontend demonstration. It is a full game system with authenticated identities, guest access, realtime WebSockets, authoritative room state, cross-device canvas input, round rotation, bot participants, and PostgreSQL-backed results.
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4"><strong>Watch the full gameplay showcase</strong></a>
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-demo.mp4"><strong>Watch the full gameplay showcase</strong></a>
 </p>
 
 ## The Experience
@@ -38,7 +38,7 @@ This is not a static frontend demonstration. It is a full game system with authe
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-demo.mp4">
     <img src="docs/images/mithril-tiles-hero-preview.gif" alt="Mithril Tiles animated hero page with a Middle-earth map and Call of Mithril action" width="800" />
   </a>
 </p>
@@ -49,7 +49,7 @@ This is not a static frontend demonstration. It is a full game system with authe
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-demo.mp4">
     <img src="docs/images/mithril-tiles-gameplay-preview.gif" alt="Mithril Tiles realtime room with players, drawing canvas, chat, guesses, and round timer" width="800" />
   </a>
 </p>
