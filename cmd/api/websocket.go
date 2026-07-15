@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -19,6 +20,9 @@ func (app *application) createWebSocketTicketHandler(w http.ResponseWriter, r *h
 	roomID := params.ByName("roomID")
 	if roomID == "" {
 		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	if !app.ensureRoomCodePlayable(w, r, roomID) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
@@ -45,6 +49,9 @@ func (app *application) handleWebSocket(w http.ResponseWriter, r *http.Request) 
 	roomID := params.ByName("roomID")
 	if roomID == "" {
 		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	if !app.ensureRoomCodePlayable(w, r, roomID) {
 		return
 	}
 
@@ -111,6 +118,9 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 		app.badRequestResponse(w, r, errors.New("word_pack_id must be provided"))
 		return
 	}
+	if !app.ensureRoomCodeUnused(w, r, roomCode) {
+		return
+	}
 	if len(input.SettingsSnapshot) == 0 {
 		input.SettingsSnapshot = json.RawMessage(`{}`)
 	}
@@ -154,4 +164,56 @@ func (app *application) handleStartGame(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 	}
+}
+
+func (app *application) ensureRoomCodePlayable(
+	w http.ResponseWriter,
+	r *http.Request,
+	roomCode string,
+) bool {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	hasClosedGame, err := app.models.Games.HasClosedForRoom(ctx, roomCode)
+	if err != nil {
+		app.serverErrorResponse(w, r, fmt.Errorf("check room code state: %w", err))
+		return false
+	}
+	if hasClosedGame {
+		app.errorResponse(
+			w,
+			r,
+			http.StatusConflict,
+			"this room code has already been used; choose a new room",
+		)
+		return false
+	}
+
+	return true
+}
+
+func (app *application) ensureRoomCodeUnused(
+	w http.ResponseWriter,
+	r *http.Request,
+	roomCode string,
+) bool {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	hasGame, err := app.models.Games.HasAnyForRoom(ctx, roomCode)
+	if err != nil {
+		app.serverErrorResponse(w, r, fmt.Errorf("check room code availability: %w", err))
+		return false
+	}
+	if hasGame {
+		app.errorResponse(
+			w,
+			r,
+			http.StatusConflict,
+			"this room code has already been used; choose a new room",
+		)
+		return false
+	}
+
+	return true
 }

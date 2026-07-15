@@ -27,6 +27,37 @@ type Game struct {
 	CreatedAt         time.Time       `json:"created_at"`
 }
 
+// HasAnyForRoom reports whether a room code has ever been used for a game.
+// Room codes are single-use because completed games cannot be reopened.
+func (m *GameModel) HasAnyForRoom(ctx context.Context, roomCode string) (bool, error) {
+	const query = `SELECT EXISTS (SELECT 1 FROM games WHERE room_code = $1)`
+
+	var exists bool
+	if err := m.DB.QueryRow(ctx, query, roomCode).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+// HasClosedForRoom reports whether a room's game reached a terminal state.
+func (m *GameModel) HasClosedForRoom(ctx context.Context, roomCode string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM games
+			WHERE room_code = $1
+				AND status IN ('completed', 'abandoned', 'cancelled')
+		)`
+
+	var exists bool
+	if err := m.DB.QueryRow(ctx, query, roomCode).Scan(&exists); err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
 func (m *GameModel) GetByIDForUpdate(
 	ctx context.Context,
 	tx pgx.Tx,

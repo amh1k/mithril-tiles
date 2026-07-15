@@ -263,8 +263,6 @@ Database-backed integration tests require Docker. The repository contains focuse
 
 Mithril Tiles already delivers its end-to-end multiplayer loop, from identity and room entry through realtime rounds and persisted final scores. Current work is focused on production hardening: richer reconnect recovery, realtime abuse controls, graceful shutdown, observability, CI, browser-level end-to-end coverage, and continued bot-quality improvements.
 
-The deeper engineering backlog is documented in [shortcomings.md](shortcomings.md), without defining the product by what remains to be built.
-
 ## Repository Guide
 
 ```text

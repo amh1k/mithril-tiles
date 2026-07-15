@@ -65,6 +65,10 @@ type UseRoomSocketOptions = {
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_CHAT_MESSAGES = 100;
 const MAX_DRAW_STROKES = 2_000;
+const ROOM_CODE_UNAVAILABLE_MESSAGE =
+  "This room has already completed a game. Return to play to choose another room.";
+
+class RoomCodeUnavailableError extends Error {}
 
 export function useRoomSocket({
   roomCode,
@@ -164,6 +168,15 @@ export function useRoomSocket({
         connectionInProgress = false;
 
         if (abortController.signal.aborted) {
+          return;
+        }
+
+        if (error instanceof RoomCodeUnavailableError) {
+          setState((currentState) => ({
+            ...currentState,
+            errorMessage: ROOM_CODE_UNAVAILABLE_MESSAGE,
+            status: "failed",
+          }));
           return;
         }
 
@@ -439,6 +452,9 @@ async function requestRoomTicket(
   });
 
   if (!response.ok) {
+    if (response.status === 409) {
+      throw new RoomCodeUnavailableError();
+    }
     throw new Error("The realtime ticket request was rejected.");
   }
 

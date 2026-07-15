@@ -179,6 +179,9 @@ func (app *application) insertBotToRoom(w http.ResponseWriter, r *http.Request) 
 		app.badRequestResponse(w, r, errors.New("missing room id"))
 		return
 	}
+	if !app.ensureRoomCodePlayable(w, r, roomID) {
+		return
+	}
 	room, err := app.roomManager.GetOrCreateRoom(roomID)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
@@ -235,6 +238,9 @@ func (app *application) deleteBotFromRoom(w http.ResponseWriter, r *http.Request
 	roomID := params.ByName("roomID")
 	if roomID == "" {
 		app.badRequestResponse(w, r, errors.New("missing room id"))
+		return
+	}
+	if !app.ensureRoomCodePlayable(w, r, roomID) {
 		return
 	}
 	room, err := app.roomManager.GetOrCreateRoom(roomID)
