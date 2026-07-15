@@ -1,162 +1,204 @@
-# Mithril Tiles
+<p align="center">
+  <img src="frontend/public/images/logo-gold.png" alt="Mithril Tiles" width="430" />
+</p>
+
+<h1 align="center">Gather. Draw. Guess.</h1>
 
 <p align="center">
-  <strong>A realtime drawing-and-guessing game for fellowships, friends, and rival wizards.</strong>
+  <strong>A realtime drawing-and-guessing adventure for fellowships, friends, and rival wizards.</strong>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">Watch the full Mithril Tiles gameplay demo</a>
+  Realtime rooms &nbsp;&bull;&nbsp; Shared canvas &nbsp;&bull;&nbsp; Persisted scores &nbsp;&bull;&nbsp; AI rivals
 </p>
 
 <p align="center">
-  <strong>The Drawing Halls</strong><br />
-  <em>A Middle-earth-inspired home for every fellowship.</em>
+  <a href="#the-experience">Experience</a> &middot;
+  <a href="#what-makes-it-special">Features</a> &middot;
+  <a href="#bots-enter-the-fellowship">Bots</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#run-it-locally">Run locally</a>
+</p>
+
+---
+
+Mithril Tiles transforms the familiar draw-and-guess party game into a complete Middle-earth-inspired multiplayer experience. Create a private room, gather a company, choose a word pack, race against the round clock, and discover whose score will be carved into the final standings.
+
+This is not a static frontend demonstration. It is a full game system with authenticated identities, guest access, realtime WebSockets, authoritative room state, cross-device canvas input, round rotation, bot participants, and PostgreSQL-backed results.
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4"><strong>Watch the full gameplay showcase</strong></a>
+</p>
+
+## The Experience
+
+<p align="center">
+  <strong>Enter the Drawing Halls</strong><br />
+  <sub>A manuscript-inspired landing experience calls every fellowship to the game.</sub>
 </p>
 
 <p align="center">
   <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
-    <img src="docs/images/mithril-tiles-hero-preview.gif" alt="Animated Mithril Tiles hero page preview" width="800" />
+    <img src="docs/images/mithril-tiles-hero-preview.gif" alt="Mithril Tiles animated hero page with a Middle-earth map and Call of Mithril action" width="800" />
   </a>
 </p>
 
 <p align="center">
-  <strong>Into the game</strong><br />
-  <em>Draw, guess, and claim the final score.</em>
+  <strong>Then take command of the canvas</strong><br />
+  <sub>Draw, decipher, score, and survive every round together in realtime.</sub>
 </p>
 
 <p align="center">
   <a href="https://raw.githubusercontent.com/amh1k/mithril-tiles/main/mithril-tiles-vid.mp4">
-    <img src="docs/images/mithril-tiles-gameplay-preview.gif" alt="Animated Mithril Tiles gameplay preview" width="800" />
+    <img src="docs/images/mithril-tiles-gameplay-preview.gif" alt="Mithril Tiles realtime room with players, drawing canvas, chat, guesses, and round timer" width="800" />
   </a>
 </p>
 
-Mithril Tiles turns the classic draw-and-guess party game into a shared realtime experience with a Middle-earth-inspired visual world. Create a room, gather a company, choose a word pack, race against the round clock, and see the final standings when the game ends.
+## One Room. A Complete Game.
 
-Built as a full-stack project, it combines a Go API and WebSocket room server, PostgreSQL persistence, and a Next.js frontend with a secure backend-for-frontend layer.
+1. **Enter quickly.** Create an account or choose a guest identity and reach the game without unnecessary friction.
+2. **Gather the fellowship.** Create a private room or join friends with a shareable room code.
+3. **Shape the match.** The host selects a word pack and can invite active bot profiles before starting.
+4. **Draw and decipher.** One participant receives the secret word while everyone else watches the shared canvas and submits guesses.
+5. **Rotate and compete.** The drawer changes between rounds, correct guesses earn authoritative points, and the game advances on the server.
+6. **Reveal the victor.** Completed rounds and final rankings are persisted and presented on the closing scoreboard.
 
-## What You Can Do
+## What Makes It Special
 
-- Create an account or enter as a guest.
-- Create private rooms or join an existing fellowship with a room code.
-- Pick a word pack and start a timed multiplayer game.
-- Draw with mouse, touch, or pen input on a shared canvas.
-- Submit guesses in realtime and receive authoritative score updates.
-- Rotate the drawer every round and finish with persisted final rankings.
-- Chat with the room while the game is in progress.
-- Add active bot profiles to a room before play begins.
-- Manage bot profiles from the administrator dashboard.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Realtime by design</h3>
+      Each room coordinates chat, drawing strokes, guesses, timers, participants, and lifecycle events through a dedicated in-memory room actor.
+    </td>
+    <td width="50%" valign="top">
+      <h3>An authoritative game loop</h3>
+      The server assigns drawers, protects secret words, verifies drawing identity, evaluates guesses, calculates scores, and controls round transitions.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>A canvas for every device</h3>
+      Mouse, touch, and pen input become normalized Canvas 2D strokes, keeping the drawing consistent across different viewport sizes.
+    </td>
+    <td width="50%" valign="top">
+      <h3>Identity without friction</h3>
+      Registered users and temporary guests share the same room model, while the frontend keeps backend credentials inside secure HttpOnly cookies.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Results that outlive the room</h3>
+      Games, participants, rounds, round scores, and final rankings are persisted in PostgreSQL instead of disappearing with the socket connection.
+    </td>
+    <td width="50%" valign="top">
+      <h3>A world, not a template</h3>
+      The interface carries one visual language from the hero page to authentication, room selection, live gameplay, administration, and final scores.
+    </td>
+  </tr>
+</table>
 
-## Gameplay At A Glance
+## More Than a Pretty Canvas
 
-```text
-Create or join a room
-        |
-Choose a word pack and gather players
-        |
-Host starts the game
-        |
-One drawer receives the secret word
-        |
-Shared canvas + realtime guesses + scoring
-        |
-Next drawer rotates in
-        |
-Final rankings are persisted and revealed
-```
+- **Private drawer knowledge:** the selected word is delivered only to the active drawer and never included in shared room snapshots.
+- **Stable participant identity:** drawing authorization and scoring use principal UUIDs rather than display names.
+- **Authoritative snapshots:** newly connected and reconnecting clients receive current membership, phase, drawer, timing, and score state.
+- **Secure browser sessions:** Next.js BFF routes keep backend bearer tokens away from client-side JavaScript.
+- **Purpose-built WebSocket access:** clients connect using short-lived, single-use tickets with explicit origin validation.
+- **Admin control:** administrators can manage word packs, words, and the persistent catalog of bot profiles.
+- **Bounded room history:** chat history is intentionally capped to keep long-lived rooms from growing without limit.
 
-The room server is authoritative. It assigns drawers, protects the secret word, validates drawing actors, evaluates guesses, manages scores, and writes completed game results to PostgreSQL.
+## Bots Enter the Fellowship
 
-## Product Highlights
+Bots are integrated participants, not decorative chat responses. Administrators create persistent bot profiles; hosts choose from active profiles before the match; and the room can assign a bot as either drawer or guesser.
 
-### Realtime multiplayer rooms
+| As the drawer | As a guesser |
+| --- | --- |
+| Receives the private word through its round-scoped runtime | Receives only public masked-word and drawing information |
+| Produces validated, normalized drawing strokes | Submits guesses through the same typed command path as humans |
+| Must pass the room's stable-ID drawer authorization | Must pass the same round, identity, and scoring checks |
 
-Every active room is an in-memory actor coordinating players, chat, canvas strokes, round progression, scores, and snapshots. Players connect through short-lived, single-use WebSocket tickets rather than exposing long-lived API credentials to the browser.
+Optional Groq, xAI Grok, and Gemini adapters can power bot drawing and guessing. Without an AI key, Mithril Tiles retains deterministic guessing and template-drawing fallbacks.
 
-### A canvas built for play
-
-The drawing experience supports mouse, touch, and pen input. Strokes are normalized before broadcast so every participant sees a consistent drawing regardless of screen size. Late room updates are synchronized through server snapshots.
-
-### Complete game history
-
-Games are more than temporary UI state. Mithril Tiles persists games, participants, rounds, round scores, and final scores, allowing the final scoreboard to be derived from authoritative results.
-
-### Guests and registered players
-
-People can join quickly as guests or create an account. The frontend keeps backend bearer tokens in HttpOnly cookies through its BFF routes, keeping them out of browser JavaScript.
-
-### Bot-enabled rooms
-
-Hosts can add administrator-managed bot profiles before a game starts. Bots participate through the same room rules as human players: they can be assigned as drawers or guessers, submit typed guesses, and receive the same round and score validation.
-
-Bot gameplay is an experimental enhancement rather than the core promise of the product. Deterministic fallbacks keep the room playable when an optional AI provider is unavailable; AI-generated line drawings and raw-stroke guessing are still being refined.
+> **Experimental frontier:** the bot architecture and complete gameplay path are working, while the quality of AI-generated line art and raw-stroke visual inference remains an active area of exploration. Human multiplayer is the heart of the experience; bots extend it when another challenger is needed.
 
 ## Architecture
 
 ```text
 Browser
   |
-  | HTTPS and authenticated BFF routes
+  | HTTPS: pages, authentication, and BFF requests
   v
-Next.js frontend
-  |- App Router UI
+Next.js 16 + React 19
+  |- themed product interface
   |- HttpOnly session-cookie management
-  `- WebSocket ticket requests
+  |- authenticated API forwarding
+  `- short-lived WebSocket ticket acquisition
   |
-  | short-lived WebSocket ticket
+  | direct WebSocket connection
   v
-Go API and realtime room server
-  |- HTTP handlers and authorization
-  |- room actors and game lifecycle
-  |- drawing, chat, guessing, and scoring
-  `- optional bot runtimes and AI adapters
+Go API + realtime room server
+  |- authentication and authorization middleware
+  |- room actors and authoritative game lifecycle
+  |- chat, drawing, guessing, scoring, and snapshots
+  `- round-scoped bot runtimes and provider adapters
   |
+  | pgx
   v
 PostgreSQL
-  |- users, guests, and bot profiles
+  |- users, guests, tokens, and bot profiles
   |- word packs and words
   `- games, participants, rounds, and scores
 ```
 
-For deeper implementation details, see [ARCHITECTURE.md](ARCHITECTURE.md), [database_design.md](database_design.md), and [frontend_spec.md](frontend_spec.md).
+The browser never receives the long-lived backend bearer token. Next.js stores it in an HttpOnly cookie and forwards authenticated HTTP requests from server-side route handlers. Realtime clients request a scoped ticket and then connect directly to the Go WebSocket server.
 
-## Technology
+Detailed engineering references:
 
-| Layer | Tools |
+- [System architecture](ARCHITECTURE.md)
+- [Database design](database_design.md)
+- [Frontend specification](frontend_spec.md)
+- [Bot implementation design](implementation_bot.md)
+
+## Built With
+
+| Area | Technology |
 | --- | --- |
-| API and realtime | Go, `net/http`, `httprouter`, `coder/websocket` |
-| Data | PostgreSQL, `pgx`, `golang-migrate` |
-| Frontend | Next.js App Router, React, TypeScript, Tailwind CSS |
-| Client state and validation | Zustand, TanStack Query, Zod |
-| Canvas | Native Canvas 2D and Pointer Events |
-| Tests | Go testing, Testcontainers, Vitest, React Testing Library |
+| Realtime backend | Go 1.26, `net/http`, `httprouter`, `coder/websocket` |
+| Persistence | PostgreSQL, `pgx`, `golang-migrate` |
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| State and validation | Zustand, TanStack Query, React Hook Form, Zod |
+| Drawing | Native Canvas 2D, Pointer Events, normalized strokes |
+| Verification | Go testing, Testcontainers, Vitest, React Testing Library |
 
-## Run Locally
+## Run It Locally
+
+<details>
+<summary><strong>Prerequisites and complete setup</strong></summary>
 
 ### Prerequisites
 
-- Go 1.26.3 or the version in [go.mod](go.mod)
-- Node.js 20.9+ and npm
+- Go 1.26.3 or the version declared in [go.mod](go.mod)
+- Node.js 20.9 or later and npm
 - PostgreSQL
-- Docker for Testcontainers-backed API tests
+- Docker when running Testcontainers-backed API tests
 
-### 1. Install the frontend
+### 1. Clone and install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/amh1k/mithril-tiles.git
 cd mithril-tiles
 cd frontend && npm install && cd ..
 ```
 
-### 2. Configure and start the API
+### 2. Start the API
 
 ```bash
 cp .env.example .env
 go run ./cmd/api
 ```
 
-The API starts on `http://localhost:4000` by default and applies database migrations during startup.
-
-At minimum, set the following in `.env`:
+Set the backend environment at minimum:
 
 ```dotenv
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/mithril_tiles?sslmode=disable
@@ -164,7 +206,9 @@ CORS_TRUSTED_ORIGINS=http://localhost:3000
 RATE_LIMIT_TRUSTED_PROXIES=
 ```
 
-### 3. Configure and start the frontend
+The API listens on `http://localhost:4000` by default and applies database migrations during startup.
+
+### 3. Start the frontend
 
 ```bash
 cp frontend/.env.local.example frontend/.env.local
@@ -172,7 +216,7 @@ cd frontend
 npm run dev
 ```
 
-Use these local defaults in `frontend/.env.local`:
+The local frontend environment uses:
 
 ```dotenv
 BACKEND_API_URL=http://localhost:4000
@@ -180,31 +224,24 @@ NEXT_PUBLIC_BACKEND_WS_URL=ws://localhost:4000
 APP_ORIGIN=http://localhost:3000
 ```
 
-Open `http://localhost:3000` to begin.
+Open `http://localhost:3000` and answer the Call of Mithril.
 
-## Bots And Optional AI Providers
+</details>
 
-Bot profiles are persistent records managed by administrators. Room hosts can only choose active profiles, and can add or remove them before gameplay begins. Difficulty and behavior style let each profile use a different pacing and drawing policy.
+### Optional bot providers
 
-At round start, a drawer bot receives the private target word. A guesser bot only receives public information, such as masked-word updates and canvas strokes. The room server remains the authority for round identity, drawing permission, score changes, and persistence.
+Only one provider is selected at startup. Precedence follows the order below.
 
-Optional providers are selected at API startup:
+| Priority | Environment variable | Provider |
+| ---: | --- | --- |
+| 1 | `GROQ_API_KEY` | Groq-hosted models |
+| 2 | `GROK_API_KEY` | xAI Grok models |
+| 3 | `GEMINI_API_KEY` | Google Gemini models |
+| Fallback | No key | Deterministic guesses and template drawings |
 
-| Environment variable | Provider |
-| --- | --- |
-| `GROQ_API_KEY` | Groq-hosted models |
-| `GROK_API_KEY` | xAI Grok models |
-| `GEMINI_API_KEY` | Google Gemini models |
+`GROQ_MODEL` can override the configured Groq model. Never commit `.env` files, provider keys, database credentials, or WebSocket ticket URLs.
 
-Without a provider key, the game uses template drawing and deterministic guessing fallbacks. Keep provider keys and all `.env` files out of version control.
-
-## Security And Reliability
-
-The project already includes password hashing, scoped expiring tokens, HttpOnly session cookies, origin checks, explicit CORS and WebSocket allowlists, WebSocket tickets, bounded message history, database integrity constraints, and stable principal IDs for drawing authorization.
-
-Mithril Tiles is an active project, not yet a public production service. The next engineering milestones are stronger realtime rate limiting, reconnection recovery, operational monitoring, CI, browser end-to-end coverage, graceful shutdown, and further accessibility work. The detailed backlog lives in [shortcomings.md](shortcomings.md).
-
-## Quality Checks
+## Quality Gates
 
 ```bash
 # Backend
@@ -220,6 +257,31 @@ npx tsc --noEmit
 npm run build
 ```
 
+Database-backed integration tests require Docker. The repository contains focused coverage for data persistence, room lifecycle behavior, provider parsing, realtime events, frontend routes, stores, and room presentation.
+
+## Project Stage
+
+Mithril Tiles already delivers its end-to-end multiplayer loop, from identity and room entry through realtime rounds and persisted final scores. Current work is focused on production hardening: richer reconnect recovery, realtime abuse controls, graceful shutdown, observability, CI, browser-level end-to-end coverage, and continued bot-quality improvements.
+
+The deeper engineering backlog is documented in [shortcomings.md](shortcomings.md), without defining the product by what remains to be built.
+
+## Repository Guide
+
+```text
+cmd/api/                 HTTP API, middleware, startup, and handlers
+cmd/player-test/         development WebSocket client
+internal/data/           PostgreSQL models and persistence
+internal/realtime/       rooms, game lifecycle, WebSockets, and bots
+internal/validator/      backend input validation
+migrations/              versioned database migrations
+frontend/                Next.js product UI and BFF routes
+docs/                    architecture and game-flow diagrams
+```
+
 ## Contributing
 
-Keep changes focused, add tests when behavior changes, and never commit credentials, database URLs, provider keys, WebSocket tickets, or production logs.
+Keep contributions focused, document intentional behavior changes, and add tests when behavior changes. Before opening a pull request, run the relevant quality gates and verify that no credentials, provider keys, ticket URLs, database URLs, or unsanitized logs are included.
+
+<p align="center">
+  <strong>May the sharpest eye claim the Mithril.</strong>
+</p>
