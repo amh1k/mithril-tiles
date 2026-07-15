@@ -4,7 +4,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
-import { BotProfileDashboard } from "@/features/admin/bot-profile-dashboard";
 import { lookupSession } from "@/features/auth/server/session";
 import { getSessionToken } from "@/lib/auth/session-cookie";
 import { cn } from "@/lib/utils";
@@ -92,7 +91,7 @@ export default async function AdminDashboardPage() {
               <span className="flex size-11 items-center justify-center rounded-t-full border border-[#5d542b]/50 bg-[#bba88d]/45 text-[#5d542b]"><Bot className="size-5" aria-hidden="true" /></span>
               <h2 className="mt-5 text-xl font-bold">Bot profiles</h2>
               <p className="mt-3 min-h-20 text-sm leading-6 text-[#3b2818]">Create and tune the computer players hosts can add to their rooms.</p>
-              <Link className={cn(buttonVariants(), "mt-6 bg-[#2b1e12] text-[#f4e7c8] hover:bg-[#5d542b]")} href="#bot-profiles">Manage bot profiles</Link>
+              <Link className={cn(buttonVariants(), "mt-6 bg-[#2b1e12] text-[#f4e7c8] hover:bg-[#5d542b]")} href="/admin/bot-profiles">Manage bot profiles</Link>
             </div>
           </article>
 
@@ -114,15 +113,6 @@ export default async function AdminDashboardPage() {
             </article>
           ))}
         </div>
-
-        <section className="mt-10" id="bot-profiles">
-          <header className="mb-5 border-l-4 border-[#d7bd89] bg-[#2b1e12]/90 px-5 py-4 text-[#f4e7c8] shadow-[0_12px_26px_rgba(43,30,18,0.24)]">
-            <p className="font-heading text-xs tracking-[0.22em] text-[#d7bd89] uppercase">Fellowship roster</p>
-            <h2 className="font-heading mt-1 text-2xl font-semibold text-[#fff0cc]">Bot Profiles</h2>
-            <p className="mt-1 text-sm text-[#f4e7c8]">Manage the persistent bots that room hosts can choose from.</p>
-          </header>
-          <BotProfileDashboard />
-        </section>
       </section>
     </main>
   );

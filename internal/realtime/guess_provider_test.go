@@ -13,7 +13,7 @@ func TestDeterministicGuessProviderUsesPublicMaskAndPreviousGuesses(t *testing.T
 	provider := DeterministicGuessProvider{}
 	guess, err := provider.Guess(context.Background(), GuessInput{
 		RoundNo:         1,
-		MaskedWord:      "____",
+		MaskedWord:      "_____",
 		Strokes:         []DrawStroke{stroke(0.1, 0.1, 0.2, 0.2)},
 		PreviousGuesses: []string{"tree"},
 	})

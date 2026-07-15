@@ -42,6 +42,7 @@ function renderRoomShell({
   errorMessage,
   finalScoresResponse,
   gameEndedAt = null,
+  guessResults = [],
   messages = [],
   participantPrincipalResponses = [],
   roomSnapshot = null,
@@ -68,6 +69,14 @@ function renderRoomShell({
   errorMessage?: string;
   finalScoresResponse?: unknown;
   gameEndedAt?: number | null;
+  guessResults?: Array<{
+    id: number;
+    result: {
+      display_name: string;
+      participant_id: string;
+      points_awarded: number;
+    };
+  }>;
   messages?: Array<{ id: number; text: string }>;
   participantPrincipalResponses?: unknown[];
   roomSnapshot?: RealtimeRoomSnapshot | null;
@@ -78,6 +87,16 @@ function renderRoomShell({
 } = {}) {
   if (finalScoresResponse !== undefined) {
     fetchMock.mockResolvedValueOnce(finalScoresResponse);
+  }
+  const storedSnapshot = useRoomStore.getState().snapshot;
+  const shouldLoadBotProfiles =
+    storedSnapshot === null ||
+    (storedSnapshot.phase === "lobby" &&
+      storedSnapshot.players.some(
+        (player) => player.id === principal.id && player.isHost,
+      ));
+  if (shouldLoadBotProfiles) {
+    mockBotProfilesResponse();
   }
   mockWordPacksResponse();
   for (const principalResponse of participantPrincipalResponses) {
@@ -92,6 +111,7 @@ function renderRoomShell({
     drawerWord,
     errorMessage,
     gameEndedAt,
+    guessResults,
     guesserWord: null,
     messages,
     retryAttempt: 0,
@@ -713,6 +733,13 @@ function mockWordPacksResponse() {
         },
       ],
     }),
+    ok: true,
+  });
+}
+
+function mockBotProfilesResponse() {
+  fetchMock.mockResolvedValueOnce({
+    json: async () => ({ bot_profiles: [] }),
     ok: true,
   });
 }

@@ -136,6 +136,23 @@ func TestUserLifecycle(t *testing.T) {
 	}
 
 	token := registered.AuthenticationToken.Plaintext
+	wordMutation := userRequest(
+		t,
+		server.URL,
+		http.MethodPost,
+		"/v1/word-packs/550e8400-e29b-41d4-a716-446655440001/words",
+		token,
+		map[string]string{"value": "unauthorized-word"},
+	)
+	defer wordMutation.Body.Close()
+	if wordMutation.StatusCode != http.StatusForbidden {
+		t.Fatalf(
+			"word mutation: expected status %d, got %d",
+			http.StatusForbidden,
+			wordMutation.StatusCode,
+		)
+	}
+
 	update := userRequest(
 		t,
 		server.URL,
