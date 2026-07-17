@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mithril Tiles — Engineering Architecture Portfolio</title>
+  <style>
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #2a2118; background: #ede6d8; font-family: "Liberation Sans", Arial, sans-serif; font-size: 8.4pt; line-height: 1.32; }
+    .page { position: relative; min-height: 276mm; padding: 9mm 12mm 11mm; background: #fffdf8; page-break-after: always; overflow: hidden; }
+    .page:last-child { page-break-after: auto; }
+    .page::before { content: ""; position: absolute; left: 0; top: 0; width: 5mm; height: 100%; background: #714522; }
+    .cover { color: #fff7e7; background: #21150c; padding: 18mm 18mm 16mm 22mm; }
+    .cover::before { width: 7mm; background: #d2aa68; }
+    .cover::after { content: ""; position: absolute; right: -45mm; top: -25mm; width: 140mm; height: 140mm; border: 1.5mm solid rgba(210,170,104,.2); transform: rotate(45deg); }
+    .eyebrow { margin: 0 0 3mm; color: #9b6a3c; font-size: 8pt; font-weight: bold; letter-spacing: 1.8pt; text-transform: uppercase; }
+    .cover .eyebrow { color: #d2aa68; }
+    h1, h2, h3 { margin: 0; color: #2a1c12; font-family: Georgia, "Liberation Serif", serif; }
+    h1 { max-width: 145mm; color: #fff7e7; font-size: 34pt; line-height: 1.04; }
+    h2 { font-size: 20pt; line-height: 1.06; }
+    h3 { margin-bottom: 1.4mm; color: #714522; font-size: 10.8pt; }
+    p { margin: 0 0 2.2mm; }
+    ul { margin: 1mm 0 2mm 4mm; padding-left: 3.5mm; }
+    li { margin: 0 0 .8mm; }
+    strong { color: #2a1c12; }
+    .cover strong { color: #fff7e7; }
+    .subtitle { max-width: 145mm; margin-top: 7mm; color: #d8c7ad; font: 15pt/1.45 Georgia, "Liberation Serif", serif; }
+    .rule { width: 32mm; height: 1.2mm; margin: 8mm 0; background: #d2aa68; }
+    .cover-note { max-width: 142mm; color: #c6b394; font-size: 10.5pt; line-height: 1.6; }
+    .cover-logo { position: relative; z-index: 2; display: block; width: 78mm; margin: 4mm 0 18mm; }
+    .page-head { margin-bottom: 4.5mm; padding-bottom: 2.8mm; border-bottom: .4mm solid #d8c9b2; }
+    .page-head p { max-width: 155mm; margin: 1.8mm 0 0; color: #6e6255; font-size: 9.2pt; }
+    .footer { position: absolute; right: 12mm; bottom: 5mm; left: 12mm; padding-top: 1.5mm; border-top: .3mm solid #e1d6c5; color: #8b7b67; font-size: 7pt; letter-spacing: .4pt; }
+    .footer .num { float: right; color: #714522; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { vertical-align: top; }
+    .two td { width: 50%; padding: 0 3.5mm; }
+    .two td:first-child { padding-left: 0; }
+    .two td:last-child { padding-right: 0; }
+    .three td { width: 33.33%; padding: 0 2mm; }
+    .three td:first-child { padding-left: 0; }
+    .three td:last-child { padding-right: 0; }
+    .card { margin-bottom: 2.7mm; padding: 3mm; border: .35mm solid #d9c8ae; border-radius: 2mm; background: #faf5eb; }
+    .card.dark { color: #efe5d2; border-color: #4c3827; background: #2a1c12; }
+    .card.dark h3, .card.dark strong { color: #e3c684; }
+    .card.accent { border-left: 1.5mm solid #9b6a3c; }
+    .callout { margin: 2.7mm 0; padding: 3mm 4mm; border-left: 1.5mm solid #d2aa68; background: #f3eadb; font: 9.3pt/1.38 Georgia, "Liberation Serif", serif; }
+    .decision { margin-bottom: 2mm; padding: 2.5mm 3mm; background: #f7f1e7; border-left: 1mm solid #714522; }
+    .decision b { display: block; margin-bottom: .8mm; color: #714522; }
+    .tag { display: inline-block; margin: 0 1.4mm 1.5mm 0; padding: 1.2mm 2.2mm; border: .3mm solid #c7ab7c; border-radius: 4mm; color: #5b3a21; background: #fbf4e7; font-size: 7.8pt; font-weight: bold; }
+    .metric { text-align: center; padding: 3mm 2mm; border-top: .8mm solid #d2aa68; background: #2a1c12; color: #d8c7ad; }
+    .metric b { display: block; color: #fff7e7; font: 18pt Georgia, serif; }
+    .metric span { font-size: 7.7pt; letter-spacing: .5pt; text-transform: uppercase; }
+    .flow { margin: 4mm 0; }
+    .flow td { text-align: center; vertical-align: middle; }
+    .box { padding: 2.7mm 2mm; border: .4mm solid #b89a69; border-radius: 1.5mm; background: #fffaf0; font-weight: bold; }
+    .box small { display: block; margin-top: 1mm; color: #756958; font-weight: normal; }
+    .box.primary { color: #fff7e7; border-color: #714522; background: #714522; }
+    .box.dark { color: #fff7e7; border-color: #21150c; background: #21150c; }
+    .arrow { width: 8mm; color: #9b6a3c; font-size: 15pt; font-weight: bold; }
+    .sequence { margin: 3mm 0 5mm; border-left: .7mm solid #d2aa68; }
+    .step { position: relative; margin-left: 4mm; padding: 1.5mm 2.5mm 1.7mm 6mm; border-bottom: .25mm solid #e6dccd; }
+    .step .n { display: inline-block; width: 6mm; height: 6mm; margin: 0 2mm 0 -9.5mm; border-radius: 50%; text-align: center; line-height: 6mm; color: white; background: #714522; font-size: 7.5pt; font-weight: bold; }
+    .matrix th { padding: 1.8mm 1.7mm; color: white; background: #714522; text-align: left; font-size: 7.5pt; }
+    .matrix td { padding: 1.8mm 1.7mm; border-bottom: .25mm solid #ddd0bd; font-size: 7.7pt; }
+    .matrix tr:nth-child(even) td { background: #f8f2e8; }
+    .code { padding: 3mm; color: #e8dcc9; background: #261a11; border-radius: 1.5mm; font: 7.8pt/1.55 "Liberation Mono", monospace; }
+    .state td { padding: 3mm 1.5mm; text-align: center; vertical-align: middle; }
+    .state .node { padding: 3mm 1.2mm; border: .4mm solid #9b6a3c; border-radius: 1.5mm; background: #f9f2e5; font-weight: bold; }
+    .state .arrow { width: 6mm; padding: 0; }
+    .erd { display: block; width: 100%; max-height: 92mm; object-fit: contain; margin: 2mm auto 3mm; padding: 2mm; border: .3mm solid #ded4c5; background: white; }
+    .mini { color: #746756; font-size: 8.2pt; }
+    .risk { color: #8a3f2e; font-weight: bold; }
+    .good { color: #396246; font-weight: bold; }
+    .repo { font-family: "Liberation Mono", monospace; font-size: 7.7pt; }
+    .cover-bottom { position: absolute; right: 18mm; bottom: 18mm; left: 22mm; }
+    .cover-bottom table td { padding-right: 5mm; color: #bfae92; font-size: 8.5pt; }
+    .cover-bottom b { display: block; margin-bottom: 1mm; color: #e4c983; font-size: 10pt; }
+  </style>
+</head>
+<body>
+
+  <section class="page cover">
+    <p class="eyebrow">Engineering architecture portfolio</p>
+    <img class="cover-logo" src="../frontend/public/images/logo-gold.png" alt="Mithril Tiles">
+    <h1>Authoritative realtime play, designed end to end.</h1>
+    <div class="rule"></div>
+    <p class="subtitle">System architecture, security boundaries, realtime coordination, persistence strategy, database integrity, and deliberate scaling decisions.</p>
+    <p class="cover-note">A technical case study of a multiplayer drawing-and-guessing platform built with Next.js, React, Go, WebSockets, and PostgreSQL.</p>
+    <div class="cover-bottom">
+      <table><tr>
+        <td><b>Realtime core</b>Actor-style room loops serialize concurrent gameplay commands.</td>
+        <td><b>Security posture</b>HttpOnly sessions and 30-second, single-use WebSocket tickets.</td>
+        <td><b>Data integrity</b>Transactions, composite keys, triggers, checks, and partial unique indexes.</td>
+      </tr></table>
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">01 / Executive summary</p>
+      <h2>The architecture in one minute</h2>
+      <p>Mithril Tiles separates fast-changing match state from durable business data while keeping the Go server authoritative over every competitive decision.</p>
+    </div>
+    <table class="three"><tr>
+      <td><div class="metric"><b>3</b><span>runtime layers</span></div></td>
+      <td><div class="metric"><b>12</b><span>core data entities</span></div></td>
+      <td><div class="metric"><b>30</b><span>test files</span></div></td>
+    </tr></table>
+    <div class="callout">The central invariant is simple: <strong>browsers request actions; the room server decides outcomes.</strong> Drawer selection, word secrecy, guess validation, scoring, timers, and lifecycle transitions never depend on client honesty.</div>
+    <table class="two"><tr>
+      <td>
+        <div class="card accent"><h3>Next.js product edge</h3><p>Renders the experience, validates browser inputs, proxies authenticated HTTP calls, and stores backend bearer credentials in secure HttpOnly cookies.</p></div>
+        <div class="card accent"><h3>Go authority layer</h3><p>Owns identity checks, authorization, origin enforcement, rate limits, room coordination, game rules, and the realtime protocol.</p></div>
+        <div class="card accent"><h3>PostgreSQL durability layer</h3><p>Preserves identities, catalog content, secure credentials, bot profiles, match history, rounds, awards, and final rankings.</p></div>
+      </td>
+      <td>
+        <div class="decision"><b>Decision: transient and durable state are intentionally split.</b>Connections, timers, secret words, strokes, and chat live in memory; completed outcomes and identity data live in PostgreSQL.</div>
+        <div class="decision"><b>Decision: each room is a serialized command processor.</b>Typed Go channels funnel joins, guesses, strokes, lifecycle events, and bot completions through one event loop.</div>
+        <div class="decision"><b>Decision: the browser never receives a reusable backend token.</b>The frontend exchanges its HttpOnly session for a room-bound ticket that expires after 30 seconds and is deleted atomically when used.</div>
+        <div class="decision"><b>Decision: database rules defend the model independently.</b>Application validation is reinforced with constraints, transactions, composite foreign keys, triggers, and partial uniqueness.</div>
+      </td>
+    </tr></table>
+    <p class="eyebrow" style="margin-top:4mm">Technology profile</p>
+    <span class="tag">Next.js 16</span><span class="tag">React 19</span><span class="tag">TypeScript</span><span class="tag">TanStack Query</span><span class="tag">Zustand</span><span class="tag">Zod</span><span class="tag">Go</span><span class="tag">WebSockets</span><span class="tag">PostgreSQL</span><span class="tag">pgx</span><span class="tag">Canvas 2D</span><span class="tag">Vitest</span>
+    <div class="footer">Mithril Tiles / Engineering Architecture Portfolio <span class="num">2</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">02 / System landscape</p>
+      <h2>Two paths, one authority</h2>
+      <p>Short-lived business operations use authenticated HTTP. Latency-sensitive room traffic uses a direct WebSocket after a secure ticket exchange.</p>
+    </div>
+    <table class="flow"><tr>
+      <td><div class="box"><strong>Browser</strong><small>React UI, Canvas 2D, local interaction state</small></div></td>
+      <td class="arrow">&rarr;</td>
+      <td><div class="box primary"><strong>Next.js</strong><small>pages, BFF route handlers, HttpOnly cookie</small></div></td>
+      <td class="arrow">&rarr;</td>
+      <td><div class="box dark"><strong>Go API</strong><small>auth, rules, room actors, persistence ports</small></div></td>
+      <td class="arrow">&rarr;</td>
+      <td><div class="box"><strong>PostgreSQL</strong><small>durable identities, content, outcomes</small></div></td>
+    </tr></table>
+    <table class="two"><tr>
+      <td>
+        <div class="card"><h3>HTTP control path</h3>
+          <ul><li>register, sign in, and guest identity</li><li>session restoration and logout</li><li>word-pack and bot-profile catalog access</li><li>room setup, bot membership, and game start</li><li>final-score and participant lookup</li></ul>
+        </div>
+        <div class="card"><h3>WebSocket data path</h3>
+          <ul><li>join, leave, and presence snapshots</li><li>authorized drawing strokes and canvas revisions</li><li>guess submission and scoring outcomes</li><li>private drawer word vs. public masked word</li><li>timers, round transitions, and final results</li></ul>
+        </div>
+      </td>
+      <td>
+        <div class="card dark"><h3>Why a Backend-for-Frontend?</h3><p>Next.js route handlers adapt browser requests to the Go API and attach bearer tokens server-side. This reduces credential exposure, centralizes browser-facing validation, and gives the UI a stable same-origin API surface.</p></div>
+        <div class="card dark"><h3>Why a direct socket?</h3><p>Once authenticated, the browser connects directly to the Go room server. The long-lived, bidirectional channel avoids proxying every stroke through the rendering tier while retaining strict room authorization.</p></div>
+        <div class="card dark"><h3>Why one authoritative service?</h3><p>Gameplay decisions and match persistence sit behind one Go boundary. This keeps rules consistent across humans and bots and prevents clients from racing independent versions of game state.</p></div>
+      </td>
+    </tr></table>
+    <div class="callout"><strong>Boundary rule:</strong> Next.js owns presentation and credential containment. Go owns domain truth. PostgreSQL owns durable invariants.</div>
+    <p class="mini">The API composes panic recovery, trusted-origin CORS, bearer authentication, role checks, endpoint-specific rate limiting, and request deadlines. The HTTP server also defines read, write, and idle timeouts.</p>
+    <div class="footer">Mithril Tiles / System Landscape <span class="num">3</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">03 / Trust boundary</p>
+      <h2>Credential containment without sacrificing realtime latency</h2>
+      <p>The login token stays outside browser JavaScript. A disposable, narrowly scoped credential is used for the socket upgrade.</p>
+    </div>
+    <table class="two"><tr>
+      <td>
+        <h3>WebSocket ticket sequence</h3>
+        <div class="sequence">
+          <div class="step"><span class="n">1</span><strong>Authenticate over HTTP.</strong> Next.js stores the backend bearer token in an HttpOnly, secure session cookie.</div>
+          <div class="step"><span class="n">2</span><strong>Request room access.</strong> A same-origin route handler reads the cookie server-side and asks Go for a ticket.</div>
+          <div class="step"><span class="n">3</span><strong>Issue a scoped secret.</strong> Go generates 32 cryptographically random bytes, hashes the plaintext with SHA-256, binds it to one principal and room, and gives it a 30-second TTL.</div>
+          <div class="step"><span class="n">4</span><strong>Upgrade directly.</strong> The browser presents only the ticket to the room WebSocket endpoint.</div>
+          <div class="step"><span class="n">5</span><strong>Consume atomically.</strong> PostgreSQL deletes and returns the matching unexpired row in a transaction. Replay attempts fail because the row no longer exists.</div>
+          <div class="step"><span class="n">6</span><strong>Rehydrate identity.</strong> Go reloads the active user or guest principal before accepting room participation.</div>
+        </div>
+      </td>
+      <td>
+        <div class="card dark"><h3>Threats addressed</h3>
+          <table class="matrix">
+            <tr><th>Threat</th><th>Control</th></tr>
+            <tr><td>Token theft via browser script</td><td>HttpOnly session cookie</td></tr>
+            <tr><td>Ticket replay</td><td>delete-on-consume transaction</td></tr>
+            <tr><td>Cross-room reuse</td><td>room-code binding</td></tr>
+            <tr><td>Stale credentials</td><td>30-second expiry</td></tr>
+            <tr><td>Database disclosure</td><td>only SHA-256 hash stored</td></tr>
+            <tr><td>Cross-origin socket abuse</td><td>trusted Origin patterns</td></tr>
+          </table>
+        </div>
+        <div class="card accent"><h3>Unified principal model</h3><p>Registered users and temporary guests enter domain code through one principal abstraction. Routes can require any authenticated principal, a registered user, or an administrator without duplicating identity logic.</p></div>
+        <div class="card accent"><h3>Authorization remains contextual</h3><p>Authentication proves identity; room commands still verify role and state. Only the host can start a game or change bots, and only the current drawer can publish strokes.</p></div>
+      </td>
+    </tr></table>
+    <div class="callout">This design deliberately treats WebSocket establishment as a privileged security transition—not merely a transport handshake.</div>
+    <div class="footer">Mithril Tiles / Trust Boundary <span class="num">4</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">04 / Concurrency model</p>
+      <h2>A room is an actor, not a shared bag of state</h2>
+      <p>Every active room owns its match state and processes typed commands through a single select loop, turning concurrent network input into an ordered stream of decisions.</p>
+    </div>
+    <table class="flow"><tr>
+      <td><div class="box"><strong>HTTP handlers</strong><small>start, bots, snapshots</small></div></td><td class="arrow">&searr;</td>
+      <td rowspan="2"><div class="box primary"><strong>Room command channels</strong><small>join / leave / stroke / guess / start / bot completion / lifecycle</small></div></td>
+      <td rowspan="2" class="arrow">&rarr;</td>
+      <td rowspan="2"><div class="box dark"><strong>Room.Run()</strong><small>one ordered event loop mutates authoritative state</small></div></td>
+      <td rowspan="2" class="arrow">&rarr;</td>
+      <td><div class="box"><strong>Public events</strong><small>snapshots, strokes, scores</small></div></td>
+    </tr><tr>
+      <td><div class="box"><strong>Socket clients</strong><small>humans and bots</small></div></td><td class="arrow">&nearr;</td>
+      <td><div class="box"><strong>Private events</strong><small>drawer word, scoped errors</small></div></td>
+    </tr></table>
+    <table class="two"><tr>
+      <td>
+        <div class="card"><h3>State owned by each room</h3>
+          <ul><li>connected players, bots, host, and stable principal IDs</li><li>game and round state, current drawer, private word</li><li>scores, correct-guess tracking, and drawer rotation</li><li>canvas revision and current-round stroke flow</li><li>bounded chat ring buffer and reconnect sessions</li><li>round cancellation, timers, and bot runtimes</li></ul>
+        </div>
+        <div class="card accent"><h3>Bounded pressure points</h3><p>Stroke, guess, bot-completion, and room-information channels use explicit buffers. Chat history uses a fixed-capacity ring buffer rather than unbounded growth.</p></div>
+      </td>
+      <td>
+        <div class="decision"><b>Race reduction by ownership</b>The event loop, rather than arbitrary socket goroutines, performs lifecycle mutations. Mutexes remain around the few state regions accessed outside the loop.</div>
+        <div class="decision"><b>Domain commands carry identity</b>Guess and host actions include participant or principal IDs plus game/round context, so stale or forged commands can be rejected.</div>
+        <div class="decision"><b>Slow work reports back as events</b>Persistence and bot providers can execute outside the main loop, then send typed completion messages back for ordered application.</div>
+        <div class="decision"><b>Lifecycle cancellation is explicit</b>Round-scoped contexts stop timers and bot work when a round changes; room closure is protected by a one-time close guard.</div>
+      </td>
+    </tr></table>
+    <div class="callout"><strong>Engineering payoff:</strong> the concurrency model aligns with the domain boundary. One room is one consistency scope.</div>
+    <div class="footer">Mithril Tiles / Room Actor Model <span class="num">5</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">05 / Realtime domain model</p>
+      <h2>Explicit states make illegal transitions visible</h2>
+      <p>The room broadcasts consequences, not authority. Clients render snapshots and events but do not select the drawer, reveal the secret, award points, or advance the game.</p>
+    </div>
+    <table class="state"><tr>
+      <td><div class="node">Lobby<br><span class="mini">host + roster</span></div></td><td class="arrow">&rarr;</td>
+      <td><div class="node">Start transaction<br><span class="mini">game + participants</span></div></td><td class="arrow">&rarr;</td>
+      <td><div class="node">Active round<br><span class="mini">draw + guess + timer</span></div></td><td class="arrow">&rarr;</td>
+      <td><div class="node">Round commit<br><span class="mini">scores + completion</span></div></td><td class="arrow">&rarr;</td>
+      <td><div class="node">Finalization<br><span class="mini">rankings + close</span></div></td>
+    </tr></table>
+    <table class="two"><tr>
+      <td>
+        <div class="card dark"><h3>Information partitioning</h3><p><strong>Drawer:</strong> receives the private word and permission to emit normalized strokes.</p><p><strong>Guessers:</strong> receive a masked word, public strokes, timer updates, and score events.</p><p><strong>Everyone:</strong> receives membership snapshots, lifecycle state, chat history, and final standings.</p></div>
+        <div class="card"><h3>Protocol defensiveness</h3>
+          <ul><li>structured events are parsed against typed schemas in the frontend</li><li>unsupported or malformed messages fail into explicit error paths</li><li>canvas revisions distinguish current state from stale drawing events</li><li>normalized coordinates make strokes independent of viewport size</li></ul>
+        </div>
+      </td>
+      <td>
+        <table class="matrix">
+          <tr><th>Action</th><th>Server-side gate</th></tr>
+          <tr><td>Join room</td><td>principal identity, room capacity/state</td></tr>
+          <tr><td>Start game</td><td>host ID, player count, idle state, unique room code</td></tr>
+          <tr><td>Add/remove bot</td><td>host ID, active profile, idle state, uniqueness</td></tr>
+          <tr><td>Draw stroke</td><td>current drawer, active round, matching game context</td></tr>
+          <tr><td>Submit guess</td><td>participant identity, active game and round, not drawer</td></tr>
+          <tr><td>Advance round</td><td>timer/correct-guess outcome inside room lifecycle</td></tr>
+          <tr><td>Finalize game</td><td>authoritative score snapshot and persistence result</td></tr>
+        </table>
+        <div class="card accent" style="margin-top:4mm"><h3>Late join and recovery</h3><p>Room snapshots reconstruct roster, game state, canvas revision, and scoring context. A bounded message history supplies recent chat without turning the room into an event archive.</p></div>
+      </td>
+    </tr></table>
+    <div class="callout">The protocol is designed around <strong>least information</strong>: private knowledge is sent only to the participant who needs it.</div>
+    <div class="footer">Mithril Tiles / Realtime Lifecycle <span class="num">6</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">06 / Persistence strategy</p>
+      <h2>Persist business outcomes, not transport noise</h2>
+      <p>The live room keeps ephemeral mechanics close to the game loop. PostgreSQL records the facts required for identity, administration, auditing, and completed-match history.</p>
+    </div>
+    <table class="two"><tr>
+      <td>
+        <div class="card dark"><h3>In-memory, by design</h3>
+          <ul><li>socket connections and reconnect activity</li><li>current drawer and secret word</li><li>round timers and cancellation functions</li><li>live strokes and canvas revision</li><li>recent chat ring buffer</li><li>temporary correct-guess tracking</li><li>bot runtime scheduling and perceptions</li></ul>
+        </div>
+        <p class="mini"><strong>Reason:</strong> these values are high-frequency, round-scoped, latency-sensitive, or intentionally disposable.</p>
+      </td>
+      <td>
+        <div class="card"><h3>Durable, by design</h3>
+          <ul><li>registered users, guest identities, and hashed tokens</li><li>one-time WebSocket ticket hashes</li><li>word packs, words, and bot profiles</li><li>game settings snapshot and lifecycle status</li><li>participant identity snapshots</li><li>round metadata and score awards</li><li>final score and rank for each participant</li></ul>
+        </div>
+        <p class="mini"><strong>Reason:</strong> these values carry product history, security meaning, content governance, or relational integrity.</p>
+      </td>
+    </tr></table>
+    <h3>Transactional game lifecycle</h3>
+    <table class="matrix">
+      <tr><th>Boundary</th><th>Atomic work</th><th>Failure behavior</th></tr>
+      <tr><td><strong>Start game</strong></td><td>choose word; create game; snapshot all participants; assign host and drawer; create first round</td><td>rollback leaves no partial match</td></tr>
+      <tr><td><strong>Start round</strong></td><td>resolve/new participants; choose a word from the game pack; create sequential round</td><td>room does not publish a false start</td></tr>
+      <tr><td><strong>End round</strong></td><td>complete active round; resolve principals; write score awards</td><td>round and awards commit together</td></tr>
+      <tr><td><strong>End game</strong></td><td>sort standings; persist final scores; mark game complete</td><td>retry policy distinguishes transient from non-retryable errors</td></tr>
+    </table>
+    <div class="callout"><strong>Snapshot fields protect history.</strong> Display names, selected word text, and settings are copied into match records so later profile or catalog edits do not rewrite the past.</div>
+    <div class="card accent"><h3>Deliberate non-goals</h3><p>Raw replay streams, incorrect-guess timelines, full chat archives, and provider prompts are not stored. Adding them later should be a retention and analytics decision—not an accidental side effect of gameplay.</p></div>
+    <div class="footer">Mithril Tiles / Persistence Boundary <span class="num">7</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">07 / Database architecture</p>
+      <h2>Integrity is encoded where the data lives</h2>
+      <p>Twelve related entities model identity, secure access, content, participants, rounds, awards, and final outcomes.</p>
+    </div>
+    <img class="erd" src="images/database-erd.png" alt="Mithril Tiles PostgreSQL entity relationship diagram">
+    <table class="two"><tr>
+      <td>
+        <div class="decision"><b>Polymorphic identities, constrained</b>Users, guests, and bots share participant records, but a check constraint requires exactly the identity column matching the participant type.</div>
+        <div class="decision"><b>Composite ownership keys</b>Foreign keys prove that drawers, score recipients, and final-score participants belong to the same game—not merely that each UUID exists.</div>
+        <div class="decision"><b>Partial uniqueness models active state</b>Only one started game per room, one started round per game, one host per game, and one outstanding ticket per principal-room pair.</div>
+      </td>
+      <td>
+        <div class="decision"><b>Triggers derive denormalized integrity columns</b>Round word-pack and score game IDs are populated from their parents, then protected with composite constraints.</div>
+        <div class="decision"><b>Deferred host relationship solves insertion order</b>The game and its host participant are created in one transaction; a deferred foreign key validates the cycle at commit.</div>
+        <div class="decision"><b>Domain values are checked, not implied</b>Lifecycle states, roles, difficulties, score reasons, positive durations, nonblank names, and chronological timestamps are database rules.</div>
+      </td>
+    </tr></table>
+    <table class="matrix">
+      <tr><th>Deletion policy</th><th>Rationale</th></tr>
+      <tr><td>Game &rarr; participants, rounds, awards, finals: cascade</td><td>A match aggregate is removed as one unit.</td></tr>
+      <tr><td>Identity &rarr; tokens and socket tickets: cascade</td><td>Credentials cannot outlive their owner.</td></tr>
+      <tr><td>Word pack &rarr; words: cascade; referenced game history: protect</td><td>Catalog cleanup is allowed until durable history depends on it.</td></tr>
+    </table>
+    <div class="footer">Mithril Tiles / Database Integrity <span class="num">8</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">08 / Bot architecture</p>
+      <h2>AI participants use the same rules as humans</h2>
+      <p>Bots are first-class principals backed by persistent profiles, while provider interfaces keep game mechanics independent of any model vendor.</p>
+    </div>
+    <table class="flow"><tr>
+      <td><div class="box"><strong>Bot profile</strong><small>identity, difficulty, behavior style</small></div></td><td class="arrow">&rarr;</td>
+      <td><div class="box primary"><strong>Round perception</strong><small>private word or public masked state</small></div></td><td class="arrow">&rarr;</td>
+      <td><div class="box dark"><strong>Provider port</strong><small>drawing or guessing interface</small></div></td><td class="arrow">&rarr;</td>
+      <td><div class="box"><strong>Domain command</strong><small>same stroke/guess path as humans</small></div></td>
+    </tr></table>
+    <table class="two"><tr>
+      <td>
+        <div class="card"><h3>Provider strategy</h3>
+          <ul><li><strong>Groq</strong> when its API key is configured</li><li><strong>xAI Grok</strong> as the next configured option</li><li><strong>Gemini</strong> as another supported adapter</li><li><strong>deterministic guessing</strong> and <strong>template drawing</strong> as offline fallbacks</li></ul>
+        </div>
+        <div class="card accent"><h3>Behavior policy</h3><p>Difficulty and style become round-scoped controls: guess delay, attempt budget, minimum revealed letters, drawing delay, and maximum stroke count.</p></div>
+      </td>
+      <td>
+        <div class="decision"><b>No privileged scoring path</b>A generated guess becomes a normal typed guess command. The room validates it and awards points exactly as it would for a human.</div>
+        <div class="decision"><b>No privileged drawing path</b>Generated strokes still pass current-drawer authorization and use the normalized drawing protocol.</div>
+        <div class="decision"><b>Cancellation follows the round</b>Each runtime receives a scoped context, so late provider work cannot leak into a later round.</div>
+        <div class="decision"><b>Completion returns to the room loop</b>Asynchronous provider output is applied only through an ordered bot-completion event.</div>
+      </td>
+    </tr></table>
+    <div class="callout">The key design choice is <strong>ports before providers</strong>. Model vendors are replaceable infrastructure; drawing and guessing remain domain capabilities.</div>
+    <h3>Extension path</h3>
+    <table class="matrix">
+      <tr><th>Future capability</th><th>Where it plugs in</th><th>What stays unchanged</th></tr>
+      <tr><td>new model vendor</td><td>provider adapter</td><td>room rules, scoring, protocol</td></tr>
+      <tr><td>new personality mode</td><td>bot profile + behavior policy</td><td>identity and participant schema</td></tr>
+      <tr><td>provider observability</td><td>adapter metrics/tracing</td><td>game lifecycle</td></tr>
+    </table>
+    <div class="footer">Mithril Tiles / Bot Extensibility <span class="num">9</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">09 / Frontend architecture</p>
+      <h2>A feature-oriented client around a strict protocol edge</h2>
+      <p>The UI is not a second game engine. It validates payloads, renders authoritative events, and isolates drawing, authentication, room state, and administration into focused modules.</p>
+    </div>
+    <table class="three"><tr>
+      <td><div class="card"><h3>App routes</h3><p>Landing, login, registration, guest flow, room entry, live room, rules, about, and protected admin surfaces.</p></div></td>
+      <td><div class="card"><h3>Feature modules</h3><p>Authentication, drawing geometry, realtime protocol, room lifecycle, bot profiles, and word-pack management.</p></div></td>
+      <td><div class="card"><h3>State tools</h3><p>TanStack Query for server/session state, Zustand for room state, React Hook Form and Zod for validated inputs.</p></div></td>
+    </tr></table>
+    <table class="two"><tr>
+      <td>
+        <div class="card dark"><h3>Realtime client lifecycle</h3>
+          <div class="code">idle
+  &rarr; requesting_ticket
+  &rarr; connecting_socket
+  &rarr; connected
+  &rarr; reconnecting / failed</div>
+          <p style="margin-top:3mm">Connection states are explicit UI states. Ticket rejection, malformed protocol events, and socket failures surface as controlled errors rather than silent desynchronization.</p>
+        </div>
+        <div class="card accent"><h3>Responsive canvas math</h3><p>Pointer coordinates are normalized into a device-independent range, clamped, transmitted, and denormalized for each viewer. A stroke therefore means the same thing on different canvas sizes.</p></div>
+      </td>
+      <td>
+        <div class="decision"><b>Runtime validation at boundaries</b>Zod schemas validate authentication envelopes, room codes, ticket responses, admin forms, and structured socket events.</div>
+        <div class="decision"><b>Server-only credential access</b>Browser calls target same-origin Next.js handlers; only server code reads the session cookie and forwards bearer authorization.</div>
+        <div class="decision"><b>Snapshot plus events</b>Snapshots provide a recovery baseline; incremental events keep interaction responsive. Canvas revisions prevent stale drawing state from being trusted.</div>
+        <div class="decision"><b>Shared error normalization</b>Backend validation and operational failures become a consistent browser-facing error shape.</div>
+      </td>
+    </tr></table>
+    <div class="callout"><strong>Frontend responsibility:</strong> preserve interaction quality and render truth. <strong>Backend responsibility:</strong> create that truth.</div>
+    <h3>Tested seams</h3>
+    <span class="tag">geometry normalization</span><span class="tag">canvas emission</span><span class="tag">protocol parsing</span><span class="tag">ticket schemas</span><span class="tag">room reducer/state</span><span class="tag">socket failures</span><span class="tag">authentication forms</span><span class="tag">admin behavior</span>
+    <div class="footer">Mithril Tiles / Frontend Architecture <span class="num">10</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">10 / Reliability and evolution</p>
+      <h2>Known constraints are part of the design</h2>
+      <p>The current architecture optimizes for strong single-process room consistency. Its scaling boundary is documented rather than hidden.</p>
+    </div>
+    <table class="two"><tr>
+      <td>
+        <div class="card"><h3>Defensive engineering already present</h3>
+          <ul><li>HTTP read, write, and idle timeouts</li><li>request-scoped database deadlines</li><li>panic recovery and structured server errors</li><li>trusted proxy-aware IP rate limiting</li><li>trusted-origin CORS and socket origin checks</li><li>transaction rollback on incomplete lifecycle work</li><li>bounded chat and buffered realtime channels</li><li>end-game retry classification</li><li>room and round cancellation</li></ul>
+        </div>
+        <div class="card accent"><h3>Verification profile</h3><p><strong>15 Go test files</strong> cover room lifecycle, drawing authorization, guesses, message history, rate limiting, WebSocket tickets, persistence, and end-to-end API behavior.</p><p><strong>15 frontend test files</strong> cover forms, schemas, drawing geometry, protocol parsing, room state, room entry, and shell behavior.</p></div>
+      </td>
+      <td>
+        <div class="card dark"><h3>Current scale boundary</h3><p>Active rooms live in one Go process. Horizontal replicas would hold independent room maps and could split participants unless routing guarantees room affinity.</p><p class="risk">Therefore the safe current deployment is one authoritative realtime process.</p></div>
+        <div class="decision"><b>Phase 1: operational hardening</b>Add room/channel metrics, structured tracing, connection gauges, lifecycle latency, provider latency, and persistence retry counters.</div>
+        <div class="decision"><b>Phase 2: room-affine scale-out</b>Partition rooms by code with sticky routing or a gateway that consistently selects the owning node.</div>
+        <div class="decision"><b>Phase 3: distributed ownership</b>Introduce leases or a registry, a pub/sub backplane, and recoverable room snapshots only when scale justifies the consistency cost.</div>
+        <div class="decision"><b>Phase 4: event products</b>Add replay, analytics, or leaderboards through explicit event retention and aggregation—not by overloading transactional tables.</div>
+      </td>
+    </tr></table>
+    <div class="callout">A good architecture communicates both <strong>why it works now</strong> and <strong>what must change next</strong>. Mithril Tiles makes that tradeoff explicit.</div>
+    <div class="footer">Mithril Tiles / Reliability and Scale <span class="num">11</span></div>
+  </section>
+
+  <section class="page">
+    <div class="page-head">
+      <p class="eyebrow">11 / Repository evidence map</p>
+      <h2>Every major claim is traceable to code</h2>
+      <p>Use this map during a technical interview or repository review to move directly from architecture decision to implementation.</p>
+    </div>
+    <table class="matrix">
+      <tr><th>Concern</th><th>Primary evidence</th><th>What to inspect</th></tr>
+      <tr><td>System composition</td><td class="repo">cmd/api/main.go<br>cmd/api/routes.go<br>cmd/api/server.go</td><td>dependency wiring, middleware composition, timeouts, endpoint boundaries</td></tr>
+      <tr><td>Room actor model</td><td class="repo">internal/realtime/room.go<br>internal/realtime/room_manager.go</td><td>typed channels, single select loop, room ownership, bounded buffers</td></tr>
+      <tr><td>Game rules</td><td class="repo">internal/realtime/handlers.go<br>internal/realtime/game_start.go</td><td>host/drawer authorization, lifecycle transitions, scoring, private/public events</td></tr>
+      <tr><td>Secure socket entry</td><td class="repo">cmd/api/websocket.go<br>internal/data/websocket_tickets.go</td><td>30-second issue, SHA-256 storage, room binding, atomic consume, origin checks</td></tr>
+      <tr><td>Transactional persistence</td><td class="repo">cmd/api/game_lifecycle.go<br>internal/realtime/gamelifecycle.go</td><td>domain port, start/round/end transactions, retry semantics</td></tr>
+      <tr><td>Database invariants</td><td class="repo">migrations/000004...000008</td><td>checks, partial indexes, composite foreign keys, triggers, role model</td></tr>
+      <tr><td>Bot abstraction</td><td class="repo">internal/realtime/guess_provider.go<br>internal/realtime/drawing_planner.go</td><td>provider interfaces, adapters, deterministic fallbacks</td></tr>
+      <tr><td>Credential boundary</td><td class="repo">frontend/src/lib/auth/session-cookie.ts<br>frontend/src/app/api/</td><td>HttpOnly storage, same-origin BFF routes, server-side bearer forwarding</td></tr>
+      <tr><td>Realtime client</td><td class="repo">frontend/src/features/realtime/<br>frontend/src/features/rooms/room-shell.tsx</td><td>protocol schemas, ticket lifecycle, connection states, snapshot/event rendering</td></tr>
+      <tr><td>Canvas portability</td><td class="repo">frontend/src/features/drawing/</td><td>normalization, clamping, pointer handling, deterministic tests</td></tr>
+    </table>
+    <table class="two" style="margin-top:6mm"><tr>
+      <td>
+        <div class="card dark"><h3>Architectural strengths</h3>
+          <ul><li>authority and trust boundaries are explicit</li><li>concurrency model matches the domain</li><li>persistence is transactional and intentionally scoped</li><li>database invariants prevent cross-aggregate corruption</li><li>AI integrations are behind stable domain ports</li><li>limitations and evolution paths are documented</li></ul>
+        </div>
+      </td>
+      <td>
+        <div class="card accent"><h3>Interview discussion prompts</h3>
+          <ul><li>Why tickets are safer than exposing bearer tokens</li><li>When actor-style state beats database-backed coordination</li><li>How composite constraints protect game ownership</li><li>Why replay data was intentionally excluded</li><li>How to scale without weakening per-room ordering</li></ul>
+        </div>
+      </td>
+    </tr></table>
+    <div class="callout"><strong>Design thesis:</strong> keep realtime decisions close, durable facts correct, credentials narrow, and boundaries easy to explain.</div>
+    <p class="mini">Prepared from the repository implementation and versioned migrations. Supporting documents: <span class="repo">ARCHITECTURE.md</span> and <span class="repo">database_design.md</span>.</p>
+    <div class="footer">Mithril Tiles / Evidence Map <span class="num">12</span></div>
+  </section>
+
+</body>
+</html>
