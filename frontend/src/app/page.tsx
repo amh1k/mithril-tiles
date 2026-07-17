@@ -148,8 +148,8 @@ export default async function Home() {
                 </Link>
                 <Link
                   className={cn(
-                    buttonVariants({ variant: "outline", size: "lg" }),
-                    "h-12 min-w-36 rounded-lg border-2 border-[#bba88d] bg-[#bba88d] px-7 text-base font-bold text-[#2b1e12] shadow-xl shadow-[#2b1e12]/30 transition-transform hover:-translate-y-0.5 hover:bg-[#946440] hover:text-[#2b1e12]",
+                    buttonVariants({ size: "lg" }),
+                    "h-12 min-w-36 rounded-lg border-2 border-[#d2aa68] bg-[#714522] px-7 text-base font-bold text-[#fff4dc] shadow-xl shadow-[#160f09]/50 transition-all hover:-translate-y-0.5 hover:border-[#e2c17f] hover:bg-[#85562b] hover:text-[#fff8e8] focus-visible:border-[#f4d99d] focus-visible:ring-4 focus-visible:ring-[#d2aa68]/45",
                   )}
                   href="/login"
                 >
